@@ -7,7 +7,7 @@ Ejercicios para intectuar con una blockchain
 1. Instalar dependencias `yarn install`
 2. Copiar `.env` a `.env.local`
 3. Asignar valores para [api-key de polygonscan](https://docs.polygonscan.com/getting-started/viewing-api-usage-statistics) y la dirección de la billetera a consultar
-4. Leer balance `yarn dev:evm`
+4. Leer balance `yarn start:evm`
 
 # Notas
 

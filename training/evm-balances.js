@@ -16,7 +16,7 @@ web3.eth
   .then((i) => {
     // convert to ether
     const etherValue = Web3.utils.fromWei(i, "ether");
-    console.log(`${etherValue} ether`);
+    console.log(`Your balance is ${etherValue} ether`);
   })
   .catch((e) => {
     console.log(e);
@@ -34,7 +34,7 @@ contract.methods
   .balanceOf(walletAddress)
   .call()
   .then((balance) => {
-    console.log(`Tu balance de POL es: ${balance} tokens`);
+    console.log(`Your POL balance is: ${balance} tokens`);
   })
   .catch((error) => {
     console.error(error);

@@ -24,6 +24,9 @@ Doc librería ethers
         ETH en Polygon
 
     - TIPs: 
-      - Tú puedes leer todos los datos de una blockchain pública. En las redes EVM, nos tokens son realmente un contrato de balances. Son una clase con los diferentes métodos, siendo uno, el de obtener tú propio balance, pero también el de cualquier dirección de la red.
+      - Tú puedes leer todos los datos de una blockchain pública. 
+      - En las redes EVM, los tokens son realmente un contrato de balances. Son una clase con los diferentes métodos, siendo uno, el de obtener tú propio balance, pero también el de cualquier dirección de la red.
+      - Para obtener el balance de un token nativo, no necesitas interactuar con un contrato, basta con consultar el método eth_getBalance
+        -  el RPC que uses determina el token nativo
       - Para obtener entonces el balance, hay que crear una instancia del contrato y ejecutar el método balanceOf
       - El método RPC sería eth_call https://ethereum.org/es/developers/docs/apis/json-rpc/#eth_call

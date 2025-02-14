@@ -4,7 +4,7 @@
  *
  */
 
-import { ethers } from "ethers";
+import { formatUnits, parseEther } from "ethers";
 // https://github.com/Road2Crypto/wallet-address-validator
 import { isWalletValid } from "r2c-wallet-validator";
 import { useEffect, useState } from "react";
@@ -12,7 +12,7 @@ import ConnectMetamaskButton from "./ConnectMetamaskButton";
 
 declare global {
   interface Window {
-    ethereum: ExternalProvider;
+    ethereum?: ExternalProvider;
   }
 }
 type ExternalProvider = {
@@ -35,6 +35,12 @@ type ExternalProvider = {
   on: (event: string, callback: (data: string[]) => void) => void;
 };
 
+function throwRequestError(request: string, message: unknown): Error {
+  throw new Error(
+    `${request} request failed: ${JSON.stringify(message, null, 4)}`
+  );
+}
+
 const Balance = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [accounts, setAccounts] = useState<string>();
@@ -49,7 +55,7 @@ const Balance = () => {
   const metamaskConnectHandler = () => {
     setIsConnecting(true);
     window.ethereum
-      .request({ method: "eth_requestAccounts" })
+      ?.request({ method: "eth_requestAccounts" })
       .then((accounts) => {
         setIsConnecting(false);
         if (Array.isArray(accounts)) {
@@ -57,10 +63,7 @@ const Balance = () => {
           return;
         }
 
-        throw new Error(
-          `Accounts received for request eth_requestAccounts is not valid.
-           => Data reveived: ${JSON.stringify(accounts)}`
-        );
+        throwRequestError("eth_requestAccounts", accounts);
       });
   };
 
@@ -71,12 +74,16 @@ const Balance = () => {
     if (accounts) {
       // console.log(window.ethereum.selectedAddress);
       window.ethereum
-        .request({
+        ?.request({
           method: "eth_getBalance",
           params: [accounts.toString(), "latest"],
         })
         .then((balanceInWei) => {
-          const balanceInEthers = (Number(balanceInWei) / 10 ** 18).toFixed(4);
+          if (typeof balanceInWei !== "string") {
+            throwRequestError("eth_getBalance", balanceInWei);
+            return;
+          }
+          const balanceInEthers = formatUnits(balanceInWei, 18); //(Number(balanceInWei) / 10 ** 18).toFixed(4);
           setBalance(balanceInEthers);
         });
     }
@@ -87,7 +94,7 @@ const Balance = () => {
    */
   useEffect(() => {
     if (accounts) {
-      window.ethereum.on("accountsChanged", (data) => {
+      window.ethereum?.on("accountsChanged", (data) => {
         setAccounts(data[0]);
       });
     }
@@ -102,23 +109,21 @@ const Balance = () => {
     }
 
     window.ethereum
-      .request({
+      ?.request({
         method: "eth_sendTransaction",
         params: [
           {
-            to: { to },
+            to,
             from: (accounts as string).toString(),
-            value: ethers.parseEther(qty),
+            value: parseEther(qty).toString(),
           },
         ],
       })
       .then((result) => {
         console.log(result);
-        
       })
       .catch((error) => {
-        console.log('ERROR!', error);
-        
+        console.log("ERROR!", error);
       });
   };
 

@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Application files
+.env.local
+database-infraestructure/mongodb

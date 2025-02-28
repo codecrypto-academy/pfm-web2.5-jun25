@@ -17,11 +17,13 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.4",
     "nodemon": "^3.1.9",
+    "prisma": "^6.4.0",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@prisma/client": "^6.4.0",
     "cors": "^2.8.5",
     "express": "^4.21.2"
   }

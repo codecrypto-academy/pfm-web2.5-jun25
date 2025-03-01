@@ -6,6 +6,7 @@ interface ContactData {
 }
 
 const prisma = new PrismaClient();
+
 class UserContact {
   constructor(private readonly contact: Contacts) {}
 
@@ -17,9 +18,6 @@ class UserContact {
         contactsBookId: contactsBookId,
       },
     });
-
-    console.log(contact);
-    
 
     return new UserContact(contact);
   }

@@ -15,7 +15,12 @@ class UserDetails {
         email: true,
         createdAt: true,
         updatedAt: true,
-        ContactsBook: true,
+        ContactsBook: {
+          select: {
+            id: true,
+            contacts: true,
+          },
+        },
       },
     });
 

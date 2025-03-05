@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+# Web2
+
+This is the web2 application for the Besu project.
 
 ## Getting Started
 
-First, run the development server:
+    npm install
+    npm run dev
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Deploying
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+    npm run build
+    npm run start
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The database is a MongoDB instance running on the same machine as the web2 application.
 
-## Learn More
+The database is used to store the networks and nodes for the Besu project.
 
-To learn more about Next.js, take a look at the following resources:
+The database is also used to store the accounts for the Besu project.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Installation mongodb
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Docker Installation
 
-## Deploy on Vercel
+To install MongoDB using Docker:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Pull the MongoDB image:
+   ```bash
+   docker pull mongo
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. Run MongoDB container:
+   ```bash
+   docker run --name mongodb -d -p 27017:27017 mongo
+   ```
+
+3. To use with authentication (recommended for production):
+   ```bash
+   docker run --name mongodb -d -p 27017:27017 \
+     -e MONGO_INITDB_ROOT_USERNAME=admin \
+     -e MONGO_INITDB_ROOT_PASSWORD=password \
+     mongo
+   ```
+
+4. For data persistence, mount a volume:
+   ```bash
+   docker run --name mongodb -d -p 27017:27017 \
+     -v /path/on/host:/data/db \
+     mongo
+   ```
+
+5. Connect to MongoDB container:
+   ```bash
+   docker exec -it mongodb mongosh
+   ```
+
+Remember to update your application's connection string accordingly.

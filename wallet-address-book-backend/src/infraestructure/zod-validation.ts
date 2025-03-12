@@ -1,0 +1,22 @@
+import { z } from "zod";
+
+// Define a schema for userId
+const userIdSchema = z.string().refine(
+  (val) => {
+    // Add your MongoDB ObjectId validation logic here
+    return /^[0-9a-fA-F]{24}$/.test(val);
+  },
+  {
+    message: "Invalid userId format",
+  }
+);
+
+// Define a schema for creating a user
+const createUserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(3).max(30).optional(),
+  password: z.string().min(6),
+});
+
+export { createUserSchema, userIdSchema };
+

@@ -1,5 +1,5 @@
-import { Prisma, PrismaClient } from "@prisma/client";
-import { encrypt } from "../plugins/password-cypher";
+import { Prisma, PrismaClient, User as PrismaUserModel } from "@prisma/client";
+import { encrypt } from "../infraestructure/password-cypher";
 
 interface UserData {
   name: string;
@@ -10,7 +10,6 @@ interface UserData {
 const prisma = new PrismaClient();
 
 class User {
-  private static db: Prisma.UserDelegate;
   constructor(
     private readonly id: string,
     private readonly name: string,
@@ -27,6 +26,12 @@ class User {
       throw new Error("User already exists");
     }
 
+    const userCreated = await this.save(userData);
+    return new User(userCreated.id, name, email);
+  }
+
+  private static async save(userData: UserData): Promise<PrismaUserModel> {
+    const { name, email, password } = userData;
     try {
       const user = await prisma.user.create({
         data: {
@@ -36,7 +41,7 @@ class User {
         },
       });
 
-      return new User(user.id, name, email);
+      return user;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new Error(`${error.code}: ${error.message}`);

@@ -14,9 +14,31 @@ const userIdSchema = z.string().refine(
 // Define a schema for creating a user
 const createUserSchema = z.object({
   email: z.string().email(),
-  name: z.string().min(3).max(30).optional(),
+  name: z.string().min(3).max(30),
   password: z.string().min(6),
 });
 
-export { createUserSchema, userIdSchema };
+// Define a schema for contactsBookId
+const contactsBookIdSchema = z.string().refine(
+  (val) => {
+    // Add your MongoDB ObjectId validation logic here
+    return /^[0-9a-fA-F]{24}$/.test(val);
+  },
+  {
+    message: "Invalid contactsBookId format",
+  }
+);
+
+// Define a schema for creating a contact
+const createContactSchema = z.object({
+  name: z.string().min(3).max(30),
+  walletAddress: z.string().min(42).max(42),
+});
+
+export {
+  contactsBookIdSchema,
+  createContactSchema,
+  createUserSchema,
+  userIdSchema
+};
 

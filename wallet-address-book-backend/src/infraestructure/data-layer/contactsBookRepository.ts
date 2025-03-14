@@ -5,6 +5,7 @@ interface ContactsBookRepository {
 }
 
 export interface ContactsBook {
+  contactsBookId: string;
   contacts: Contact[];
 }
 

@@ -49,6 +49,7 @@ class PrismaUserRepository implements UserRepository {
               email: userDetails.email,
             },
             contactsBook: {
+              contactsBookId: userDetails.ContactsBook?.id ?? "",
               contacts: userDetails.ContactsBook?.contacts ?? [],
             },
           };

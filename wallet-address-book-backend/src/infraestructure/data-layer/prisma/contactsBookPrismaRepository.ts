@@ -8,13 +8,14 @@ class PrismaContactsBookRepository implements ContactsBookRepository {
   }
 
   async createContactsBookRepository(userId: string): Promise<ContactsBook> {
-    await this.prisma.contactsBook.create({
+    const contactsBook =await this.prisma.contactsBook.create({
       data: {
         ownerId: userId,
       },
     });
 
     return {
+      contactsBookId: contactsBook.id,
       contacts: []
     };
 

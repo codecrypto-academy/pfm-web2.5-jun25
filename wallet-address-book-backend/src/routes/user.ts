@@ -23,6 +23,11 @@ router.get("/:userId", async (req: Request, res: Response) => {
     const userRepository = createUserRepository(new PrismaClient());
     const user = await userRepository.getUser(userId);
 
+    if (!user) {
+      res.status(404).send({ message: "User not found" });
+      return;
+    }
+
     res.status(200).send(user);
   } catch (error) {
     if (error instanceof Error) {
@@ -69,9 +74,10 @@ router.post("/", async (req: Request, res: Response) => {
 
   try {
     const user = await createUser(userRepository, { email, name, password });
-    const userCreatedPayload = { ...user.data, password: undefined };
+    // const userCreatedPayload = { ...user.data, password: undefined };
+    const userCreated = await userRepository.getUser(user.data.id);
 
-    res.status(201).send(userCreatedPayload);
+    res.status(201).send(userCreated);
   } catch (error) {
     if (error instanceof Error) {
       res.status(400).send({ message: error.message });

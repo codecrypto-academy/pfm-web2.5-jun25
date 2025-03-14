@@ -1,7 +1,6 @@
-import { ContactsBook } from "./contactsBookRepository";
 
 interface ContactRepository {
-  createContact(contact: Contact, contactsBook: ContactsBook): void;
+  createContact(contact: Contact, contactsBook: string): void;
 }
 
 export interface Contact {

@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import react from "../assets/react.svg";
+import user from "../assets/user.svg";
 
 const Home = () => {
   const location = useLocation();
@@ -14,7 +15,6 @@ const Home = () => {
           flexDirection: "row",
           justifyContent: "flex-start",
           alignItems: "center",
-          width: "100%"
         }}
       >
         <Link
@@ -36,6 +36,7 @@ const Home = () => {
             display: "flex",
             flexDirection: "row",
             gap: "10px",
+            flexGrow: "1",
           }}
         >
           <li>
@@ -45,6 +46,17 @@ const Home = () => {
             <Link to="/balance">Balance</Link>
           </li>
         </ul>
+        <Link
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+          }}
+          to="/login"
+        >
+          <img style={{backgroundColor: "#b9bdf8", borderRadius: "50%"}}src={user} alt="" />
+          <span>Login</span>
+        </Link>
       </nav>
 
       {!isHome && (
@@ -52,8 +64,8 @@ const Home = () => {
           style={{
             backgroundColor: "#1a1a1a",
             padding: "12px 24px",
-            borderRadius: "25px",
-            width: "100%"
+            borderRadius: "5px",
+            marginTop: "24px",
           }}
         >
           <Outlet />

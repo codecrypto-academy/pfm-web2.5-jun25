@@ -1,12 +1,17 @@
-import { PrismaClient } from "@prisma/client";
-import { encrypt } from "../../password-cypher";
-import UserRepository, { User, UserData } from "../userRepository";
+import {PrismaClient} from "@prisma/client";
+import {encrypt} from "../../password-cypher";
+import UserRepository, {User, UserData} from "../userRepository";
 import createContactsBookRepository from "./contactsBookPrismaRepository";
 
 class PrismaUserRepository implements UserRepository {
-  constructor(private prisma: PrismaClient) {
+  constructor(private readonly prisma: PrismaClient) {
     this.prisma = prisma;
   }
+
+  static create() {
+    return new PrismaUserRepository(new PrismaClient());
+  }
+
   async isUserCreated(email: string): Promise<boolean> {
     try {
       const user = await this.prisma.user.findUnique({
@@ -21,6 +26,7 @@ class PrismaUserRepository implements UserRepository {
       throw new Error("An error occurred while fetching the user");
     }
   }
+
   async getUser(userId: string): Promise<User | null> {
     try {
       const userDetails = await this.prisma.user.findUnique({
@@ -31,7 +37,7 @@ class PrismaUserRepository implements UserRepository {
           id: true,
           name: true,
           email: true,
-          ContactsBook: {
+          contactsBook: {
             select: {
               id: true,
               contacts: true,
@@ -49,14 +55,48 @@ class PrismaUserRepository implements UserRepository {
               email: userDetails.email,
             },
             contactsBook: {
-              contactsBookId: userDetails.ContactsBook?.id ?? "",
-              contacts: userDetails.ContactsBook?.contacts ?? [],
+              contactsBookId: userDetails.contactsBook?.id ?? "",
+              contacts: userDetails.contactsBook?.contacts ?? [],
             },
           };
     } catch (error) {
-      console.log(error);
       throw new Error(
         `An error occurred while getting the user ${userId} information`
+      );
+    }
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    try {
+      const users = await this.prisma.user.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          contactsBook: {
+            select: {
+              id: true,
+              contacts: true,
+            },
+          },
+        },
+      });
+
+      return users.map((u) => ({
+        data: {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+        },
+        contactsBook: {
+          contactsBookId: u.contactsBook?.id ?? '',
+          contacts: u.contactsBook?.contacts ?? []
+        }
+      }));
+
+    } catch (error) {
+      throw new Error(
+          `An error occurred while getting the list of usera`
       );
     }
   }
@@ -86,8 +126,4 @@ class PrismaUserRepository implements UserRepository {
   }
 }
 
-function createUserRepository(prisma: PrismaClient) {
-  return new PrismaUserRepository(prisma);
-}
-
-export default createUserRepository;
+export default PrismaUserRepository;

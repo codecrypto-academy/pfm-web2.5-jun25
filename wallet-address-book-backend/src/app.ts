@@ -3,11 +3,13 @@ import express from "express";
 
 import contactsBookRoutes from "./routes/contacts-book";
 import userRoutes from "./routes/user";
+import usersRoutes from "./routes/users";
 
 const app = express();
 app.use(cors());
 
 app.use("/user", userRoutes);
+app.use("/users", usersRoutes);
 app.use("/contacts_book", contactsBookRoutes);
 
 app.listen(process.env.PORT ?? 3000, () => {

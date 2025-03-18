@@ -1,9 +1,11 @@
-import { ContactsBook } from "./contactsBookRepository";
+import {ContactsBook} from "./contactsBookRepository";
 
 interface UserRepository {
   createUser(user: UserData): Promise<User>;
   getUser(id: string): Promise<User | null>;
   isUserCreated(email: string): Promise<boolean>;
+
+  getAllUsers(): Promise<User[]>;
 }
 
 export interface UserData {

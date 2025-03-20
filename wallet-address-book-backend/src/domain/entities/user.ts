@@ -7,4 +7,10 @@ interface User {
   contactsBook: ContactsBook;
 }
 
+interface UserCredentials {
+  email: string;
+  password: string;
+}
+
+export { UserCredentials };
 export default User;

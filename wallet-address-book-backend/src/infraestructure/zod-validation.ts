@@ -18,6 +18,12 @@ const createUserSchema = z.object({
   password: z.string().min(6),
 });
 
+// Define a schame for checking if a user exists and login a user
+const loginUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+});
+
 // Define a schema for contactsBookId
 const contactsBookIdSchema = z.string().refine(
   (val) => {
@@ -38,7 +44,6 @@ const createContactSchema = z.object({
 export {
   contactsBookIdSchema,
   createContactSchema,
-  createUserSchema,
-  userIdSchema
+  createUserSchema, loginUserSchema, userIdSchema
 };
 

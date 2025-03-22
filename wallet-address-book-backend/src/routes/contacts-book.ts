@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import express from "express";
+import PrismaContactsBookRepository from "../infraestructure/data-layer/prisma/contactsBookPrismaRepository";
 import createContactsRepository from "../infraestructure/data-layer/prisma/contactsPrismaRepository";
 import {
   contactsBookIdSchema,
@@ -8,6 +9,35 @@ import {
 
 const router = express.Router();
 router.use(express.json());
+
+router.get("/:contactsBookId/contacts", async (req, res) => {
+  const { contactsBookId } = req.params;
+  // TODO: Create an abstraction to validate the contactsBookId
+  const parseContactsBookIdResult =
+    contactsBookIdSchema.safeParse(contactsBookId);
+  if (!parseContactsBookIdResult.success) {
+    res
+      .status(400)
+      .send({ message: parseContactsBookIdResult.error.errors[0].message });
+    return;
+  }
+
+  try {
+    const contactsBookRepostitory = PrismaContactsBookRepository.create();
+    const contacts = await contactsBookRepostitory.getAllContacts(contactsBookId);
+
+    res.status(200).send(contacts);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).send({ message: error.message });
+      return;
+    }
+    console.error(error);
+    throw new Error(
+      `An error occurred while creating the contact ${name} in the contacts book ${contactsBookId}`
+    );
+  }
+});
 
 router.post("/:contactsBookId/contact", async (req, res) => {
   const { contactsBookId } = req.params;
@@ -40,7 +70,7 @@ router.post("/:contactsBookId/contact", async (req, res) => {
       contactsBookId
     );
 
-    res.status(201).send({ message: contact });
+    res.status(201).send(contact);
   } catch (error) {
     if (error instanceof Error) {
       res.status(400).send({ message: error.message });
@@ -51,8 +81,6 @@ router.post("/:contactsBookId/contact", async (req, res) => {
       `An error occurred while creating the contact ${name} in the contacts book ${contactsBookId}`
     );
   }
-
-  
 });
 
 export default router;

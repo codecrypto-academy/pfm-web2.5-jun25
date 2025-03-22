@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { compare, encrypt } from "../../password-cypher";
 import UserRepository, { User, UserData } from "../userRepository";
-import createContactsBookRepository from "./contactsBookPrismaRepository";
+import PrismaContactsBookRepository from "./contactsBookPrismaRepository";
 
 class PrismaUserRepository implements UserRepository {
   constructor(private readonly prisma: PrismaClient) {
@@ -150,7 +150,7 @@ class PrismaUserRepository implements UserRepository {
         },
       });
 
-      const contactsBookRepository = createContactsBookRepository(this.prisma);
+      const contactsBookRepository = PrismaContactsBookRepository.create();
 
       return {
         data: newUser,

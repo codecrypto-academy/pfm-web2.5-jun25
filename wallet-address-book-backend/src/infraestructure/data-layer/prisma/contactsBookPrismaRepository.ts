@@ -1,14 +1,32 @@
 import { PrismaClient } from "@prisma/client";
-import ContactsBookRepository, { ContactsBook } from "../contactsBookRepository";
-
+import ContactsBookRepository, {
+  ContactsBook,
+} from "../contactsBookRepository";
+import { Contact } from "../contactsRepository";
 
 class PrismaContactsBookRepository implements ContactsBookRepository {
   constructor(private prisma: PrismaClient) {
     this.prisma = prisma;
   }
 
+  static create() {
+    return new PrismaContactsBookRepository(new PrismaClient());
+  }
+
+  async getAllContacts(contactsBookId: string): Promise<Contact[]> {
+    const contacts = await this.prisma.contacts.findMany({
+      where: {
+        contactsBookId,
+      },
+    });
+
+    console.log(contacts);
+
+    return contacts;
+  }
+
   async createContactsBookRepository(userId: string): Promise<ContactsBook> {
-    const contactsBook =await this.prisma.contactsBook.create({
+    const contactsBook = await this.prisma.contactsBook.create({
       data: {
         ownerId: userId,
       },
@@ -16,14 +34,9 @@ class PrismaContactsBookRepository implements ContactsBookRepository {
 
     return {
       contactsBookId: contactsBook.id,
-      contacts: []
+      contacts: [],
     };
-
   }
 }
 
-function createContactsBookRepository(prisma: PrismaClient) {
-  return new PrismaContactsBookRepository(prisma);
-}
-
-export default createContactsBookRepository;
+export default PrismaContactsBookRepository;

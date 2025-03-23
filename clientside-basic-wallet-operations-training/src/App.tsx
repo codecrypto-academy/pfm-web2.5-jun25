@@ -4,10 +4,10 @@ import "./App.css";
 import Balance from "./components/Balance";
 import Contacts from "./components/Contacts.tsx";
 import Login from "./components/Login";
-import Nav from "./components/Nav.tsx";
 import NotAuthorized from "./components/NotAuthorized.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
 import Register from "./components/Register";
+import Layout from "./Layout.tsx";
 
 const queryClient = new QueryClient();
 
@@ -19,51 +19,51 @@ function App() {
           <Route
             path="/"
             element={
-              <Nav>
+              <Layout>
                 <h1>Wallet Contacts App</h1>
-              </Nav>
+              </Layout>
             }
           />
           <Route
             path="/contacts"
             element={
               <ProtectedRoute>
-                <Nav>
+                <Layout>
                   <Contacts />
-                </Nav>
+                </Layout>
               </ProtectedRoute>
             }
           />
           <Route
             path="/balance"
             element={
-              <Nav>
+              <Layout>
                 <Balance />
-              </Nav>
+              </Layout>
             }
           />
           <Route
             path="/login"
             element={
-              <Nav>
+              <Layout>
                 <Login />
-              </Nav>
+              </Layout>
             }
           />
           <Route
             path="/register"
             element={
-              <Nav>
+              <Layout>
                 <Register />
-              </Nav>
+              </Layout>
             }
           />
           <Route
             path="/not-autorized"
             element={
-              <Nav>
+              <Layout>
                 <NotAuthorized />
-              </Nav>
+              </Layout>
             }
           />
         </Routes>

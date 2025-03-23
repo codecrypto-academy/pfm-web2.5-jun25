@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-// Define a schema for userId
-const userIdSchema = z.string().refine(
+// Define a schema for mongo ObjectId
+const objectIdSchema = z.string().refine(
   (val) => {
     // Add your MongoDB ObjectId validation logic here
     return /^[0-9a-fA-F]{24}$/.test(val);
@@ -44,6 +44,8 @@ const createContactSchema = z.object({
 export {
   contactsBookIdSchema,
   createContactSchema,
-  createUserSchema, loginUserSchema, userIdSchema
+  createUserSchema,
+  loginUserSchema,
+  objectIdSchema
 };
 

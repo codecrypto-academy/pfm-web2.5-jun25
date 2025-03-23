@@ -1,10 +1,11 @@
 import { ContactsBook } from "./contactsBookRepository";
 
 interface UserRepository {
-  getUserWithCredentials(email: string, password: string): Promise<User | null>;
   createUser(user: UserData): Promise<User>;
   getAllUsers(): Promise<User[]>;
   getUser(id: string): Promise<User | null>;
+  getUserWithCredentials(email: string, password: string): Promise<User | null>;
+  isUserCreated(email: string): Promise<boolean>;
 }
 
 export interface UserData {

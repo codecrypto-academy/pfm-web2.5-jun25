@@ -12,11 +12,11 @@ class PrismaUserRepository implements UserRepository {
     return new PrismaUserRepository(new PrismaClient());
   }
 
-  async getUser(userId: string): Promise<User | null> {
+  async getUser(id: string): Promise<User | null> {
     try {
       const userDetails = await this.prisma.user.findUnique({
         where: {
-          id: userId,
+          id: id,
         },
         select: {
           id: true,
@@ -46,7 +46,7 @@ class PrismaUserRepository implements UserRepository {
         : null;
     } catch (error) {
       throw new Error(
-        `An error occurred while getting the user ${userId} information`
+        `An error occurred while getting the user ${id} information`
       );
     }
   }
@@ -159,7 +159,6 @@ class PrismaUserRepository implements UserRepository {
         ),
       };
     } catch (error) {
-      console.error(error);
       throw new Error("An error occurred while fetching the user");
     }
   }

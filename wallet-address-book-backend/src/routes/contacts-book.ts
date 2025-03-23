@@ -1,11 +1,16 @@
-import { PrismaClient } from "@prisma/client";
 import express from "express";
-import PrismaContactsBookRepository from "../infraestructure/data-layer/prisma/contactsBookPrismaRepository";
-import createContactsRepository from "../infraestructure/data-layer/prisma/contactsPrismaRepository";
+
 import {
   contactsBookIdSchema,
   createContactSchema,
 } from "../infraestructure/zod-validation";
+
+import { createContact } from "../domain/use-cases/create-contact";
+import PrismaContactsBookRepository from "../infraestructure/data-layer/prisma/contactsBookPrismaRepository";
+import PrismaContactsRepository from "../infraestructure/data-layer/prisma/contactsPrismaRepository";
+
+const contactsBookRepostitory = PrismaContactsBookRepository.create();
+const contactsRepository = PrismaContactsRepository.create();
 
 const router = express.Router();
 router.use(express.json());
@@ -23,8 +28,9 @@ router.get("/:contactsBookId/contacts", async (req, res) => {
   }
 
   try {
-    const contactsBookRepostitory = PrismaContactsBookRepository.create();
-    const contacts = await contactsBookRepostitory.getAllContacts(contactsBookId);
+    const contacts = await contactsBookRepostitory.getAllContacts(
+      contactsBookId
+    );
 
     res.status(200).send(contacts);
   } catch (error) {
@@ -64,11 +70,10 @@ router.post("/:contactsBookId/contact", async (req, res) => {
   const { name, walletAddress } = req.body;
 
   try {
-    const contactsRepostitory = createContactsRepository(new PrismaClient());
-    const contact = await contactsRepostitory.createContact(
-      { name, walletAddress },
-      contactsBookId
-    );
+    const contact = await createContact(contactsRepository, contactsBookId, {
+      name,
+      walletAddress,
+    });
 
     res.status(201).send(contact);
   } catch (error) {

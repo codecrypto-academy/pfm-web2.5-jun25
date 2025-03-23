@@ -1,14 +1,15 @@
 import express, { Request, Response } from "express";
 
 import {
-    createUserSchema,
-    loginUserSchema,
-    userIdSchema,
+  createUserSchema,
+  loginUserSchema,
+  objectIdSchema,
 } from "../infraestructure/zod-validation";
 
 import { createUser } from "../domain/use-cases/create-user";
 import { getUserDetails } from "../domain/use-cases/get-user-details";
 import { getUserWithCredentials } from "../domain/use-cases/get-user-with-credentials";
+import { isUserCreated } from "../domain/use-cases/is-user-created";
 
 import PrismaUserRepository from "../infraestructure/data-layer/prisma/userPrismaRepository";
 
@@ -20,7 +21,7 @@ router.use(express.json());
 router.get("/:userId", async (req: Request, res: Response) => {
   const { userId } = req.params;
   // TODO: Create an abstraction to validate the userId
-  const parseResult = userIdSchema.safeParse(userId);
+  const parseResult = objectIdSchema.safeParse(userId);
   if (!parseResult.success) {
     res.status(400).send({ message: parseResult.error.errors[0].message });
     return;
@@ -39,12 +40,12 @@ router.get("/:userId", async (req: Request, res: Response) => {
       res.status(400).send({ message: error.message });
       return;
     }
-    console.error(error);
     throw new Error(
       `An error occurred while getting the user ${userId} information`
     );
   }
 });
+
 router.post("/login", async (req: Request, res: Response) => {
   // TODO: Create an abstraction to validate the request body
   const parseResult = loginUserSchema.safeParse(req.body);
@@ -79,6 +80,7 @@ router.post("/login", async (req: Request, res: Response) => {
     throw new Error(`An error occurred while checking the user credentials.`);
   }
 });
+
 router.post("/", async (req: Request, res: Response) => {
   // TODO: Create an abstraction to validate the request body
   const parseResult = createUserSchema.safeParse(req.body);
@@ -94,8 +96,7 @@ router.post("/", async (req: Request, res: Response) => {
   const { email, name, password } = req.body;
 
   try {
-    const isUserCreated = await userRepository.isUserCreated(email);
-    if (isUserCreated) {
+    if (await isUserCreated(userRepository, email)) {
       res.status(400).send({ message: "User already exists" });
       return;
     }

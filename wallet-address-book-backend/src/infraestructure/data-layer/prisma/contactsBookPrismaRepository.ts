@@ -20,8 +20,6 @@ class PrismaContactsBookRepository implements ContactsBookRepository {
       },
     });
 
-    console.log(contacts);
-
     return contacts;
   }
 

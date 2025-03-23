@@ -3,23 +3,26 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 type ProtectedRouteProps = {
-    children: React.ReactNode;
+  children: React.ReactNode;
 };
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
+  const [userId, setUserId] = useState<string | undefined>();
 
-    const [userId, setUserId] = useState<string | undefined>();
-
-    useEffect(() => {
-        const userId = window.localStorage.getItem("user") ?? '';
-        setUserId(userId);
-    }, [userId]);
-
-    if (userId !== undefined && !userId) {
-        return <Navigate to="/not-autorized" replace />;
+  useEffect(() => {
+    const user = JSON.parse(window.localStorage.getItem("user") ?? "{}");
+    if (Object.entries(user).length > 0) {
+      setUserId(user.data.id);
+    } else {
+      setUserId("");
     }
+  }, [userId]);
 
-    return children;
+  if (userId !== undefined && !userId) {
+    return <Navigate to="/not-autorized" replace />;
+  }
+
+  return children;
 };
 
 export default ProtectedRoute;

@@ -43,7 +43,7 @@ const Login = () => {
 
   useEffect(() => {
     if (response && "data" in response) {
-      window.localStorage.setItem("user", JSON.stringify(response.data.id));
+      window.localStorage.setItem("user", JSON.stringify(response));
       navigate("/contacts");
     }
   }, [navigate, response]);

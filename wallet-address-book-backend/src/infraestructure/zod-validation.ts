@@ -38,13 +38,25 @@ const contactsBookIdSchema = z.string().refine(
 // Define a schema for creating a contact
 const createContactSchema = z.object({
   name: z.string().min(3).max(30),
-  walletAddress: z.string().min(42).max(42),
+  walletAddress: z.string().min(42).max(42), // ^0x[0-9a-fA-F]{40}$
+});
+
+// Define a schema for checking the balance of a wallet address
+const balanceInputSchema = z.object({
+  address: z.string()
+});
+
+const faucetInputsSchema = z.object({
+  address: z.string(),
+  amount: z.coerce.number().int().positive(),
 });
 
 export {
+  balanceInputSchema,
   contactsBookIdSchema,
   createContactSchema,
   createUserSchema,
+  faucetInputsSchema,
   loginUserSchema,
   objectIdSchema
 };

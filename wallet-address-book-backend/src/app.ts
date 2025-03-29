@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 
+import apiRoutes from "./routes/api";
 import contactRoutes from "./routes/contact";
 import contactsBookRoutes from "./routes/contacts-book";
 import userRoutes from "./routes/user";
@@ -13,6 +14,7 @@ app.use("/contact", contactRoutes);
 app.use("/contacts_book", contactsBookRoutes);
 app.use("/user", userRoutes);
 app.use("/users", usersRoutes);
+app.use("/api", apiRoutes);
 
 app.listen(process.env.PORT ?? 3000, () => {
   console.log(`Server running at port ${process.env.PORT ?? 3000}`);

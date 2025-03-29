@@ -1,2 +1,4 @@
 .idea/
 .vscode/
+eth-node/data
+eth-node/pwd.txt

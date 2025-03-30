@@ -1,1 +1,1 @@
-console.log("venga, fumate uno!")
+console.log("app limpio, echa un vistazo a web3 para ver los ejemplos implementados");

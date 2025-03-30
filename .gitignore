@@ -2,3 +2,5 @@
 .vscode/
 eth-node/data
 eth-node/pwd.txt
+geth-node/data
+geth-node/pwd.txt

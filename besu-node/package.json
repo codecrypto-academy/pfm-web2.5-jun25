@@ -1,0 +1,17 @@
+{
+  "name": "besu-node",
+  "version": "1.0.0",
+  "description": "https://besu.hyperledger.org/private-networks",
+  "scripts": {
+    "start": "bash create-node.sh",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "elliptic": "^6.6.1",
+    "keccak256": "^1.0.6",
+    "yargs": "^17.7.2"
+  }
+}

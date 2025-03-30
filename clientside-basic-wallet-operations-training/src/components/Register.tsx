@@ -51,7 +51,7 @@ const Register = () => {
     <>
       <p>Por favor, ingresa tus datos para registrarte.</p>
       <form
-        className={styles.loginForm}
+        className={styles.form}
         onSubmit={handleSubmit(registerUserHandler)}
       >
         <label>

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import react from "../assets/react.svg";
 import user from "../assets/user.svg";
 
@@ -15,9 +15,10 @@ const Navigation = ({ isLogged, logoutHandler }: Props) => {
         flexDirection: "row",
         justifyContent: "flex-start",
         alignItems: "center",
+        fontVariant: "small-caps"
       }}
     >
-      <Link
+      <NavLink
         style={{
           flexGrow: "1",
           display: "flex",
@@ -28,7 +29,7 @@ const Navigation = ({ isLogged, logoutHandler }: Props) => {
       >
         <img src={react} />
         <span>Home</span>
-      </Link>
+      </NavLink>
       <div
         style={{
           display: "flex",
@@ -37,11 +38,12 @@ const Navigation = ({ isLogged, logoutHandler }: Props) => {
           flexGrow: "1",
         }}
       >
-        <Link to="/contacts">Contactos</Link>
-        <Link to="/balance">Balance</Link>
+        <NavLink to="/contacts">Agenda de contactos</NavLink>
+        <NavLink to="/transfer">Transferir fondos</NavLink>
+        <NavLink to="/balance">Balance</NavLink>
       </div>
       {!isLogged && (
-        <Link
+        <NavLink
           style={{
             display: "flex",
             alignItems: "center",
@@ -55,7 +57,7 @@ const Navigation = ({ isLogged, logoutHandler }: Props) => {
             alt=""
           />
           Login
-        </Link>
+        </NavLink>
       )}
       {isLogged && (
         <div

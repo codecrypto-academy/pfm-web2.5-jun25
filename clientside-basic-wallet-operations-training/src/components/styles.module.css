@@ -20,7 +20,7 @@
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-.loginForm {
+.form {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -32,6 +32,10 @@
     align-items: center;
   }
 
+  span {
+    white-space: nowrap;
+  }
+
   input {
     border-radius: 8px;
     border: 1px solid transparent;
@@ -41,6 +45,7 @@
     font-family: inherit;
     background-color: #1a1a1a;
     border-color: #646cff;    
+    width: 100%;
   }
 
   small {

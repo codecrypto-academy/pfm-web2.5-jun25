@@ -4,13 +4,7 @@
  *
  */
 
-import { formatUnits, parseEther } from "ethers";
-// https://github.com/Road2Crypto/wallet-address-validator
-import { isWalletValid } from "r2c-wallet-validator";
-
-// https://github.com/juanelas/bigint-conversion/blob/4a6d8f8a680c2022024bc6f9d4df4cec2fe979a6/docs/API.md#bigint-conversion---v243
-import * as bigintConversion from 'bigint-conversion';
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import ConnectMetamaskButton from "./ConnectMetamaskButton";
 
 declare global {
@@ -39,96 +33,72 @@ type ExternalProvider = {
   selectedAddress?: string;
 };
 
-function throwRequestError(request: string, message: unknown): Error {
-  throw new Error(
-    `${request} request failed: ${JSON.stringify(message, null, 4)}`
-  );
-}
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEthereumAccount } from "../hooks/useEthereumAccount";
+import ConnectedAccount from "./ConnectedAccount";
+import styles from "./styles.module.css";
 
 const Balance = () => {
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [accounts, setAccounts] = useState<string>();
+  const [isProvidingFunds, setIsProvidingFunds] = useState(false);
+
   const [balance, setBalance] = useState<string>();
 
-  const [qty, setQty] = useState<string>("0.0000");
-  const [to, setTo] = useState<string>("");
+  const { currentAccount, metamaskConnectHandler, isConnecting } =
+    useEthereumAccount();
 
-  /**
-   * Connect to metamask
-   */
-  const metamaskConnectHandler = () => {
-    setIsConnecting(true);
-    window.ethereum
-      ?.request({ method: "eth_requestAccounts" })
-      .then((accounts) => {
-        setIsConnecting(false);
-        if (Array.isArray(accounts)) {
-          setAccounts(accounts[0]);
-          return;
-        }
-
-        throwRequestError("eth_requestAccounts", accounts);
+  const { mutate: loadFundsMutation } = useMutation({
+    mutationFn: async () => {
+      if (!currentAccount) {
+        return;
+      }
+      const response = await fetch(`http://localhost:3000/api/faucet/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          address: currentAccount.toString(),
+          amount: "10000",
+        }),
       });
-  };
 
-  /**
-   * Read the balance of the connected wallet address
-   */
-  useEffect(() => {
-    if (accounts) {
-      // console.log(window.ethereum.selectedAddress);
-      window.ethereum
-        ?.request({
-          method: "eth_getBalance",
-          params: [accounts.toString(), "latest"],
-        })
-        .then((balanceInWei) => {
-          if (typeof balanceInWei !== "string") {
-            throwRequestError("eth_getBalance", balanceInWei);
-            return;
-          }
-          const balanceInEthers = formatUnits(balanceInWei, 18); //(Number(balanceInWei) / 10 ** 18).toFixed(4);
-          setBalance(balanceInEthers);
-        });
-    }
-  }, [accounts]);
+      return await response.json();
+    },
+    onMutate: () => {
+      setIsProvidingFunds(true);
+    },
+    onSuccess: async () => {
+      setIsProvidingFunds(false);
+      if (!currentAccount) {
+        return;
+      }
+      const response = await fetch(
+        `http://localhost:3000/api/balance/${currentAccount.toString()}`
+      );
 
-  /**
-   * Add accountsChanged handler to manage wallet address change
-   */
-  useEffect(() => {
-    if (accounts) {
-      window.ethereum?.on("accountsChanged", (data) => {
-        setAccounts(data[0]);
-      });
-    }
-  }, [accounts]);
+      const { balance } = await response.json();
+      setBalance(balance);
+    },
+  });
 
-  /**
-   * Send funds from one wallet to another wallet
-   */
-  const transferClickHandler = () => {
-    if (!qty || !to) {
-      return;
-    }
+  useQuery({
+    queryKey: ["balance", currentAccount],
+    queryFn: async () => {
+      if (!currentAccount) {
+        return 0;
+      }
+      const response = await fetch(
+        `http://localhost:3000/api/balance/${currentAccount.toString()}`
+      );
 
-    window.ethereum
-      ?.request({
-        method: "eth_sendTransaction",
-        params: [
-          {
-            to,
-            from: (accounts as string).toString(),
-            value: bigintConversion.bigintToHex(parseEther(qty), true),
-          },
-        ],
-      })
-      .then((result) => {
-        console.log(result);
-      })
-      .catch((error) => {
-        console.log("ERROR!", error);
-      });
+      const reponseBody = await response.json();
+      setBalance(reponseBody.balance);
+      return reponseBody;
+    },
+  });
+
+  const loadFundsHandler = () => {
+    loadFundsMutation();
   };
 
   const isMetamaskInstalled = !!window.ethereum;
@@ -141,52 +111,38 @@ const Balance = () => {
   return (
     <>
       <h2>Balance</h2>
-      {!accounts ? (
+      {!currentAccount ? (
         <ConnectMetamaskButton
           clickHandler={metamaskConnectHandler}
           isConnecting={isConnecting}
         />
       ) : (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>Wallet address:</span>
-            <span>{accounts.toString()}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>Balance:</span>
-            <span>{balance}</span>
-          </div>
-          <h3>Transfer</h3>
-          <div style={{ display: "flex", gap: "12px" }}>
-            <span>Quantity:</span>
-            <input
-              style={{ width: "64px" }}
-              type="number"
-              name="qty"
-              min="0"
-              max={balance}
-              step="0.0001"
-              value={Number(qty).toFixed(4)}
-              onChange={(e) => setQty(e.target.value)}
-            />
-            <span>to account</span>
-            <input
-              style={{ flexGrow: "1" }}
-              type="text"
-              name="to"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-            />
-          </div>
-          <pre>is valid {isWalletValid(to).valid ? "si" : "no"}</pre>
-          <button
-            style={{ width: "100%", marginTop: "12px" }}
-            onClick={transferClickHandler}
-            disabled={!qty || !to}
+        <section style={{ backgroundColor: "#1a1a1a", padding: "12px" }}>
+          <ConnectedAccount currentAccount={currentAccount} />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
           >
-            Transfer
-          </button>
-        </>
+            <span>Balance:</span>
+            <span style={{ fontWeight: "bold", fontSize: "20px" }}>
+              {balance}
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              marginTop: "12px",
+            }}
+          >
+            <button className={styles.button} onClick={loadFundsHandler}>
+              {isProvidingFunds ? "Loading..." : "Load funds"}
+            </button>
+          </div>
+        </section>
       )}
     </>
   );

@@ -7,6 +7,7 @@ import Login from "./components/Login";
 import NotAuthorized from "./components/NotAuthorized.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
 import Register from "./components/Register";
+import Transfer from "./components/Transfer.tsx";
 import Layout from "./Layout.tsx";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,14 @@ function App() {
                   <Contacts />
                 </Layout>
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/transfer"
+            element={
+              <Layout>
+                <Transfer />
+              </Layout>
             }
           />
           <Route

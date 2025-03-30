@@ -54,7 +54,7 @@ const Login = () => {
         <p className={styles.errorMessage}>{response.message}</p>
       )}
       <form
-        className={styles.loginForm}
+        className={styles.form}
         onSubmit={handleSubmit(loginUserHandler)}
       >
         <label>

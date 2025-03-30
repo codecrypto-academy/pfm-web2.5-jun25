@@ -35,13 +35,13 @@ const key = ecObj.genKeyPair();
 // generate the public key in hex format
 const pubKey = key.getPublic("hex");
 fs.writeFileSync(`${rootPath}/key.pub`, pubKey);
-console.log(`Public key: ${rootPath}/key.pub`);
+console.log(`Public key: ${rootPath}/key.pub created`);
 
 
 // generate the private key in hex format
 const privKey = key.getPrivate("hex");
 fs.writeFileSync(`${rootPath}/key.priv`, privKey);
-console.log(`Private key: ${rootPath}/key.priv`);
+console.log(`Private key: ${rootPath}/key.priv created`);
 
 // generate the address from the public key
 // --> In Ethereum, the '04' prefix is used to indicate that the public key is uncompressed
@@ -56,9 +56,9 @@ const address = keccak256(Buffer.from(pubKeyWithoutPrefix, "hex"))
   .toString("hex")
   .slice(-40);
 fs.writeFileSync(`${rootPath}/address`, address);
-console.log(`Address: ${rootPath}/address`);
+console.log(`Address: ${rootPath}/address created`);
 
 // create enode URL from the public key and IP address
 const enode = `enode://${pubKeyWithoutPrefix}@${ip}:30303`;
 fs.writeFileSync(`${rootPath}/enode`, enode);
-console.log(`enode: ${rootPath}/enode`);
+console.log(`enode: ${rootPath}/enode created`);

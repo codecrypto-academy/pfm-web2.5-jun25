@@ -1,9 +1,7 @@
-version: '3'
-
 services:
   nodo_eth:
     image: ethereum/client-go:v1.13.15
-    container_name: nodo_eth
+    container_name: geth-node
     volumes:
       - ./pwd.txt:/pwd.txt
       - ./data:/data

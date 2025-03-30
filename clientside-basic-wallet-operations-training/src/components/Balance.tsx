@@ -36,6 +36,7 @@ type ExternalProvider = {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEthereumAccount } from "../hooks/useEthereumAccount";
 import ConnectedAccount from "./ConnectedAccount";
+import ConnectedChainId from "./ConnectedChainId";
 import styles from "./styles.module.css";
 
 const Balance = () => {
@@ -43,7 +44,7 @@ const Balance = () => {
 
   const [balance, setBalance] = useState<string>();
 
-  const { currentAccount, metamaskConnectHandler, isConnecting } =
+  const { currentAccount, metamaskConnectHandler, isConnecting, chainId } =
     useEthereumAccount();
 
   const { mutate: loadFundsMutation } = useMutation({
@@ -51,14 +52,14 @@ const Balance = () => {
       if (!currentAccount) {
         return;
       }
-      const response = await fetch(`http://localhost:3000/api/faucet/`, {
+      const response = await fetch(`http://localhost:3000/api/faucet/${chainId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           address: currentAccount.toString(),
-          amount: "10000",
+          amount: "10",
         }),
       });
 
@@ -73,7 +74,7 @@ const Balance = () => {
         return;
       }
       const response = await fetch(
-        `http://localhost:3000/api/balance/${currentAccount.toString()}`
+        `http://localhost:3000/api/balance/${chainId}/${currentAccount.toString()}`
       );
 
       const { balance } = await response.json();
@@ -84,11 +85,11 @@ const Balance = () => {
   useQuery({
     queryKey: ["balance", currentAccount],
     queryFn: async () => {
-      if (!currentAccount) {
+      if (!currentAccount || !chainId) {
         return 0;
       }
       const response = await fetch(
-        `http://localhost:3000/api/balance/${currentAccount.toString()}`
+        `http://localhost:3000/api/balance/${chainId}/${currentAccount.toString()}`
       );
 
       const reponseBody = await response.json();
@@ -117,32 +118,35 @@ const Balance = () => {
           isConnecting={isConnecting}
         />
       ) : (
-        <section style={{ backgroundColor: "#1a1a1a", padding: "12px" }}>
-          <ConnectedAccount currentAccount={currentAccount} />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span>Balance:</span>
-            <span style={{ fontWeight: "bold", fontSize: "20px" }}>
-              {balance}
-            </span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginTop: "12px",
-            }}
-          >
-            <button className={styles.button} onClick={loadFundsHandler}>
-              {isProvidingFunds ? "Loading..." : "Load funds"}
-            </button>
-          </div>
-        </section>
+        <>
+          <ConnectedChainId currentChainId={chainId} />
+          <section style={{ backgroundColor: "#1a1a1a", padding: "12px" }}>
+            <ConnectedAccount currentAccount={currentAccount} />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span>Balance:</span>
+              <span style={{ fontWeight: "bold", fontSize: "20px" }}>
+                {balance}
+              </span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: "12px",
+              }}
+            >
+              <button className={styles.button} onClick={loadFundsHandler}>
+                {isProvidingFunds ? "Loading..." : "Load funds"}
+              </button>
+            </div>
+          </section>
+        </>
       )}
     </>
   );

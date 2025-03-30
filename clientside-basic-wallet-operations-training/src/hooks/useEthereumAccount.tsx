@@ -8,6 +8,7 @@ function throwRequestError(request: string, message: unknown): Error {
 
 export const useEthereumAccount = () => {
   const [isConnecting, setIsConnecting] = useState(false);
+  const [chainId, setChainId] = useState<number>();
   const [currentAccount, setCurrentAccount] = useState<string>();
 
   const metamaskConnectHandler = () => {
@@ -43,6 +44,27 @@ export const useEthereumAccount = () => {
     window.ethereum?.on("accountsChanged", accountsChangedHandler);
   }, [accountsChangedHandler]);
 
+  useEffect(() => {
+    window.ethereum
+      ?.request({ method: "eth_chainId" })
+      .then((chainId) => {
+        // console.log(`Connected to chain: ${Number(chainId)}`);
+        // console.log("GETH", import.meta.env.VITE_GETH_CHAIN_ID);
+        // console.log("BESU", import.meta.env.VITE_BESU_CHAIN_ID);
+        setChainId(Number(chainId));
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+
+    window.ethereum?.on("chainChanged", () => {
+      console.log("Chain changed");
+      window.location.reload();
+    });
+  }, []);
+
+
+
   /**
    * Detect if metamask is already connected
    */
@@ -54,6 +76,7 @@ export const useEthereumAccount = () => {
 
   return {
     isConnecting,
+    chainId,
     currentAccount,
 
     metamaskConnectHandler,

@@ -9,6 +9,7 @@ import { isWalletValid } from "r2c-wallet-validator";
 import { useState } from "react";
 import { useEthereumAccount } from "../hooks/useEthereumAccount";
 import ConnectedAccount from "./ConnectedAccount";
+import ConnectedChainId from "./ConnectedChainId";
 import styles from "./styles.module.css";
 
 type FormData = {
@@ -16,7 +17,7 @@ type FormData = {
   qty: string;
 };
 const Transfer = () => {
-  const { currentAccount } = useEthereumAccount();
+  const { currentAccount, chainId } = useEthereumAccount();
   const [isSendingFunds, setIsSendingFunds] = useState(false);
 
   const {
@@ -56,6 +57,7 @@ const Transfer = () => {
   return (
     <>
       <h2>Transfer</h2>
+      <ConnectedChainId currentChainId={chainId} />
       <section
         style={{
           backgroundColor: "#1a1a1a",

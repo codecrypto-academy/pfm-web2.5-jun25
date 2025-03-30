@@ -43,10 +43,12 @@ const createContactSchema = z.object({
 
 // Define a schema for checking the balance of a wallet address
 const balanceInputSchema = z.object({
+  chainid: z.coerce.number().int().positive(),
   address: z.string()
 });
 
 const faucetInputsSchema = z.object({
+  chainid: z.coerce.number().int().positive(),
   address: z.string(),
   amount: z.coerce.number().int().positive(),
 });

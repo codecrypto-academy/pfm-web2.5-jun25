@@ -1,6 +1,11 @@
 
 # Nodo de Etherium besu (private networks)
 
+Para levantar el nodo:
+
+- Instalar dependencias `npm install`
+- Ejecutar script `npm run start`
+
 ## Introducción
 
 https://besu.hyperledger.org/private-networks
@@ -28,7 +33,7 @@ Mecanismo de consenso
 ```json
 {
   "config": {
-    "chainId": 701337,
+    "chainId": "<ChainId>",
     "londonBlock": 0,
     "clique": {
       "blockperiodseconds": 4,

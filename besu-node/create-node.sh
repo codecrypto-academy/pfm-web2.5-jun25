@@ -7,7 +7,7 @@ rm -rf networks
 # remove docker containers
 docker rm -f $(docker ps -aq --filter "label=network=besu-network") >/dev/null 2>/dev/null || true
 # remove docker networks
-docker network rm besu-network 2>/dev/null || true
+docker network rm besu-network >/dev/null 2>/dev/null || true
 
 ###########################################################
 # setup 
@@ -16,6 +16,7 @@ NETWORK="172.24.0.0/16"
 BOOTNODE_IP="172.24.0.20"
 BESU_NETWORK="networks/besu-network"
 BOOTNODE_DIR="$BESU_NETWORK/bootnode"
+CHAIN_ID="701337"
 
 mkdir -p $BOOTNODE_DIR
 
@@ -38,7 +39,7 @@ fi
 cat > $BESU_NETWORK/genesis.json << EOF
 {
   "config": {
-    "chainId": 701337,
+    "chainId": $CHAIN_ID,
     "londonBlock": 0,
     "clique": {
       "blockperiodseconds": 4,

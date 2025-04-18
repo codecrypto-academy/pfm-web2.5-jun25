@@ -16,7 +16,7 @@ NETWORK="172.24.0.0/16"
 BOOTNODE_IP="172.24.0.20"
 BESU_NETWORK="networks/besu-network"
 BOOTNODE_DIR="$BESU_NETWORK/bootnode"
-CHAIN_ID="701337"
+CHAIN_ID="7402"
 
 mkdir -p $BOOTNODE_DIR
 
@@ -86,7 +86,7 @@ docker run -d \
 --label network=besu-network \
 --ip ${BOOTNODE_IP} \
 --network besu-network \
--p 8888:8545 \
+-p 8546:8545 \
 -v ${PWD}/${BESU_NETWORK}:/data \
 hyperledger/besu:latest \
 --config-file=/data/config.toml \

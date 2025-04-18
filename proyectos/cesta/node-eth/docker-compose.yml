@@ -1,0 +1,10 @@
+services:
+  eth_node:
+    container_name: cesta_eth_node
+    image: ethereum/client-go:v1.13.15
+    volumes:
+      - ./password:/password
+      - ./data:/data
+    ports:
+      - 8888:8545
+    command: --datadir /data --unlock b01d5c90c2f78b5f0aa6b4b5a3b05c587b41a850 --allow-insecure-unlock --mine --miner.etherbase b01d5c90c2f78b5f0aa6b4b5a3b05c587b41a850 --password /password --nodiscover --ipcdisable --http --http.addr "0.0.0.0" --http.api "admin,eth,debug,miner,net,txpool,personal,web3" --http.corsdomain "*"

@@ -1,4 +1,10 @@
 .idea/
 .vscode/
-eth-geth-node/data
-eth-geth-node/pwd.txt
+node1/
+node2/
+node3/
+pwd.txt
+pwd
+boot.key
+node_modules/
+data/

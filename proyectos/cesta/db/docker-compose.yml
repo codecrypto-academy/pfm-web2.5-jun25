@@ -1,0 +1,13 @@
+services:
+  db:
+    container_name: db
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: northwind
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./northwind.sql:/docker-entrypoint-initdb.d/northwind.sql
+      - ./files:/files
+    ports:
+      - 55432:5432

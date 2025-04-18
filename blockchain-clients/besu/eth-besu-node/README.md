@@ -65,6 +65,8 @@ p2p-host="0.0.0.0"
 p2p-port=30303
 p2p-enabled=true
 
+discovery-enabled=true
+
 # JSON-RPC
 rpc-http-enabled=true
 rpc-http-host="0.0.0.0"

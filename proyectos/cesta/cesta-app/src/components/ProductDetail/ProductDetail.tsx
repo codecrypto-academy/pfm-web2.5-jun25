@@ -51,6 +51,9 @@ const ProductDetail = () => {
             className="form-control"
             value={qty}
             onChange={(e) => setQty(Number(e.target.value))}
+            style={{ width: "100px" }}
+            min={1}
+            max={data.result.units_in_stock}
           />
         </div>
         <div className="card-footer">

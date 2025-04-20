@@ -26,6 +26,8 @@ const useMetamask = () => {
         } catch (error) {
           console.error(error);
         }
+      } else {
+        alert("Please install MetaMask to use this feature.");
       }
     };
   
@@ -36,7 +38,6 @@ const useMetamask = () => {
             method: "eth_accounts",
           })
           .then((accounts: string[]) => {
-            console.log("Accounts:", accounts);
             if (accounts.length > 0) {
               setIsWalletConnected(true);
               setAccount(accounts[0]);

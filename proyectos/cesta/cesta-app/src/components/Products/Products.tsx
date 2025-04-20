@@ -7,7 +7,6 @@ function getProducts(): Promise<{ result: Product[] }> {
 }
 
 const Products = () => {
-  // const { addProductToCart } = useContext(CartContext);
   const query = useQuery({ queryKey: ["products"], queryFn: getProducts });
 
   return (
@@ -32,7 +31,7 @@ const Products = () => {
                     className="btn btn-primary"
                     to={`/product/${product.product_id}`}
                   >
-                    Add to cart
+                    Buy
                   </Link>
                 </td>
               </tr>

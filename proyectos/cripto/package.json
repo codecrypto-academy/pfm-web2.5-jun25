@@ -1,0 +1,22 @@
+{
+  "name": "cripto",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npx -y tsx src/app.ts",
+    "dev": "npx -y tsx watch src/app.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "@types/yargs": "^17.0.33",
+    "typescript": "^5.8.3"
+  }
+}

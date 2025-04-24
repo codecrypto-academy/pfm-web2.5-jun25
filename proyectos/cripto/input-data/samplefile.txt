@@ -1,0 +1,8 @@
+# This is a sample text file
+# The following lines contain example text data
+
+Hello, world!
+This is a sample text file.
+It contains multiple lines of text.
+Feel free to add more lines as needed.
+

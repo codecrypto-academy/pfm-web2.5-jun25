@@ -48,7 +48,7 @@ console.log(`Decrypting file ${inputDataFilePath}
   and private key ${privateKeyPath}
 `);
 
-// recrear la clave privada del origen
+// recrear la clave privada del origen con criptografía asimétrica curva elíptica (ECDH)
 const origen = createECDH("secp521r1"); // or "secp256k1"
 const privateKey = fs.readFileSync(privateKeyPath, { encoding: "utf-8" });
 origen.setPrivateKey(privateKey, "hex");

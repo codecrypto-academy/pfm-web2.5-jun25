@@ -1,0 +1,174 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: besu-network
+  labels:
+    name: besu-network
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: besu-config
+  namespace: besu-network
+data:
+  key: a807d2cffc3008a8305dc92b86213001ae277752bcf88174bf414d848862b451
+  address: 0xF7a7C3d9e450641C590FE49bc3652f7c9d38f193
+  public-key: 04f7dcc10f97a2284ad3b6191808541fd1d91fa97c21ee320d4e3335eac4c3da54811fe65ddb009892846c29b052e15d078be21475cb117268cd55d86b1cf1753d
+  enode: enode://8842ad6d946f0b64331493376532b22bc158878a2@127.0.0.1:30303
+  config.toml: |
+    # Networking
+    p2p-host="0.0.0.0"
+    p2p-port=30303
+    p2p-enabled=true
+    # JSON-RPC
+    bootnodes=["${bootnode}"]
+    rpc-http-enabled=true
+    rpc-http-host="0.0.0.0"
+    rpc-http-port=8545
+    rpc-http-cors-origins=["*"]
+    rpc-http-api=["ETH","NET","CLIQUE","ADMIN", "TRACE", "DEBUG", "TXPOOL", "PERM"]
+    host-allowlist=["*"]
+  genesis.json: |
+    {
+      "config": {
+        "chainId": 1337,
+        "londonBlock": 0,
+        "clique": {
+          "blockperiodseconds": 4,
+          "epochlength": 30000,
+          "createemptyblocks": true
+        }
+      },
+      "extraData": "0x0000000000000000000000000000000000000000000000000000000000000000F7a7C3d9e450641C590FE49bc3652f7c9d38f1930000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "gasLimit": "0x1000000",
+      "difficulty": "0x1",
+      "alloc": {
+        "0xF7a7C3d9e450641C590FE49bc3652f7c9d38f193": {
+          "balance": "0x200000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: besu-network
+  namespace: besu-network
+  labels:
+    app: besu
+spec:
+  replicas: 1  # For bootnode, miner, and 2 RPC nodes
+  selector:
+    matchLabels:
+      app: besu
+  template:
+    metadata:
+      labels:
+        app: besu
+    spec:
+      containers:
+      - name: besu
+        image: hyperledger/besu:latest
+        ports:
+        - containerPort: 8545
+        - containerPort: 30303
+        volumeMounts:
+        - name: besu-data
+          mountPath: /data
+        - name: besu-config
+          mountPath: /data/besu-config
+        args:
+        - --data-path=/data/node/data
+        - --config-file=/data/besu-config/config.toml
+        - --node-private-key-file=/data/besu-config/key
+        - --genesis-file=/data/besu-config/genesis.json
+    
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+      volumes:
+      - name: besu-config
+        configMap:
+          name: besu-config
+      - name: besu-data
+        persistentVolumeClaim:
+          claimName: besu-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: besu-service
+  namespace: besu-network
+spec:
+  selector:
+    app: besu
+  ports:
+    - name: json-rpc
+      port: 8545
+      targetPort: 8545
+    - name: p2p
+      port: 30303
+      targetPort: 30303
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: besu-service2
+  namespace: besu-network
+spec:
+  selector:
+    app: besu
+  ports:
+    - name: json-rpc
+      port: 8545
+      targetPort: 8545
+    - name: p2p
+      port: 30303
+      targetPort: 30303
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: besu-data-pvc
+  namespace: besu-network
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: networking.k8s.io/v1
+# NetworkPolicy defines how groups of pods are allowed to communicate with each other and other network endpoints.
+# It provides network isolation and security controls at the pod level using labels and selectors.
+kind: NetworkPolicy
+metadata:
+  name: besu-network-policy
+  namespace: besu-network
+spec:
+  podSelector:
+    matchLabels:
+      app: besu
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: besu
+    ports:
+    - protocol: TCP
+      port: 8545
+    - protocol: TCP
+      port: 30303
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: besu

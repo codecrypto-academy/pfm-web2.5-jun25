@@ -13,7 +13,6 @@ router.use(express.json());
 router.get(
   "/balance/:chainid/:address",
   async (req: Request, res: Response) => {
-    // TODO: Create an abstraction to validate the userId
     const parseResult = balanceInputSchema.safeParse(req.params);
     if (!parseResult.success) {
       res.status(400).send({ message: parseResult.error.errors[0].message });
@@ -21,20 +20,67 @@ router.get(
     }
 
     const { address, chainid } = req.params;
-
-    const providerURL =
-      chainid === "701337"
-        ? process.env.BESU_RPC_URL
-        : process.env.ETHEREUM_RPC_URL;
+    const providerURL = chainid === "701337" 
+      ? process.env.BESU_RPC_URL 
+      : process.env.ETHEREUM_RPC_URL;
 
     try {
+      // 1. Validate RPC URL exists
+      if (!providerURL) {
+        res.status(503).send({ 
+          message: "Blockchain service not configured",
+          error: "RPC_URL_MISSING"
+        });
+        return;
+      }
+
       const provider = new ethers.JsonRpcProvider(providerURL);
+      
+      // 2. Test connection explicitly
+      await provider.getNetwork();
+      
       const balance = formatEther(await provider.getBalance(address));
       res.status(200).send({ balance });
+      
     } catch (error) {
-      console.log(error);
-
-      res.status(400).send({ message: "Invalid address" });
+      // 3. Handle specific error types
+      if (error instanceof Error && error.constructor.name === 'AggregateError') {
+        console.log("AggregateError - Blockchain node unavailable:", error);
+        res.status(503).send({ 
+          message: "Blockchain node is unavailable",
+          error: "NODE_UNAVAILABLE"
+        });
+        return;
+      }
+      
+      if (error instanceof Error) {
+        // Network connectivity issues
+        if (error.message.includes("fetch") || error.message.includes("network")) {
+          console.log("Network connectivity error:", error);
+          res.status(503).send({ 
+            message: "Cannot connect to blockchain node",
+            error: "NETWORK_ERROR"
+          });
+          return;
+        }
+        
+        // Invalid address format
+        if (error.message.includes("invalid address")) {
+          console.log("Invalid address format error:", error);
+          res.status(400).send({ 
+            message: "Invalid wallet address format",
+            error: "INVALID_ADDRESS"
+          });
+          return;
+        }
+      }
+      
+      // 4. Generic server error for unexpected issues
+      console.log("Unexpected error:", error);
+      res.status(500).send({ 
+        message: "Internal server error",
+        error: "INTERNAL_ERROR"
+      });
     }
   }
 );

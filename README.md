@@ -1,295 +1,129 @@
 # jmvelasco
 ###### Codecrypto Academy Student Repo
 
-
 ## Instructor repository
 - https://github.com/jviejocodecripto?tab=repositories
 - https://github.com/Jviejo?tab=repositories
 
 ---
 
-# 📚 Course Exercises Documentation
+# 📚 Project Documentation
 
-## 🎓 Course Overview
+## 🏗️ Overview
 
-This repository contains a collection of exercises and projects from the CodeCrypto Academy course. Each folder represents a different exercise or project assignment covering various aspects of blockchain development, cryptocurrency tools, and web3 technologies.
+This repository contains a collection of independent blockchain and cryptocurrency development projects. Each project is self-contained with its own setup, configuration, and documentation.
 
 ---
 
-## 📁 Exercise Structure
+## 🌐 Local Blockchain Networks
 
-### 1. **Wallet Address Book Exercise** (`/backend` + `/front`)
+This repository includes several local blockchain networks configured for MetaMask:
 
-**Exercise Objective**: Build a full-stack application for managing cryptocurrency wallet contacts
+### **MetaMask Network Configuration:**
 
-**Backend Exercise (`/backend`)**
-- **Learning Goals**: REST API development, database design, authentication
-- **Technology Stack**: Node.js, Express, TypeScript, Prisma, MongoDB
-- **Exercise Features**:
-  - User registration and authentication with bcrypt
-  - Contact management (CRUD operations)
-  - Contacts book organization
-  - Wallet address validation
-  - JWT-based authentication
+#### **1. GETH Local Network (KHLOE.A)**
+- **RPC URL**: `http://localhost:8545`
+- **Chain ID**: `7401`
+- **Currency Symbol**: `KHLOE.A`
+- **Configuration Location**: `blockchain-clients/geth/eth-geth-node/`
 
-**Database Schema**:
+#### **2. Besu Local Network (KHLOE.B)**
+- **RPC URL**: `http://localhost:8546`
+- **Chain ID**: `7402`
+- **Currency Symbol**: `KHLOE.B`
+- **Configuration Location**: `blockchain-clients/besu/eth-besu-node/`
+
+#### **3. GETH Multi-Node Network (KHLOE.C)**
+- **RPC URL**: `http://localhost:30306`
+- **Chain ID**: `7403`
+- **Currency Symbol**: `KHLOE.C`
+- **Configuration Location**: `blockchain-clients/geth/ethereum-network/`
+
+#### **4. Northwind E-commerce Network (KHLOE)**
+- **RPC URL**: `http://localhost:8888`
+- **Chain ID**: `35001`
+- **Currency Symbol**: `KHLOE`
+- **Configuration Location**: `proyectos/cesta/node-eth/`
+
+---
+
+## 📁 Projects
+
+### 1. **Wallet Address Book Application**
+
+**Location**: `/backend` + `/front`
+
+#### **Description**
+Full-stack application for managing cryptocurrency wallet contacts with user authentication, contact management, and blockchain integration.
+
+#### **Project Relationships**
+- **Connected Projects**: Frontend and Backend work together
+- **Frontend** → **Backend API** at `http://localhost:3000`
+- **Backend** → **MongoDB** database
+- **Backend** → **Blockchain networks** for balance checking
+
+#### **Technology Stack**
+- **Backend**: Node.js, Express, TypeScript, Prisma, MongoDB, bcrypt, JWT
+- **Frontend**: React, TypeScript, Vite, React Router, React Query
+- **Blockchain**: ethers.js for Web3 integration
+
+#### **Features**
+- User registration and authentication
+- Contact management (CRUD operations)
+- Wallet address validation
+- Blockchain balance checking
+- MetaMask integration
+- Protected routes
+
+#### **Database Schema**
 ```prisma
 - User: id, name, email, password, createdAt, updatedAt
 - ContactsBook: id, ownerId, owner (relation), createdAt, updatedAt
 - Contacts: id, name, walletAddress, contactsBookId, createdAt, updatedAt
 ```
 
-**Frontend Exercise (`/front`)**
-- **Learning Goals**: React development, Web3 integration, state management
-- **Technology Stack**: React, TypeScript, Vite, React Router, React Query
-- **Exercise Features**:
-  - User authentication (Login/Register)
-  - Contact management interface
-  - Wallet balance checking
-  - Transfer functionality
-  - Protected routes
-  - MetaMask integration
-
-### 2. **Blockchain Manager Exercise** (`/blockchain-manager`)
-
-**Exercise Objective**: Learn Hyperledger Besu node management and Docker automation
-
-**Exercise Components**:
-- **Script Exercise (`/script`)**: Shell scripting for node deployment and testing
-- **Library Exercise (`/lib-dockercode`)**: TypeScript library development for Docker container management
-- **Web Interface Exercise (`/web`)**: Next.js application for network management
-
-**Learning Goals**:
-- Docker-based node deployment
-- Clique consensus protocol implementation
-- Multi-node network creation
-- REST API for network management
-- Web interface for node operations
-- Automated testing with Jest
-
-**Technology Stack**:
-- Hyperledger Besu
-- Docker & Dockerode
-- TypeScript
-- Next.js 15
-- Tailwind CSS
-- Jest for testing
-
-### 3. **Blockchain Balance Checker Exercise** (`/console`)
-
-**Exercise Objective**: Learn multi-chain balance monitoring and Web3 integration
-
-**Learning Goals**:
-- **EVM Chains**: Ethereum, Polygon balance checking
-- **Solana**: Devnet balance monitoring
-- **Token Support**: ERC-20 token balance checking
-- **Web3 Integration**: ethers.js and @solana/web3.js
-
-**Exercise Scripts**:
-- `evm-balances.js`: Ethereum/Polygon balance checker
-- `solana.js`: Solana balance checker
-- `utils.js`: Web3 utility functions
-
-### 4. **Cryptographic Tools Exercise** (`/proyectos/cripto`)
-
-**Exercise Objective**: Learn cryptographic operations and file encryption/decryption
-
-**Learning Goals**:
-- ECDH key pair generation (secp521r1/secp256k1)
-- File encryption and decryption
-- Stream-based processing for large files
-- Command-line interface with yargs
-
-**Exercise Commands**:
-```bash
-# Generate key pair
-npm start -- --key_name mykey
-
-# Encrypt/Decrypt files
-npm run dev
-```
-
-### 5. **E-commerce with Blockchain Exercise** (`/proyectos/cesta`)
-
-**Exercise Objective**: Build an e-commerce application with blockchain integration
-
-**Exercise Components**:
-- **Frontend Exercise (`cesta-app`)**: React + TypeScript shopping cart
-- **Backend Exercise (`cesta-backend`)**: Node.js API development
-- **Database Exercise (`db`)**: PostgreSQL with Northwind sample data
-- **Blockchain Exercise (`node-eth`)**: Private Ethereum network with Geth
-
-**Learning Goals**:
-- Product catalog management
-- Shopping cart functionality
-- User authentication
-- Blockchain integration
-- Private Ethereum network setup
-
-### 6. **Blockchain Clients Exercise** (`/blockchain-clients`)
-
-**Exercise Objective**: Learn different blockchain client implementations
-
-**Exercise Components**:
-- **Besu Exercise (`/besu`)**: Hyperledger Besu network setup
-- **Geth Exercise (`/geth`)**: Ethereum Geth node configuration
-
-**Learning Goals**:
-- Different blockchain client configurations
-- Network setup and management
-- Genesis block configuration
-- Node deployment strategies
-
----
-
-## 🛠️ Technologies Covered in Course
-
-### Backend Technologies
-- **Node.js** with TypeScript
-- **Express.js** for REST APIs
-- **Prisma** for database ORM
-- **MongoDB** for data storage
-- **PostgreSQL** for e-commerce exercise
-- **bcrypt** for password hashing
-- **JWT** for authentication
-
-### Frontend Technologies
-- **React** with TypeScript
-- **Next.js** for blockchain manager exercise
-- **Vite** for development
-- **React Router** for navigation
-- **React Query** for data fetching
-- **Tailwind CSS** for styling
-- **Radix UI** for components
-
-### Blockchain Technologies
-- **Hyperledger Besu** for enterprise blockchain
-- **Ethereum Geth** for private networks
-- **Ethers.js** for EVM interactions
-- **@solana/web3.js** for Solana
-- **Web3.js** for blockchain utilities
-
-### DevOps & Tools
-- **Docker** for containerization
-- **Dockerode** for programmatic Docker control
-- **Jest** for testing
-- **ESLint** for code quality
-- **TypeScript** for type safety
-
----
-
-## 🚀 Exercise Setup Instructions
-
-### Prerequisites
+#### **Prerequisites**
 - Node.js (v18+)
-- Docker Desktop
-- MongoDB (for wallet exercise)
-- PostgreSQL (for e-commerce exercise)
+- MongoDB
+- MetaMask browser extension
 
-### Installation
+#### **Installation & Setup**
 
-1. **Clone the repository**
+1. **Clone and navigate**
 ```bash
-git clone <repository-url>
-cd jmvelasco
+cd backend
+npm install
+cd ../front
+npm install
 ```
 
-2. **Install dependencies for each exercise**
+2. **Environment Configuration**
 ```bash
-# Wallet Address Book Exercise
-cd backend && npm install
-cd ../front && npm install
-
-# Blockchain Manager Exercise
-cd ../blockchain-manager/lib-dockercode && npm install
-cd ../web && npm install
-
-# Console Tools Exercise
-cd ../../console && npm install
-
-# Cryptographic Tools Exercise
-cd ../proyectos/cripto && npm install
-
-# E-commerce Exercise
-cd ../cesta/cesta-app && npm install
-cd ../cesta-backend && npm install
-```
-
-3. **Environment Setup**
-```bash
-# Backend Exercise (.env)
+# Backend (.env)
 DATABASE_URL="mongodb://localhost:27017/wallet-address-book"
 PORT=3000
 JWT_SECRET=your-secret-key
-
-# Console Exercise (.env.local)
-WALLET_ADDRESS=your-wallet-address
 ```
 
-4. **Database Setup**
+3. **Database Setup**
 ```bash
-# MongoDB (Wallet Exercise)
 cd backend
 npx prisma generate
 npx prisma db push
-
-# PostgreSQL (E-commerce Exercise)
-cd proyectos/cesta/db
-docker-compose up -d
 ```
 
----
-
-## 📋 Exercise Status
-
-### ✅ Completed Exercises
-- Wallet Address Book (Backend + Frontend)
-- Blockchain Balance Checker
-- Cryptographic Tools
-- E-commerce Project Structure
-- Hyperledger Besu Library
-
-### 🔄 In Progress Exercises
-- Blockchain Manager Web Interface
-- Advanced Testing Implementation
-
-### 📝 Planned Exercises
-- Enhanced Security Features
-- Multi-chain Support Expansion
-- Performance Optimizations
-
----
-
-## 🧪 Exercise Testing
-
-### Wallet Address Book Exercise
+4. **Start Services**
 ```bash
+# Backend (Terminal 1)
 cd backend
-npm test
+npm run dev
+
+# Frontend (Terminal 2)
+cd front
+npm run dev
 ```
 
-### Blockchain Manager Library Exercise
-```bash
-cd blockchain-manager/lib-dockercode
-npm test
-```
-
-### Console Tools Exercise
-```bash
-cd console
-npm run start:evm    # Check EVM balances
-npm run start:solana # Check Solana balances
-```
-
----
-
-## 📖 Exercise API Documentation
-
-### Wallet Address Book Exercise API
-
-**Base URL**: `http://localhost:3000`
-
-**Endpoints**:
+#### **API Endpoints**
 - `POST /user` - User registration
 - `POST /users` - User login
 - `GET /user/:id` - Get user details
@@ -299,51 +133,183 @@ npm run start:solana # Check Solana balances
 - `PUT /contact/:id` - Update contact
 - `DELETE /contact/:id` - Delete contact
 
-### Blockchain Manager Exercise API
-
-**Base URL**: `http://localhost:3001`
-
-**Endpoints**:
-- `POST /api/networks` - Create network
-- `DELETE /api/networks/:id` - Delete network
-- `POST /api/networks/:id/nodes` - Add node
-- `DELETE /api/networks/:id/nodes/:nodeId` - Remove node
-
----
-
-## 🔧 Exercise Development Commands
-
-### Wallet Address Book Exercise
+#### **Development Commands**
 ```bash
 # Backend
-cd backend
 npm run dev      # Development server
 npm run build    # Build for production
 npm start        # Production server
 
 # Frontend
-cd front
 npm run dev      # Development server
 npm run build    # Build for production
 npm run preview  # Preview production build
 ```
 
-### Blockchain Manager Exercise
+#### **Testing**
+```bash
+cd backend
+npm test
+```
+
+---
+
+### 2. **Blockchain Manager**
+
+**Location**: `/blockchain-manager`
+
+#### **Description**
+Hyperledger Besu node management system with Docker automation, including a TypeScript library and web interface for managing blockchain networks.
+
+#### **Project Relationships**
+- **Independent Project**: Self-contained with no external dependencies
+- **Components**: Script, Library, Web Interface work together
+- **Library** → **Docker** via dockerode
+- **Web Interface** → **Library** for network operations
+
+#### **Technology Stack**
+- **Library**: TypeScript, dockerode, Jest
+- **Web Interface**: Next.js 15, React, TypeScript, Tailwind CSS
+- **Scripts**: Shell scripting, Docker
+- **Blockchain**: Hyperledger Besu
+
+#### **Features**
+- Docker-based node deployment
+- Clique consensus protocol implementation
+- Multi-node network creation
+- REST API for network management
+- Web interface for node operations
+- Automated testing
+
+#### **Components**
+- **Script (`/script`)**: Shell scripting for node deployment
+- **Library (`/lib-dockercode`)**: TypeScript library for Docker management
+- **Web Interface (`/web`)**: Next.js application
+
+#### **Prerequisites**
+- Node.js (v18+)
+- Docker Desktop
+- Hyperledger Besu knowledge
+
+#### **Installation & Setup**
+
+1. **Install Library Dependencies**
+```bash
+cd blockchain-manager/lib-dockercode
+npm install
+```
+
+2. **Install Web Interface Dependencies**
+```bash
+cd blockchain-manager/web
+npm install
+```
+
+3. **Build Library**
+```bash
+cd blockchain-manager/lib-dockercode
+npm run build
+```
+
+4. **Start Web Interface**
+```bash
+cd blockchain-manager/web
+npm run dev
+```
+
+#### **API Endpoints**
+- `POST /api/networks` - Create network
+- `DELETE /api/networks/:id` - Delete network
+- `POST /api/networks/:id/nodes` - Add node
+- `DELETE /api/networks/:id/nodes/:nodeId` - Remove node
+
+#### **Development Commands**
 ```bash
 # Library
-cd blockchain-manager/lib-dockercode
 npm run build    # Build library
 npm test         # Run tests
 
 # Web Interface
-cd blockchain-manager/web
 npm run dev      # Development server
 npm run build    # Build for production
 ```
 
-### Console Tools Exercise
+#### **Testing**
+```bash
+cd blockchain-manager/lib-dockercode
+npm test
+```
+
+---
+
+### 3. **Blockchain Balance Checker**
+
+**Location**: `/console`
+
+#### **Description**
+Multi-chain balance monitoring tool for checking balances on Ethereum, Polygon, and Solana networks.
+
+#### **Project Relationships**
+- **Independent Project**: Standalone utility
+- **Connects to**: External blockchain networks (Ethereum, Polygon, Solana)
+
+#### **Technology Stack**
+- **Runtime**: Node.js
+- **Blockchain**: ethers.js, @solana/web3.js
+- **Utilities**: Web3.js
+
+#### **Features**
+- EVM chains balance checking (Ethereum, Polygon)
+- Solana devnet balance monitoring
+- ERC-20 token balance checking
+- Web3 integration
+
+#### **Scripts**
+- `evm-balances.js`: Ethereum/Polygon balance checker
+- `solana.js`: Solana balance checker
+- `utils.js`: Web3 utility functions
+
+#### **Prerequisites**
+- Node.js (v18+)
+- Internet connection for blockchain APIs
+
+#### **Installation & Setup**
+
+1. **Install Dependencies**
 ```bash
 cd console
+npm install
+```
+
+2. **Environment Configuration**
+```bash
+# .env.local
+WALLET_ADDRESS=your-wallet-address
+```
+
+3. **Run Scripts**
+```bash
+# Check EVM balances
+npm run start:evm
+
+# Check Solana balances
+npm run start:solana
+
+# Development mode
+npm run dev
+```
+
+#### **Usage Examples**
+```bash
+# Check Ethereum/Polygon balance
+npm run start:evm
+
+# Check Solana balance
+npm run start:solana
+```
+
+#### **Development Commands**
+```bash
 npm run dev      # Development mode
 npm run start:evm    # Check EVM balances
 npm run start:solana # Check Solana balances
@@ -351,12 +317,196 @@ npm run start:solana # Check Solana balances
 
 ---
 
-## 📝 Exercise Notes
+### 4. **Cryptographic Tools**
 
-- Each exercise is designed to teach specific blockchain and web3 concepts
-- All exercises use TypeScript for type safety
-- Docker is used for blockchain node deployment exercises
+**Location**: `/proyectos/cripto`
+
+#### **Description**
+Command-line cryptographic operations tool for file encryption/decryption using ECDH key pairs.
+
+#### **Project Relationships**
+- **Independent Project**: Standalone utility
+- **No external dependencies** except Node.js
+
+#### **Technology Stack**
+- **Runtime**: Node.js, TypeScript
+- **Cryptography**: Node.js crypto module
+- **CLI**: yargs
+
+#### **Features**
+- ECDH key pair generation (secp521r1/secp256k1)
+- File encryption and decryption
+- Stream-based processing for large files
+- Command-line interface
+
+#### **Prerequisites**
+- Node.js (v18+)
+
+#### **Installation & Setup**
+
+1. **Install Dependencies**
+```bash
+cd proyectos/cripto
+npm install
+```
+
+2. **Generate Key Pair**
+```bash
+npm start -- --key_name mykey
+```
+
+3. **Encrypt/Decrypt Files**
+```bash
+npm run dev
+```
+
+#### **Commands**
+```bash
+# Generate key pair
+npm start -- --key_name mykey
+
+# Encrypt/Decrypt files
+npm run dev
+```
+
+#### **File Structure**
+- `keys/`: Generated key pairs
+- `input-data/`: Files to encrypt
+- `output/`: Encrypted/decrypted files
+
+---
+
+### 5. **E-commerce with Blockchain**
+
+**Location**: `/proyectos/cesta`
+
+#### **Description**
+E-commerce application with blockchain integration, including shopping cart, product catalog, and private Ethereum network.
+
+#### **Project Relationships**
+- **Connected Projects**: Multiple components work together
+- **Frontend** → **Backend API** at `http://localhost:3000`
+- **Backend** → **PostgreSQL** database
+- **Backend** → **Private Ethereum** network
+- **Database** → **Northwind** sample data
+
+#### **Technology Stack**
+- **Frontend**: React, TypeScript, Vite, React Router
+- **Backend**: Node.js, Express, TypeScript, PostgreSQL
+- **Database**: PostgreSQL with Northwind data
+- **Blockchain**: Ethereum Geth, ethers.js
+- **Styling**: Bootstrap
+
+#### **Features**
+- Product catalog management
+- Shopping cart functionality
+- User authentication
+- Blockchain integration
+- Private Ethereum network setup
+
+#### **Components**
+- **Frontend (`cesta-app`)**: React shopping cart
+- **Backend (`cesta-backend`)**: Node.js API
+- **Database (`db`)**: PostgreSQL setup
+- **Blockchain (`node-eth`)**: Private Ethereum network
+
+#### **Prerequisites**
+- Node.js (v18+)
+- Docker Desktop
+- PostgreSQL
+
+#### **Installation & Setup**
+
+1. **Install Frontend Dependencies**
+```bash
+cd proyectos/cesta/cesta-app
+npm install
+```
+
+2. **Install Backend Dependencies**
+```bash
+cd proyectos/cesta/cesta-backend
+npm install
+```
+
+3. **Setup Database**
+```bash
+cd proyectos/cesta/db
+docker-compose up -d
+```
+
+4. **Setup Blockchain Network**
+```bash
+cd proyectos/cesta/node-eth
+docker-compose up -d
+```
+
+5. **Start Services**
+```bash
+# Backend (Terminal 1)
+cd proyectos/cesta/cesta-backend
+npm run dev
+
+# Frontend (Terminal 2)
+cd proyectos/cesta/cesta-app
+npm run dev
+```
+
+#### **Database Configuration**
+- **Host**: localhost
+- **Port**: 55432
+- **Database**: northwind
+- **User**: postgres
+- **Password**: postgres
+
+#### **Blockchain Network**
+- **RPC URL**: `http://localhost:8888`
+- **Chain ID**: `35001`
+- **Currency Symbol**: `KHLOE`
+
+#### **API Endpoints**
+- `GET /products` - Get product catalog
+- `GET /product/:id` - Get product details
+
+#### **Development Commands**
+```bash
+# Frontend
+npm run dev      # Development server
+npm run build    # Build for production
+
+# Backend
+npm run dev      # Development server
+npm run build    # Build for production
+```
+
+---
+
+## 📋 Project Status
+
+### ✅ Completed Projects
+- Wallet Address Book (Backend + Frontend)
+- Blockchain Balance Checker
+- Cryptographic Tools
+- E-commerce Project Structure
+- Hyperledger Besu Library
+
+### 🔄 In Progress Projects
+- Blockchain Manager Web Interface
+- Advanced Testing Implementation
+
+### 💡 Planned Projects
+- Enhanced Security Features
+- Multi-chain Support Expansion
+- Performance Optimizations
+
+---
+
+## 📝 Notes
+
+- Each project can be completed independently
+- All projects use TypeScript for type safety
+- Docker is used for blockchain node deployment
 - Environment variables are required for proper configuration
 - Database migrations should be run before starting applications
 - Blockchain networks require proper genesis configuration
-- Each exercise can be completed independently
+- MetaMask must be configured with local networks manually

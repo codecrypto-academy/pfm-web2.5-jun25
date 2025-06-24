@@ -1,2 +1,4 @@
 data
 config
+script/node_modules
+script/package-lock.json

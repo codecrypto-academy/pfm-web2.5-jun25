@@ -1,0 +1,23 @@
+{
+  "name": "besu-transaction-tests",
+  "version": "1.0.0",
+  "description": "Real transaction testing scripts for Besu network",
+  "main": "real_transaction.js",
+  "scripts": {
+    "test": "node real_transaction.js",
+    "test-bash": "bash test_transactions.sh",
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "ethers": "^6.8.0"
+  },
+  "keywords": [
+    "ethereum",
+    "besu",
+    "blockchain",
+    "transactions",
+    "testing"
+  ],
+  "author": "Besu Test Suite",
+  "license": "MIT"
+}

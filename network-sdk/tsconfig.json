@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "composite": true,
     "target": "ES2022",
     "lib": ["ES2022"],
     "module": "ESNext",
@@ -9,19 +8,11 @@
     "esModuleInterop": true,
     "allowImportingTsExtensions": false,
     "resolveJsonModule": true,
-    "isolatedModules": true,
     "declaration": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "removeComments": false,
     "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },

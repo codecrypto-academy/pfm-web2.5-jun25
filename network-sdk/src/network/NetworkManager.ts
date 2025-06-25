@@ -1,8 +1,13 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const execAsync = promisify(exec);
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Network Manager for Besu operations
@@ -12,8 +17,9 @@ export class NetworkManager {
   private readonly scriptsPath: string;
 
   constructor(scriptsPath?: string) {
-    // Default to scripts directory relative to project root
-    this.scriptsPath = scriptsPath || path.join(process.cwd(), '..', 'scripts');
+    // Default to bundled scripts in dist directory
+    // Go up from dist/network/ to dist/scripts/
+    this.scriptsPath = scriptsPath || path.join(__dirname, '..', 'scripts');
   }
 
   /**
@@ -21,7 +27,9 @@ export class NetworkManager {
    */
   async setup(): Promise<void> {
     const scriptPath = path.join(this.scriptsPath, 'besu-network.sh');
-    await execAsync(`${scriptPath} setup`);
+    await execAsync(`NON_INTERACTIVE=true ${scriptPath} setup`, {
+      cwd: this.scriptsPath
+    });
   }
 
   /**
@@ -29,7 +37,9 @@ export class NetworkManager {
    */
   async start(): Promise<void> {
     const scriptPath = path.join(this.scriptsPath, 'besu-network.sh');
-    await execAsync(`${scriptPath} start`);
+    await execAsync(`NON_INTERACTIVE=true ${scriptPath} start`, {
+      cwd: this.scriptsPath
+    });
   }
 
   /**
@@ -37,7 +47,9 @@ export class NetworkManager {
    */
   async stop(): Promise<void> {
     const scriptPath = path.join(this.scriptsPath, 'besu-network.sh');
-    await execAsync(`${scriptPath} stop`);
+    await execAsync(`${scriptPath} stop`, {
+      cwd: this.scriptsPath
+    });
   }
 
   /**
@@ -45,7 +57,9 @@ export class NetworkManager {
    */
   async restart(): Promise<void> {
     const scriptPath = path.join(this.scriptsPath, 'besu-network.sh');
-    await execAsync(`${scriptPath} restart`);
+    await execAsync(`${scriptPath} restart`, {
+      cwd: this.scriptsPath
+    });
   }
 
   /**
@@ -53,7 +67,9 @@ export class NetworkManager {
    */
   async getStatus(): Promise<string> {
     const scriptPath = path.join(this.scriptsPath, 'besu-network.sh');
-    const { stdout } = await execAsync(`${scriptPath} status`);
+    const { stdout } = await execAsync(`${scriptPath} status`, {
+      cwd: this.scriptsPath
+    });
     return stdout;
   }
 
@@ -62,7 +78,9 @@ export class NetworkManager {
    */
   async getLogs(container: string = 'all'): Promise<string> {
     const scriptPath = path.join(this.scriptsPath, 'besu-network.sh');
-    const { stdout } = await execAsync(`${scriptPath} logs ${container}`);
+    const { stdout } = await execAsync(`${scriptPath} logs ${container}`, {
+      cwd: this.scriptsPath
+    });
     return stdout;
   }
 
@@ -71,7 +89,9 @@ export class NetworkManager {
    */
   async test(): Promise<string> {
     const scriptPath = path.join(this.scriptsPath, 'besu-network.sh');
-    const { stdout } = await execAsync(`${scriptPath} test`);
+    const { stdout } = await execAsync(`${scriptPath} test`, {
+      cwd: this.scriptsPath
+    });
     return stdout;
   }
 
@@ -80,6 +100,8 @@ export class NetworkManager {
    */
   async reset(): Promise<void> {
     const scriptPath = path.join(this.scriptsPath, 'besu-network.sh');
-    await execAsync(`${scriptPath} reset`);
+    await execAsync(`${scriptPath} reset`, {
+      cwd: this.scriptsPath
+    });
   }
 }

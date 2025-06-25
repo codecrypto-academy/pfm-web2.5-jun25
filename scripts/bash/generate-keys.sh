@@ -50,7 +50,7 @@ generate_node_keys() {
     
     log_info "Generating keys for $node_name..."
     
-    if ! yarn dev createKeys "$node_dir"; then
+    if ! yarn createKeys "$node_dir"; then
         log_error "Failed to generate keys for $node_name"
         exit 1
     fi
@@ -73,7 +73,7 @@ generate_bootnode_keys() {
     
     log_info "Generating keys and enode for bootnode..."
     
-    if ! yarn dev createKeysAndEnode "$BOOTNODE_IP" "$P2P_PORT" "$bootnode_dir"; then
+    if ! yarn createKeysAndEnode "$BOOTNODE_IP" "$P2P_PORT" "$bootnode_dir"; then
         log_error "Failed to generate keys and enode for bootnode"
         exit 1
     fi

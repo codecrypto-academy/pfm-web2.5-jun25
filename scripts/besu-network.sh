@@ -87,6 +87,13 @@ start_network_safe() {
         log_warning "Network appears to be already running ($running_containers containers)"
         log_info "Current status:"
         "$SCRIPT_DIR/bash/network-utils.sh" status
+        
+        # Check if we're in non-interactive mode (for SDK usage)
+        if [[ "${NON_INTERACTIVE:-false}" == "true" || ! -t 0 ]]; then
+            log_info "Non-interactive mode: Network is already running, nothing to do"
+            return 0
+        fi
+        
         echo ""
         read -p "Do you want to restart the network? (y/N): " -r
         if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -96,7 +103,7 @@ start_network_safe() {
         fi
         return 0
     fi
-    
+
     # Start the network
     "$SCRIPT_DIR/bash/start-network.sh" || {
         log_error "Failed to start network"

@@ -32,6 +32,29 @@ const keys = KeyGenerator.generateKeys();
 await KeyGenerator.saveKeys(keys, './output');
 ```
 
+## Security
+
+🔐 **This package contains only templates and infrastructure scripts.**
+
+- All cryptographic keys and sensitive data are generated **locally** when you run the setup commands
+- No private keys, passwords, or credentials are included in this package
+- Each network setup creates fresh, unique keys specific to your environment
+- Generated keys are stored in your local filesystem and never transmitted
+
+**What's included:**
+- ✅ Network setup automation scripts
+- ✅ Configuration templates  
+- ✅ Key generation algorithms
+- ✅ Infrastructure management tools
+
+**What's NOT included:**
+- ❌ Pre-generated private keys
+- ❌ Hardcoded credentials
+- ❌ Production secrets
+- ❌ User-specific data
+
+Always keep your generated keys secure and never share them publicly.
+
 ## API
 
 ### NetworkManager

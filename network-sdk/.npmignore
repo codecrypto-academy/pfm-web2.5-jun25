@@ -1,0 +1,32 @@
+# Security - exclude sensitive files
+*.pem
+*.key
+.env*
+secrets/
+
+# Development files
+*.log
+.DS_Store
+node_modules/
+coverage/
+
+# Build artifacts (keep dist/ for distribution)
+src/
+tsconfig.json
+build.sh
+network-cli.mjs
+
+# Test files
+test-*.js
+*.test.js
+*.spec.js
+
+# Development configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore

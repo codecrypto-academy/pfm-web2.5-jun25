@@ -6,10 +6,20 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "./build.sh",
+    "build:tsc": "tsc",
     "dev": "tsx src/index.ts",
     "clean": "rm -rf dist",
-    "prepare": "yarn build"
+    "prepare": "yarn build",
+    "network:setup": "node network-cli.mjs setup",
+    "network:start": "node network-cli.mjs start",
+    "network:stop": "node network-cli.mjs stop",
+    "network:restart": "node network-cli.mjs restart",
+    "network:status": "node network-cli.mjs status",
+    "network:test": "node network-cli.mjs test",
+    "network:logs": "node network-cli.mjs logs",
+    "network:reset": "node network-cli.mjs reset",
+    "network:help": "node scripts/network-cli.mjs help"
   },
   "keywords": [
     "besu",

@@ -1,0 +1,28 @@
+# Node Configuration for Besu Network
+
+# Genesis configuration
+genesis-file="/data/genesis.json"
+
+# Network settings
+p2p-host="0.0.0.0"
+p2p-port=42007
+p2p-enabled=true
+discovery-enabled=true
+
+# Bootnode configuration
+bootnodes=["enode://fbe637a368a8254f5a717881dff127f288a84f7d7048f09dbf46d91ede5d642d3aeb30e7e4c8cc2af1a08eb84869707a6c8f938dec67f2bd90f7211dfd9f9132@192.47.0.2:42007"]
+
+# RPC settings
+rpc-http-enabled=true
+rpc-http-host="0.0.0.0"
+rpc-http-port=8545
+rpc-http-cors-origins=["*"]
+rpc-http-api=["ADMIN", "ETH", "CLIQUE", "NET", "TRACE", "DEBUG", "TXPOOL", "PERM"]
+host-allowlist=["*"]
+
+# Mining settings (for miner node)
+miner-enabled=false
+miner-coinbase="0x0000000000000000000000000000000000000000"
+
+# Logging
+logging="INFO"

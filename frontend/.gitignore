@@ -1,0 +1,47 @@
+# ==============================================================================
+# FRONTEND SPECIFIC IGNORES (React + Vite)
+# ==============================================================================
+# Note: Common patterns are handled by root .gitignore
+
+# Vite specific
+.vite/
+vite.config.*.timestamp-*
+.vite-inspect/
+
+# React specific  
+.react/
+
+# Build outputs (Vite specific)
+dist-ssr/
+*.local
+
+# Static assets cache
+.vite/deps/
+
+# Storybook (if added later)
+storybook-static/
+
+# ESLint cache (project specific)
+.eslintcache
+
+# Stylelint cache  
+.stylelintcache
+
+# Bundle analyzer
+bundle-analyzer-report.html
+
+# Development server
+.vite/
+vite.config.*.timestamp-*
+
+# Testing (Jest/Vitest specific)
+coverage/
+.nyc_output/
+junit.xml
+
+# Build analysis
+stats.json
+bundle-report.html
+
+# Hot reload cache
+.vite-inspect/

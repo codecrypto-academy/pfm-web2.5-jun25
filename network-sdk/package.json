@@ -1,0 +1,36 @@
+{
+  "name": "network-sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Besu network operations",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "clean": "rm -rf dist",
+    "prepare": "yarn build"
+  },
+  "keywords": [
+    "besu",
+    "blockchain",
+    "network",
+    "sdk",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@types/elliptic": "^6.4.18",
+    "elliptic": "^6.5.4",
+    "keccak256": "^1.0.6"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

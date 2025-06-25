@@ -1,0 +1,38 @@
+{
+  "name": "scripts",
+  "version": "1.0.0",
+  "description": "Besu Network Scripts & Key Generator",
+  "main": "dist/createKeys.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/createKeys.js",
+    "dev": "tsx createKeys.ts",
+    "createKeysAndEnode": "yarn build && node dist/createKeys.js createKeysAndEnode",
+    "createKeys": "yarn build && node dist/createKeys.js createKeys",
+    "clean": "rm -rf dist",
+    "prepare": "yarn build"
+  },
+  "keywords": [
+    "ethereum",
+    "cryptography",
+    "blockchain",
+    "keys",
+    "enode"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@types/elliptic": "^6.4.18",
+    "elliptic": "^6.5.4",
+    "keccak256": "^1.0.6"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

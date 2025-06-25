@@ -14,7 +14,7 @@ A comprehensive TypeScript-based solution for managing Hyperledger Besu blockcha
 - 🛡️ Type-safe with comprehensive TypeScript types
 
 ### Besu Network Management
-- 🐳 **Podman-based**: Uses Podman instead of Docker for better security and macOS compatibility
+- 🦭 **Podman-based**: Uses Podman instead of Docker for better security and macOS compatibility
 - 🧩 **Modular Architecture**: Separate scripts for different network management concerns
 - 🛡️ **Error Handling**: Comprehensive error checking and graceful failure handling  
 - 🚫 **Race Condition Prevention**: Proper container startup sequencing and health checks
@@ -49,9 +49,69 @@ yarn build
 brew install make
 ```
 
+## 🚀 Quick Start (Workspace)
+
+This is now a **multi-project workspace** with independent components:
+
+```bash
+# Install all dependencies for all projects
+yarn install:all
+
+# Build all projects
+yarn build:all
+
+# Start backend API (port 3000)
+yarn start:backend
+
+# Start frontend dev server (port 5173) 
+yarn dev:frontend
+
+# Network operations (from any directory)
+yarn network:setup    # Complete setup
+yarn network:start     # Start network
+yarn network:status    # Check status
+yarn network:stop      # Stop network
+```
+
 ## 📖 Usage
 
-### Key Generation
+### Multi-Project Architecture
+
+The project is now organized into multiple independent components:
+
+#### 1. Network SDK (TypeScript Library)
+```bash
+cd network-sdk
+yarn install
+yarn build
+
+# Use in other projects
+import { NetworkManager, KeyGenerator } from 'network-sdk';
+```
+
+#### 2. Backend (REST API)
+```bash
+cd backend
+yarn install
+yarn build
+yarn start  # Runs on http://localhost:3000
+```
+
+#### 3. Frontend (Web Interface)
+```bash
+cd frontend
+yarn install
+yarn dev    # Runs on http://localhost:5173
+```
+
+#### 4. Scripts (Shell/Bash Operations)
+```bash
+cd scripts
+make setup  # Complete network setup
+make start  # Start network
+```
+
+### Legacy Key Generation (Direct CLI)
 
 #### Development Mode (TypeScript)
 
@@ -59,7 +119,7 @@ brew install make
 # Generate basic keys
 yarn dev createKeys ./output-directory
 
-# Generate keys with enode URL
+# Generate keys with enode URL  
 yarn dev createKeysAndEnode <ip> <port> ./output-directory
 ```
 
@@ -74,20 +134,6 @@ yarn createKeys ./output-directory
 
 # Generate keys with enode URL
 yarn createKeysAndEnode 192.168.1.100 42007 ./output-directory
-```
-
-#### Examples
-
-```bash
-# Create keys in a 'keys' directory
-yarn dev createKeys ./keys
-
-# Create keys with enode for IP 192.168.1.100 on port 42007
-yarn dev createKeysAndEnode 192.168.1.100 42007 ./network-keys
-
-# Production usage
-yarn build
-node dist/network/createKeys.js createKeys ./production-keys
 ```
 
 ### Besu Network Management
@@ -170,25 +216,57 @@ The network manager creates a complete Besu network setup:
 
 ```
 pfm-web2.5/
-├── package.json              # Yarn configuration & dependencies
-├── tsconfig.json             # TypeScript configuration
+├── package.json              # Root project configuration
+├── tsconfig.json             # TypeScript configuration  
 ├── README.md                 # Project documentation
 ├── LICENSE                   # MIT license
 ├── .gitignore               # Git ignore rules
 ├── yarn.lock                # Yarn lockfile
 ├── dist/                    # Compiled JavaScript output
-│   ├── createKeys.js        # Compiled key generator
-│   └── network/             # Compiled network utilities
-└── network/                 # Network management & key generation
-    ├── createKeys.ts        # Modern TypeScript key generator
+├── network-sdk/             # TypeScript SDK for network operations
+│   ├── package.json         # SDK dependencies
+│   ├── tsconfig.json        # SDK TypeScript config
+│   ├── README.md           # SDK documentation
+│   ├── src/
+│   │   ├── index.ts         # Main SDK export
+│   │   ├── network/         # Network management classes
+│   │   │   ├── index.ts     # Network exports
+│   │   │   └── NetworkManager.ts # Core network management
+│   │   ├── crypto/          # Key generation utilities
+│   │   │   ├── index.ts     # Crypto exports
+│   │   │   └── KeyGenerator.ts # Cryptographic operations
+│   │   └── types/           # TypeScript type definitions
+│   │       ├── index.ts     # Type exports
+│   │       ├── network.ts   # Network types
+│   │       └── crypto.ts    # Crypto types
+│   └── dist/               # Compiled SDK
+├── backend/                # REST API server
+│   ├── package.json        # Backend dependencies
+│   ├── tsconfig.json       # Backend TypeScript config
+│   ├── src/
+│   │   ├── app.ts          # Express application
+│   │   └── routes/         # API route handlers
+│   │       ├── network.ts  # Network API endpoints
+│   │       └── keys.ts     # Key generation endpoints
+│   └── dist/               # Compiled backend
+├── frontend/               # Web interface
+│   ├── package.json        # Frontend dependencies
+│   ├── vite.config.ts      # Vite configuration
+│   ├── index.html          # Main HTML file
+│   ├── src/
+│   │   ├── main.ts         # Frontend TypeScript
+│   │   └── style.css       # Styling
+│   └── dist/               # Built frontend
+└── scripts/                # Shell scripts and configurations (renamed from network/)
+    ├── createKeys.ts        # Original TypeScript key generator
     ├── besu-network.sh      # Main network orchestrator script
     ├── Makefile            # Convenient make commands
-    ├── README.md           # Network-specific documentation
+    ├── README.md           # Scripts documentation
     ├── config/
     │   └── network.conf    # Network configuration
     ├── lib/
     │   └── common.sh       # Shared utilities and functions
-    ├── scripts/
+    ├── bash/               # Bash scripts (renamed from scripts/)
     │   ├── setup-network.sh     # Podman network setup
     │   ├── generate-keys.sh     # Cryptographic key generation
     │   ├── generate-config.sh   # Genesis and TOML config generation

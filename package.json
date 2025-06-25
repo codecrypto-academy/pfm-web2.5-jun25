@@ -1,36 +1,52 @@
 {
-  "name": "pfm-web2.5",
+  "name": "pfm-web2.5-workspace",
   "version": "1.0.0",
-  "description": "Ethereum key generation utility",
-  "main": "dist/network/createKeys.js",
+  "description": "Multi-project workspace for Besu Network Manager with SDK, Backend, and Frontend",
+  "private": true,
   "type": "module",
+  "workspaces": [
+    "network-sdk",
+    "backend", 
+    "frontend",
+    "scripts"
+  ],
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/network/createKeys.js",
-    "dev": "tsx network/createKeys.ts",
-    "createKeysAndEnode": "yarn build && node dist/network/createKeys.js createKeysAndEnode",
-    "createKeys": "yarn build && node dist/network/createKeys.js createKeys",
-    "clean": "rm -rf dist",
-    "prepare": "yarn build"
+    "install:all": "yarn install",
+    "build:all": "yarn workspaces run build",
+    "clean:all": "yarn workspaces run clean",
+    "dev:network-sdk": "yarn workspace network-sdk run dev",
+    "dev:backend": "yarn workspace backend run dev",
+    "dev:frontend": "yarn workspace frontend run dev",
+    "dev:scripts": "yarn workspace scripts run dev",
+    "build:network-sdk": "yarn workspace network-sdk run build",
+    "build:backend": "yarn workspace backend run build", 
+    "build:frontend": "yarn workspace frontend run build",
+    "build:scripts": "yarn workspace scripts run build",
+    "start:backend": "yarn workspace backend run start",
+    "start:frontend": "yarn workspace frontend run preview",
+    "network:setup": "cd scripts && make setup",
+    "network:start": "cd scripts && make start",
+    "network:stop": "cd scripts && make stop",
+    "network:status": "cd scripts && make status",
+    "network:logs": "cd scripts && make logs",
+    "network:test": "cd scripts && make test",
+    "network:restart": "cd scripts && make restart",
+    "network:clean": "cd scripts && make clean",
+    "network:reset": "cd scripts && make reset"
   },
   "keywords": [
+    "besu",
+    "blockchain",
+    "network-management",
     "ethereum",
     "cryptography",
-    "blockchain",
-    "keys",
-    "enode"
+    "typescript",
+    "workspace"
   ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "tsx": "^4.0.0",
     "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "@types/elliptic": "^6.4.18",
-    "elliptic": "^6.5.4",
-    "keccak256": "^1.0.6"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -1,30 +1,68 @@
-# Dependencies
+# ==============================================================================
+# WORKSPACE-WIDE IGNORES (Monorepo Root)
+# ==============================================================================
+
+# Dependencies & Package Managers
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
 
-# Build output
+# Build Output
 dist/
 build/
+lib/
+out/
 *.tsbuildinfo
+.cache/
 
-# Environment files
+# Environment Files
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
+!.env.template
 
-# IDE
+# IDE & Editors
 .vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
+*~
+.project
+.classpath
+.settings/
 
-# OS
+# OS Generated
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
 
-# Test output
+# ==============================================================================
+# BLOCKCHAIN & NETWORK SPECIFIC
+# ==============================================================================
+
+# Besu Network Data
+scripts/besu-network/*/data/
+scripts/besu-network/bootnode/data/
+scripts/besu-network/miner-node/data/
+scripts/besu-network/rpc-node/data/
+
+# Generated Keys & Addresses
 test-keys/
 keys/
 network-keys/
@@ -33,20 +71,89 @@ production-keys/
 *.pub
 *.enode
 *.address
+keystore/
+secrets/
+
+# Network Logs
+besu-network/logs/
+network-logs/
+
+# ==============================================================================
+# DEVELOPMENT & TESTING
+# ==============================================================================
 
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
-# Runtime data
+# Runtime Data
 pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# Coverage & Testing
 coverage/
 *.lcov
+.nyc_output/
+junit.xml
+test-results/
+.coverage/
 
-# TypeScript cache
+# Temporary Files
+tmp/
+temp/
+.tmp/
+
+# ==============================================================================
+# TYPESCRIPT & JAVASCRIPT
+# ==============================================================================
+
+# TypeScript
 *.tsbuildinfo
+.tscache/
+
+# JavaScript
+.eslintcache
+.stylelintcache
+
+# ==============================================================================
+# FRONTEND SPECIFIC (React/Vite)
+# ==============================================================================
+
+# Vite
+.vite/
+vite.config.*.timestamp-*
+
+# React
+.react/
+
+# ==============================================================================
+# BACKEND SPECIFIC
+# ==============================================================================
+
+# Express/Node.js uploads
+uploads/
+public/uploads/
+
+# ==============================================================================
+# MISCELLANEOUS
+# ==============================================================================
+
+# Archives
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Local configuration files that shouldn't be shared
+local.config.*
+*.local.*

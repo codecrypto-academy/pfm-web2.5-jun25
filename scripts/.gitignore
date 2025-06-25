@@ -1,0 +1,43 @@
+# ==============================================================================
+# SCRIPTS SPECIFIC IGNORES (Blockchain Network Scripts)
+# ==============================================================================
+# Note: Common patterns are handled by root .gitignore
+
+# Generated network configuration
+besu-network/*/data/
+generated-config/
+auto-generated/
+
+# Script outputs
+script-outputs/
+execution-logs/
+
+# Blockchain data directories
+blockchain-data/
+chain-data/
+
+# Generated key files (specific to scripts)
+generated-keys/
+auto-keys/
+temp-keys/
+
+# Network test results
+network-test-results/
+connectivity-logs/
+
+# Besu specific files
+*.genesis
+*.toml.backup
+*.conf.backup
+
+# Script execution cache
+.script-cache/
+.execution-cache/
+
+# Makefile generated files
+.make-cache/
+make-logs/
+
+# Bash script logs
+bash-logs/
+shell-logs/

@@ -1,0 +1,47 @@
+# ==============================================================================
+# BACKEND SPECIFIC IGNORES (Express.js + TypeScript)  
+# ==============================================================================
+# Note: Common patterns are handled by root .gitignore
+
+# Express.js specific
+uploads/
+public/uploads/
+sessions/
+
+# Database files (if using local DB)
+*.db
+*.sqlite
+*.sqlite3
+database.json
+
+# API documentation generated files
+docs/api/
+
+# SSL certificates (if stored locally)
+*.pem
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Authentication & tokens
+auth-tokens/
+jwt-keys/
+
+# Monitoring & profiling
+*.heapsnapshot
+profile-*
+
+# Express session files
+sessions/
+.sessions/
+
+# Rate limiting cache
+rate-limit-cache/
+
+# Health check logs
+health-checks/
+
+# Backup files
+backups/
+*.backup

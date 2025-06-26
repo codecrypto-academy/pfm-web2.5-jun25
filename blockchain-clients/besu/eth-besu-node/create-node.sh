@@ -35,6 +35,8 @@ if ! npx node ./utils/create-bootnode-files.js --bootnode_dir $BOOTNODE_DIR --bo
   exit 1
 fi
 
+echo "Bootnode files created"
+
 # create genesis file
 cat > $BESU_NETWORK/genesis.json << EOF
 {
@@ -58,6 +60,8 @@ cat > $BESU_NETWORK/genesis.json << EOF
 }
 EOF
 
+echo "Genesis file created"
+
 # create config.toml file
 cat > $BESU_NETWORK/config.toml << EOF
 genesis-file="/data/genesis.json" # Path to the custom genesis file
@@ -76,6 +80,8 @@ rpc-http-api=["ETH","NET","CLIQUE","ADMIN","TRACE","DEBUG","TXPOOL","PERM"]
 
 host-allowlist=["*"]
 EOF
+
+echo "Config.toml file created"
 
 ###########################################################
 # create node 

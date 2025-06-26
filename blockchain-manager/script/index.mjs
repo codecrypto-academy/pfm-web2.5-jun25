@@ -113,6 +113,26 @@ async function main() {
             const info = await getNextworkInfo(url);
             console.log('Network Info:', info);
             break;
+        case 'network-status':
+            const statusUrl = args[1] || 'http://localhost:8888';
+            try {
+                const networkInfo = await getNextworkInfo(statusUrl);
+                console.log('Network Status:', networkInfo);
+                
+                // Check if nodes are connected
+                const peerCount = parseInt(networkInfo.peerCount.result, 16);
+                console.log(`Connected peers: ${peerCount}`);
+                
+                if (peerCount > 0) {
+                    console.log('✅ Network is healthy');
+                } else {
+                    console.log('⚠️  No peers connected');
+                }
+            } catch (error) {
+                console.error('Error checking network status:', error);
+                process.exit(1);
+            }
+            break;
         case 'balance':
             const balanceAddress = args[1];
             if (!balanceAddress) {
@@ -150,6 +170,8 @@ async function main() {
 Available commands:
     create-keys <ip>     - Create node keys for given IP address
     network-info [url]   - Get network information (defaults to http://localhost:8888)
+    network-status [url] - Check network health and peer connections
+    balance <address>    - Get balance for address
     transfer <fromPrivate> <to> <amount> - Transfer funds from one account to another
             `);
     }

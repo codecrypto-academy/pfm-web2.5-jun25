@@ -5,6 +5,8 @@ import {
   NetworkInfo,
   ContainerInfo
 } from './types';
+// Intégration de la librairie lib-docker (copiée dans src/lib-besu)
+import { DockerNetwork, KeyValue, typeNode, BesuNode, KeyPair } from './lib-besu/index';
 
 /**
  * Clase para gestionar contenedores y redes Docker
@@ -214,4 +216,57 @@ export class DockerManager {
       throw new Error(`Error al obtener información del contenedor: ${(error as Error).message}`);
     }
   }
-} 
+
+  /**
+   * Crée un réseau Besu complet (répertoire, fichiers, docker network, clés, etc.) via lib-docker
+   * @param name Nom du réseau
+   * @param chainId ID de la chaîne
+   * @param subnet Subnet Docker (ex: "172.20.0.0/16")
+   * @param labels Tableau de labels clé/valeur
+   * @returns Instance DockerNetwork (lib-docker)
+   */
+  createBesuNetwork(name: string, chainId: number, subnet: string, labels: KeyValue[]) {
+    return DockerNetwork.create(name, chainId, subnet, labels);
+  }
+
+  /**
+   * Supprime un réseau Besu complet (répertoire, containers, docker network)
+   * @param name Nom du réseau
+   */
+  removeBesuNetwork(name: string) {
+    DockerNetwork.removeDockerNetwork(name);
+  }
+
+  /**
+   * Ajoute un noeud à un réseau Besu existant
+   * @param networkName Nom du réseau
+   * @param nodeName Nom du noeud
+   * @param nodeType Type du noeud (bootnode, miner, rpc, node)
+   * @param port Port exposé
+   * @param ip IP optionnelle
+   */
+  async addBesuNode(networkName: string, nodeName: string, nodeType: typeNode, port: string, ip?: string) {
+    const network = new DockerNetwork(networkName);
+    if (nodeType === 'bootnode') {
+      await network.addBootnode(nodeName, port, ip ?? '');
+    } else if (nodeType === 'miner') {
+      await network.addMiner(nodeName, port, ip);
+    } else if (nodeType === 'rpc') {
+      await network.addRpc(nodeName, port, ip);
+    } else if (nodeType === 'node') {
+      await network.addFullNode(nodeName, port, ip);
+    } else {
+      throw new Error(`Type de noeud Besu inconnu: ${nodeType}`);
+    }
+  }
+
+  /**
+   * Supprime un noeud d'un réseau Besu
+   * @param networkName Nom du réseau
+   * @param nodeName Nom du noeud
+   */
+  async removeBesuNode(networkName: string, nodeName: string) {
+    const network = new DockerNetwork(networkName);
+    await network.removeNode(nodeName);
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "name": "besu-network-lib",
+  "version": "1.0.0",
+  "description": "TypeScript library for creating and managing Besu blockchain networks",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "example": "npx ts-node examples/example.ts",
+    "example:simple": "npx ts-node examples/example.ts",
+    "example:advanced": "npx ts-node examples/advanced-example.ts",
+    "example:cleanup": "npx ts-node examples/example.ts cleanup",
+    "example:advanced:cleanup": "npx ts-node examples/advanced-example.ts cleanup",
+    "cleanup-networks": "npx ts-node src/cleanup-networks.ts",
+    "networks:info": "npx ts-node src/cleanup-networks.ts info",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "besu",
+    "blockchain",
+    "ethereum",
+    "network",
+    "docker",
+    "hyperledger"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "elliptic": "^6.5.5",
+    "ethers": "^6.10.0",
+    "js-sha3": "^0.9.3"
+  },
+  "devDependencies": {
+    "@types/elliptic": "^6.4.18",
+    "@types/node": "^20.11.16",
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

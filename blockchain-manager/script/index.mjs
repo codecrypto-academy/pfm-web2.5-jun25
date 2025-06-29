@@ -2,12 +2,11 @@ import pkg from 'elliptic';
 const { ec: EC } = pkg;
 import { ethers } from 'ethers';
 
-
-
 import { Buffer } from 'buffer';
 import keccak256 from 'keccak256';
 import fs from 'fs';
-import path from 'path';
+
+const CHAIN_ID = 20190606;
 
 async function callApi(url, method, params) {
     const response = await fetch(url, {
@@ -51,7 +50,6 @@ function createKeys(ip) {
 async function getBalance(url, address) {
     const data = await callApi(url, "eth_getBalance", [address, "latest"]);
     return BigInt(data.result);
-
 }
 
 async function getBlockNumber(url) {
@@ -63,7 +61,7 @@ async function transferFrom(url, fromPrivate, to, amount) {
     const wallet = new ethers.Wallet(fromPrivate);
     // Connect wallet to the JSON-RPC provider
     const provider = new ethers.JsonRpcProvider(url, {
-        chainId: 13371337,
+        chainId: CHAIN_ID, // Updated to match our network
         name: "private"
     });
     const connectedWallet = wallet.connect(provider);
@@ -78,15 +76,97 @@ async function transferFrom(url, fromPrivate, to, amount) {
     
     return receipt;
 }
+
 async function getNextworkInfo(url) {
-    const version =  await callApi("http://localhost:8888", "net_version", [])
-    const peerCount = await callApi("http://localhost:8888", "net_peerCount", [])
+    const version =  await callApi(url, "net_version", [])
+    const peerCount = await callApi(url, "net_peerCount", [])
     return {
         version,
         peerCount
     };
 }
 
+// Function to derive wallet from mnemonic
+function deriveWalletFromMnemonic(mnemonic, index = 0) {
+    const path = `m/44'/60'/0'/0/${index}`;
+    const wallet = ethers.Wallet.fromPhrase(mnemonic, path);
+    return wallet;
+}
+
+// Function to transfer funds to multiple accounts
+async function transferToMultipleAccounts(url, sourceIndex, targetIndices, amountPerAccount) {
+    const mnemonic = "test test test test test test test test test test test junk";
+    
+    // Get source wallet
+    const sourceWallet = deriveWalletFromMnemonic(mnemonic, sourceIndex);
+    console.log(`Source account (${sourceIndex}): ${sourceWallet.address}`);
+    
+    // Check source balance
+    const sourceBalance = await getBalance(url, sourceWallet.address);
+    const requiredAmount = BigInt(targetIndices.length) * ethers.parseEther(amountPerAccount.toString());
+    
+    console.log(`Source balance: ${ethers.formatEther(sourceBalance)} ETH`);
+    console.log(`Required amount: ${ethers.formatEther(requiredAmount)} ETH`);
+    
+    if (sourceBalance < requiredAmount) {
+        throw new Error(`Insufficient funds. Need ${ethers.formatEther(requiredAmount)} ETH, but have ${ethers.formatEther(sourceBalance)} ETH`);
+    }
+    
+    // Transfer to each target account
+    for (const targetIndex of targetIndices) {
+        const targetWallet = deriveWalletFromMnemonic(mnemonic, targetIndex);
+        console.log(`\n🔄 Transferring ${amountPerAccount} ETH to account ${targetIndex}: ${targetWallet.address}`);
+        
+        try {
+            const receipt = await transferFrom(url, sourceWallet.privateKey, targetWallet.address, amountPerAccount);
+            console.log(`✅ Transfer completed. Transaction hash: ${receipt.hash}`);
+        } catch (error) {
+            console.error(`❌ Transfer failed: ${error.message}`);
+        }
+    }
+    
+    // Verify final balances
+    console.log("\n🔍 Verifying final balances:");
+    for (const targetIndex of targetIndices) {
+        const targetWallet = deriveWalletFromMnemonic(mnemonic, targetIndex);
+        const balance = await getBalance(url, targetWallet.address);
+        console.log(`Account ${targetIndex}: ${ethers.formatEther(balance)} ETH`);
+    }
+}
+
+// Function to show account information
+function showAccounts(startIndex = 0, endIndex = 10) {
+    const mnemonic = "test test test test test test test test test test test junk";
+    
+    console.log("🔑 Account Information for MetaMask Import");
+    console.log("==================================");
+    console.log(`Mnemonic: ${mnemonic}`);
+    console.log("Derivation Path: m/44'/60'/0'/0/0");
+    console.log("");
+    
+    for (let i = startIndex; i <= endIndex; i++) {
+        const wallet = deriveWalletFromMnemonic(mnemonic, i);
+        console.log(`Account ${i}:`);
+        console.log(`  Address:     ${wallet.address}`);
+        console.log(`  Private Key: ${wallet.privateKey}`);
+        console.log(`  Path:        m/44'/60'/0'/0/${i}`);
+        console.log("");
+    }
+    
+    console.log("📱 MetaMask Import Instructions:");
+    console.log("1. Open MetaMask");
+    console.log("2. Click on the account icon (top right)");
+    console.log("3. Select 'Import Account'");
+    console.log("4. Choose 'Private Key'");
+    console.log("5. Paste the private key from any account above");
+    console.log("6. Click 'Import'");
+    console.log("");
+    console.log("🌐 Network Configuration:");
+    console.log("- Network Name: Besu Private Network");
+    console.log("- RPC URL: http://localhost:8545");
+    console.log("- Chain ID: 20190606");
+    console.log("- Currency Symbol: ETH");
+}
 
 // Command line handling
 async function main() {
@@ -109,12 +189,13 @@ async function main() {
             break;
 
         case 'network-info':
-            const url = args[1] || 'http://localhost:8888';
+            const url = args[1] || 'http://localhost:8545';
             const info = await getNextworkInfo(url);
             console.log('Network Info:', info);
             break;
+            
         case 'network-status':
-            const statusUrl = args[1] || 'http://localhost:8888';
+            const statusUrl = args[1] || 'http://localhost:8545';
             try {
                 const networkInfo = await getNextworkInfo(statusUrl);
                 console.log('Network Status:', networkInfo);
@@ -133,49 +214,79 @@ async function main() {
                 process.exit(1);
             }
             break;
+            
         case 'balance':
             const balanceAddress = args[1];
             if (!balanceAddress) {
-                console.error('Usage: balance [url] <address>');
+                console.error('Usage: balance <address>');
                 process.exit(1);
             }
             try {
-                const balance = await getBalance("http://localhost:8888", balanceAddress);
+                const balance = await getBalance("http://localhost:8545", balanceAddress);
                 console.log('Balance:', ethers.formatEther(balance), 'ETH');
             } catch (error) {
                 console.error('Error getting balance:', error);
                 process.exit(1);
             }
             break;
+            
         case 'transfer':
             const fromPrivateKey = args[1];
             const toAddress = args[2];
             const amount = args[3];
             if (!toAddress || !amount || !fromPrivateKey) {
-                console.error('Usage: transfer <to-address> <amount> <from-private-key>');
+                console.error('Usage: transfer <fromPrivate> <to> <amount>');
                 process.exit(1);
             }
             try {
-                const tx = await transferFrom("http://localhost:8888", fromPrivateKey, toAddress, amount);
+                const tx = await transferFrom("http://localhost:8545", fromPrivateKey, toAddress, amount);
                 console.log('Transaction sent:', tx);
             } catch (error) {
                 console.error('Error sending transaction:', error);
                 process.exit(1);
             }
             break;
-
             
+        case 'transfer-funds':
+            const sourceIndex = parseInt(args[1]) || 0;
+            const targetStart = parseInt(args[2]) || 1;
+            const targetEnd = parseInt(args[3]) || 10;
+            const amountPerAccount = parseFloat(args[4]) || 1;
+            
+            const targetIndices = [];
+            for (let i = targetStart; i <= targetEnd; i++) {
+                targetIndices.push(i);
+            }
+            
+            try {
+                await transferToMultipleAccounts("http://localhost:8545", sourceIndex, targetIndices, amountPerAccount);
+                console.log("\n🎉 Fund transfer completed successfully!");
+            } catch (error) {
+                console.error('Error transferring funds:', error.message);
+                process.exit(1);
+            }
+            break;
+            
+        case 'show-accounts':
+            const startIndex = parseInt(args[1]) || 0;
+            const endIndex = parseInt(args[2]) || 10;
+            showAccounts(startIndex, endIndex);
+            break;
+
         default:
             console.log(`
 Available commands:
-    create-keys <ip>     - Create node keys for given IP address
-    network-info [url]   - Get network information (defaults to http://localhost:8888)
-    network-status [url] - Check network health and peer connections
-    balance <address>    - Get balance for address
+    create-keys <ip>                    - Create node keys for given IP address
+    network-info [url]                  - Get network information (defaults to http://localhost:8545)
+    network-status [url]                - Check network health and peer connections
+    balance <address>                   - Get balance for address
     transfer <fromPrivate> <to> <amount> - Transfer funds from one account to another
+    transfer-funds [source] [start] [end] [amount] - Transfer funds to multiple accounts
+    show-accounts [start] [end]         - Show account information for MetaMask import
             `);
     }
 }
+
 // Run if called directly
 if (import.meta.url === new URL(import.meta.url).href) {
     main().catch(console.error);

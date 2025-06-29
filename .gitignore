@@ -1,4 +1,7 @@
 data
 config
-script/node_modules
-script/package-lock.json
+*/node_modules
+*/package-lock.json
+*/coverage
+dist
+*/dist

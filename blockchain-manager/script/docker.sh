@@ -7,6 +7,7 @@ docker network rm besu-network 2>/dev/null || true
 NETWORK="172.24.0.0/16"
 BOOTNODE_IP="172.24.0.20"
 MINER_IP="172.24.0.21"
+CHAIN_ID=20190606
 
 # crear directorio
 mkdir -p networks/besu-network
@@ -17,7 +18,7 @@ docker network create besu-network \
   --label network=besu-network \
   --label type=besu
 
-echo "Network created"
+echo "➡️ Network created"
 
 # crear clave privada bootnode
 # Generate private key public key and address and 
@@ -27,7 +28,21 @@ cd bootnode
 node ../../../index.mjs create-keys $BOOTNODE_IP
 cd ../../..
 
-echo "Bootnode files created"
+echo "➡️ Bootnode files created"
+
+# Get bootnode public key for enode URL
+BOOTNODE_PUBLIC_KEY=$(cat networks/besu-network/bootnode/key.pub)
+# Remove the "04" prefix from public key for enode format
+BOOTNODE_PUBLIC_KEY_ENODE=${BOOTNODE_PUBLIC_KEY#04}
+BOOTNODE_ENODE="enode://${BOOTNODE_PUBLIC_KEY_ENODE}@${BOOTNODE_IP}:30303"
+
+echo "➡️ Bootnode enode: ${BOOTNODE_ENODE}"
+
+# Verify enode format
+if [[ ! "$BOOTNODE_ENODE" =~ ^enode://[a-fA-F0-9]{128}@[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:[0-9]+$ ]]; then
+    echo "❌ Error: Invalid enode format"
+    exit 1
+fi
 
 # crear clave privada para nodo miner
 cd networks/besu-network
@@ -36,23 +51,24 @@ cd miner
 node ../../../index.mjs create-keys ${MINER_IP}
 cd ../../..
 
-echo "Miner files created"
+echo "➡️ Miner files created"
 
-# Generate extraData for Clique PoA
+# Generate extraData for Clique PoA - CORRECTED VERSION
 generate_extra_data() {
-    local bootnode_address=$1
-    local miner_address=$2
+    local miner_address=$1
+    
+    # Remove 0x prefix if present
+    miner_address=${miner_address#0x}
     
     # 32 bytes of vanity data (64 hex chars)
     local vanity_data="0000000000000000000000000000000000000000000000000000000000000000"
     
-    # Validator addresses (20 bytes each = 40 hex chars)
-    local validators="${bootnode_address}${miner_address}"
+    # Use the miner address as validator (20 bytes = 40 hex chars)
+    local validator="${miner_address}"
     
-    # Calculate remaining zeros needed to complete 65 bytes (130 hex chars)
-    local total_length=${#vanity_data}
-    total_length=$((total_length + ${#validators}))
-    local remaining_zeros=$((130 - total_length))
+    # Calculate remaining zeros to complete 234 chars (117 bytes total)
+    local total_length=$((${#vanity_data} + ${#validator}))
+    local remaining_zeros=$((234 - total_length))
     
     # Generate remaining zeros
     local zeros=""
@@ -60,16 +76,16 @@ generate_extra_data() {
         zeros="${zeros}0"
     done
     
-    echo "0x${vanity_data}${validators}${zeros}"
+    echo "0x${vanity_data}${validator}${zeros}"
 }
 
 # Generate extraData
-EXTRA_DATA=$(generate_extra_data "$(cat networks/besu-network/bootnode/address)" "$(cat networks/besu-network/miner/address)")
+EXTRA_DATA=$(generate_extra_data "$(cat networks/besu-network/miner/address)")
 
 # Create genesis.json with Clique PoA configuration
 echo '{
   "config": {
-    "chainId": 13371337,
+    "chainId": '$CHAIN_ID',
     "londonBlock": 0,
     "clique": {
               "blockperiodseconds": 4,
@@ -78,19 +94,19 @@ echo '{
     }
   },
   "extraData": "'$EXTRA_DATA'",
-  "gasLimit": "0x1fffffffffffff",
+  "gasLimit": "0xa00000",
   "difficulty": "0x1",
   "alloc": {
     "'$(cat networks/besu-network/bootnode/address)'": {
-      "balance": "0x200000000000000000000000000000000000000000000000000000000000000"
+      "balance": "0xad78ebc5ac6200000"
     },
     "'$(cat networks/besu-network/miner/address)'": {
-      "balance": "0x2b5e3af16b188000000000000000000000000000000000000000000000000000"
+      "balance": "0xad78ebc5ac6200000"
     }
   }
 }' > networks/besu-network/genesis.json
 
-echo "Genesis file created"
+echo "➡️ Genesis file created"
 
 # Create config.toml for Besu node configuration
 cat > networks/besu-network/config.toml << EOF
@@ -105,11 +121,11 @@ rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
 rpc-http-port=8545
 rpc-http-cors-origins=["*"]
-rpc-http-api=["ETH","NET","CLIQUE","ADMIN", "TRACE", "DEBUG", "TXPOOL", "PERM"]
+rpc-http-api=["ETH","NET","CLIQUE"]
 host-allowlist=["*"]            
 EOF
 
-echo "Config.toml file created"
+echo "➡️ Config.toml file created"
 
 # Create Besu node
 docker run -d \
@@ -126,7 +142,7 @@ docker run -d \
   --node-private-key-file=/data/bootnode/key.priv \
   --genesis-file=/data/genesis.json
 
-echo "Besu node created"
+echo "➡️ Bootnode node created"
 
 # Create miner node
 docker run -d \
@@ -143,9 +159,11 @@ docker run -d \
   --node-private-key-file=/data/miner/key.priv \
   --genesis-file=/data/genesis.json \
   --miner-enabled=true \
-  --min-gas-price=0
+  --miner-coinbase="$(cat networks/besu-network/miner/address)" \
+  --min-gas-price=0 \
+  --bootnodes="${BOOTNODE_ENODE}"
 
-echo "Miner node created"
+echo "➡️ Miner node created"
 
 # Create RPC nodes
 for port in 8545 8546 8547 8548; do
@@ -163,13 +181,9 @@ for port in 8545 8546 8547 8548; do
       --config-file=/data/config.toml \
       --data-path=/data/rpc${port}/data \
       --genesis-file=/data/genesis.json \
-      --rpc-http-port=8545 \
-      --rpc-http-host=0.0.0.0 \
-      --rpc-http-cors-origins=["*"] \
-      --rpc-http-api=["ETH","NET","CLIQUE","ADMIN", "TRACE", "DEBUG", "TXPOOL", "PERM"] \
-      --host-allowlist=["*"]
+      --bootnodes="${BOOTNODE_ENODE}"
     
-    echo "RPC node on port ${port} created"
+    echo "➡️ RPC node on port ${port} created"
 done
 
 # Check if all nodes are running

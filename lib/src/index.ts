@@ -767,12 +767,20 @@ export class BesuNetwork {
           });
         }
         
-        // Clique requires odd number of miners to avoid split voting
+        if (minerCount === 2) {
+          errors.push({
+            field: 'consensus',
+            type: 'invalid',
+            message: 'Clique consensus with exactly 2 miners can cause network splits. Use 1, 3, or more miners for better stability'
+          });
+        }
+
+        // Recomendaciones para Clique
         if (minerCount > 1 && minerCount % 2 === 0) {
           errors.push({
             field: 'consensus',
             type: 'invalid',
-            message: `Clique consensus requires an odd number of miners to avoid split voting. Currently: ${minerCount} miners`
+            message: `Clique consensus with ${minerCount} miners (even number) may cause issues. Consider using an odd number of miners for better consensus`
           });
         }
 
@@ -2200,11 +2208,11 @@ export class BesuNetwork {
   private updateNodesIpsForNewSubnet(nodes: BesuNodeDefinition[], subnet: string): BesuNodeDefinition[] {
     const [baseNetwork] = subnet.split('/');
     const baseParts = baseNetwork.split('.');
-    const newBase = `${baseParts[0]}.${baseParts[1]}.${baseParts[2]}`;
+    const basePrefix = `${baseParts[0]}.${baseParts[1]}.${baseParts[2]}`;
     
     return nodes.map((node, index) => ({
       ...node,
-      ip: `${newBase}.${20 + index}` // Start from .20 and increment
+      ip: `${basePrefix}.${20 + index}` // Start from .20 and increment
     }));
   }
 
@@ -2486,55 +2494,152 @@ export class BesuNetwork {
   }
 
   /**
-   * Agrega un nodo a una red existente
+   * Modifica la configuración de una red Besu existente sin afectar el genesis
+   * Solo permite cambios en subnet, gasLimit y blockTime
    */
-  async addNode(nodeDef: BesuNodeDefinition): Promise<void> {
-    console.log(`Adding node: ${nodeDef.name} (${nodeDef.type})`);
-    
-    const nodeConfig: BesuNodeConfig = {
-      name: nodeDef.name,
-      ip: nodeDef.ip,
-      port: nodeDef.p2pPort || 30303,
-      rpcPort: nodeDef.rpcPort,
-      type: nodeDef.type,
-    };
-    
-    const node = new BesuNode(nodeConfig, this.fileService);
-    this.nodes.set(nodeDef.name, node);
-    
-    // Generate config file for the new node
-    const bootnodeNodes = this.getNodesByType('bootnode');
-    const bootnodeEnodes = bootnodeNodes.map(node => node.getKeys().enode);
-    
-    const tomlConfig = node.generateTomlConfig(
-      this.config, 
-      node.getConfig().type === 'bootnode' ? undefined : bootnodeEnodes
-    );
-    this.fileService.createFile('', `${nodeDef.name}_config.toml`, tomlConfig);
-    
-    console.log(`✅ Added ${nodeDef.type} node: ${nodeDef.name} (${nodeDef.ip}:${nodeDef.rpcPort})`);
+  async updateNetworkConfig(updates: {
+    subnet?: string;
+    gasLimit?: string;
+    blockTime?: number;
+  }): Promise<void> {
+    let needsRestart = false;
+    let needsSubnetUpdate = false;
+
+    // Actualizar subnet si se proporciona
+    if (updates.subnet && updates.subnet !== this.config.subnet) {
+      // Verificar si la nueva subnet es válida
+      if (!this.isValidSubnet(updates.subnet)) {
+        throw new Error(`Invalid subnet format: ${updates.subnet}`);
+      }
+      
+      if (!isSubnetAvailable(updates.subnet)) {
+        throw new Error(`Subnet ${updates.subnet} is already in use`);
+      }
+
+      console.log(`🔄 Updating subnet from ${this.config.subnet} to ${updates.subnet}`);
+      
+      // Actualizar configuración
+      this.config.subnet = updates.subnet;
+      needsSubnetUpdate = true;
+      needsRestart = true;
+    }
+
+    // Actualizar gasLimit si se proporciona
+    if (updates.gasLimit && updates.gasLimit !== this.config.gasLimit) {
+      const gasLimit = parseInt(updates.gasLimit, 16);
+      if (isNaN(gasLimit) || gasLimit < 4712388 || gasLimit > 100000000) {
+        throw new Error('Gas limit must be between 4,712,388 (0x47E7C4) and 100,000,000 (0x5F5E100)');
+      }
+
+      console.log(`🔄 Updating gas limit from ${this.config.gasLimit} to ${updates.gasLimit}`);
+      this.config.gasLimit = updates.gasLimit;
+      needsRestart = true;
+    }
+
+    // Actualizar blockTime si se proporciona
+    if (updates.blockTime !== undefined && updates.blockTime !== this.config.blockTime) {
+      if (!Number.isInteger(updates.blockTime) || updates.blockTime < 1 || updates.blockTime > 300) {
+        throw new Error('Block time must be between 1 and 300 seconds');
+      }
+
+      console.log(`🔄 Updating block time from ${this.config.blockTime || 'default'} to ${updates.blockTime}`);
+      this.config.blockTime = updates.blockTime;
+      needsRestart = true;
+    }
+
+    // Si hay cambios que requieren reinicio
+    if (needsRestart) {
+      console.log('⏸️  Stopping network for configuration update...');
+      await this.stop();
+
+      // Si cambió la subnet, recrear la red Docker
+      if (needsSubnetUpdate) {
+        console.log('🔧 Recreating Docker network with new subnet...');
+        this.dockerManager.removeNetwork();
+        
+        // Actualizar IPs de los nodos para la nueva subnet
+        this.updateNodesForNewSubnet(updates.subnet!);
+        
+        // Crear nueva red Docker
+        this.dockerManager.createNetwork(updates.subnet!, {
+          network: this.config.name,
+          type: "besu",
+        });
+      }
+
+      // Regenerar archivos de configuración TOML con los nuevos parámetros
+      console.log('📝 Updating node configuration files...');
+      await this.updateNodeConfigurations();
+
+      console.log('✅ Network configuration updated successfully');
+      console.log('💡 Use start() to restart the network with new configuration');
+    } else {
+      console.log('ℹ️  No changes detected in configuration');
+    }
   }
 
   /**
-   * Elimina un nodo de la red
+   * Actualiza las IPs de los nodos para una nueva subnet
    */
-  async removeNode(nodeName: string): Promise<void> {
-    const node = this.nodes.get(nodeName);
-    if (!node) {
-      throw new Error(`Node ${nodeName} not found`);
-    }
-
-    // Stop and remove container if running
-    try {
-      executeCommand(`docker rm -f ${this.config.name}-${nodeName}`);
-    } catch (error) {
-      // Container might not exist, that's ok
-    }
-
-    // Remove from nodes map
-    this.nodes.delete(nodeName);
+  private updateNodesForNewSubnet(newSubnet: string): void {
+    const [baseNetwork] = newSubnet.split('/');
+    const baseParts = baseNetwork.split('.');
+    const basePrefix = `${baseParts[0]}.${baseParts[1]}.${baseParts[2]}`;
     
-    console.log(`✅ Removed node: ${nodeName}`);
+    let ipCounter = 10;
+    
+    for (const [nodeName, node] of this.nodes) {
+      const currentConfig = node.getConfig();
+      const newIp = `${basePrefix}.${ipCounter}`;
+      
+      // Actualizar la IP del nodo
+      node.updateIp(newIp);
+      
+      console.log(`🔄 Updated ${nodeName} IP to ${newIp}`);
+      ipCounter++;
+    }
+  }
+
+  /**
+   * Actualiza los archivos de configuración TOML de todos los nodos
+   */
+  private async updateNodeConfigurations(): Promise<void> {
+    const bootnodeNodes = this.getNodesByType('bootnode');
+    const bootnodeEnodes = bootnodeNodes.map(node => node.getKeys().enode);
+    
+    for (const [nodeName, node] of this.nodes) {
+      const nodeConfig = node.getConfig();
+      
+      // Generar nueva configuración TOML
+      let tomlConfig: string;
+      if (nodeConfig.type === 'bootnode') {
+        tomlConfig = node.generateTomlConfig(this.config);
+      } else {
+        tomlConfig = node.generateTomlConfig(this.config, bootnodeEnodes);
+      }
+      
+      // Guardar nueva configuración
+      this.fileService.createFile(nodeConfig.name, 'config.toml', tomlConfig);
+    }
+  }
+
+  /**
+   * Valida que las direcciones de cuentas tengan el formato correcto
+   */
+  private validateAccountAddresses(): void {
+    if (this.config.signerAccount) {
+      if (!this.isValidEthereumAddress(this.config.signerAccount.address)) {
+        throw new Error(`Invalid signer account address: ${this.config.signerAccount.address}`);
+      }
+    }
+
+    if (this.config.accounts && this.config.accounts.length > 0) {
+      for (const account of this.config.accounts) {
+        if (!this.isValidEthereumAddress(account.address)) {
+          throw new Error(`Invalid account address: ${account.address}`);
+        }
+      }
+    }
   }
 
   /**
@@ -2542,51 +2647,16 @@ export class BesuNetwork {
    */
   private generateNodeIp(nodeIndex: number): string {
     if (this.config.mainIp) {
-      // Si hay IP principal definida, usar la subnet de esa IP
-      const ipParts = this.config.mainIp.split('.');
-      return `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.${20 + nodeIndex}`;
+      // Si hay una IP principal definida, usarla como base
+      const parts = this.config.mainIp.split('.');
+      parts[3] = (parseInt(parts[3]) + nodeIndex + 1).toString();
+      return parts.join('.');
     } else {
-      // Usar la subnet de la configuración
+      // Usar la subnet para generar IPs
       const [baseNetwork] = this.config.subnet.split('/');
       const baseParts = baseNetwork.split('.');
-      return `${baseParts[0]}.${baseParts[1]}.${baseParts[2]}.${20 + nodeIndex}`;
-    }
-  }
-
-  /**
-   * Obtiene todas las cuentas configuradas
-   */
-  private getAllConfiguredAccounts(): string[] {
-    const accounts: string[] = [];
-    
-    // Add signer account first if exists
-    if (this.config.signerAccount) {
-      accounts.push(this.config.signerAccount.address);
-    }
-    
-    // Add other configured accounts
-    if (this.config.accounts && this.config.accounts.length > 0) {
-      for (const account of this.config.accounts) {
-        // Avoid duplicates
-        if (!accounts.includes(account.address)) {
-          accounts.push(account.address);
-        }
-      }
-    }
-    
-    return accounts;
-  }
-
-  /**
-   * Valida que las direcciones de cuentas tengan el formato correcto
-   */
-  private validateAccountAddresses(): void {
-    const accounts = this.getAllConfiguredAccounts();
-    
-    for (const account of accounts) {
-      if (!account.startsWith('0x') || account.length !== 42) {
-        throw new Error(`Invalid account address format: ${account}. Must be a valid Ethereum address (0x...)`);
-      }
+      const baseIp = `${baseParts[0]}.${baseParts[1]}.${baseParts[2]}.${10 + nodeIndex}`;
+      return baseIp;
     }
   }
 

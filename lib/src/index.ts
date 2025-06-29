@@ -2505,46 +2505,77 @@ export class BesuNetwork {
     let needsRestart = false;
     let needsSubnetUpdate = false;
 
+    // Validar los cambios propuestos usando las mismas validaciones que en createNetwork
+    const errors: ValidationError[] = [];
+
     // Actualizar subnet si se proporciona
     if (updates.subnet && updates.subnet !== this.config.subnet) {
-      // Verificar si la nueva subnet es válida
+      // Usar las mismas validaciones que en validateNetworkBasicConfig
       if (!this.isValidSubnet(updates.subnet)) {
-        throw new Error(`Invalid subnet format: ${updates.subnet}`);
-      }
-      
-      if (!isSubnetAvailable(updates.subnet)) {
-        throw new Error(`Subnet ${updates.subnet} is already in use`);
+        errors.push({
+          field: 'subnet',
+          type: 'format',
+          message: 'Invalid subnet format. Expected format: xxx.xxx.xxx.xxx/xx (e.g., 172.24.0.0/16)'
+        });
+      } else if (!isSubnetAvailable(updates.subnet)) {
+        errors.push({
+          field: 'subnet',
+          type: 'duplicate',
+          message: `Subnet ${updates.subnet} is already in use by another Docker network`
+        });
       }
 
-      console.log(`🔄 Updating subnet from ${this.config.subnet} to ${updates.subnet}`);
-      
-      // Actualizar configuración
-      this.config.subnet = updates.subnet;
-      needsSubnetUpdate = true;
-      needsRestart = true;
+      if (errors.length === 0) {
+        console.log(`🔄 Updating subnet from ${this.config.subnet} to ${updates.subnet}`);
+        this.config.subnet = updates.subnet;
+        needsSubnetUpdate = true;
+        needsRestart = true;
+      }
     }
 
     // Actualizar gasLimit si se proporciona
     if (updates.gasLimit && updates.gasLimit !== this.config.gasLimit) {
+      // Usar las mismas validaciones que en validateNetworkBasicConfig
       const gasLimit = parseInt(updates.gasLimit, 16);
       if (isNaN(gasLimit) || gasLimit < 4712388 || gasLimit > 100000000) {
-        throw new Error('Gas limit must be between 4,712,388 (0x47E7C4) and 100,000,000 (0x5F5E100)');
+        errors.push({
+          field: 'gasLimit',
+          type: 'range',
+          message: 'Gas limit must be between 4,712,388 (0x47E7C4) and 100,000,000 (0x5F5E100)'
+        });
       }
 
-      console.log(`🔄 Updating gas limit from ${this.config.gasLimit} to ${updates.gasLimit}`);
-      this.config.gasLimit = updates.gasLimit;
-      needsRestart = true;
+      if (errors.length === 0) {
+        console.log(`🔄 Updating gas limit from ${this.config.gasLimit} to ${updates.gasLimit}`);
+        this.config.gasLimit = updates.gasLimit;
+        needsRestart = true;
+      }
     }
 
     // Actualizar blockTime si se proporciona
     if (updates.blockTime !== undefined && updates.blockTime !== this.config.blockTime) {
+      // Usar las mismas validaciones que en validateNetworkBasicConfig
       if (!Number.isInteger(updates.blockTime) || updates.blockTime < 1 || updates.blockTime > 300) {
-        throw new Error('Block time must be between 1 and 300 seconds');
+        errors.push({
+          field: 'blockTime',
+          type: 'range',
+          message: 'Block time must be between 1 and 300 seconds'
+        });
       }
 
-      console.log(`🔄 Updating block time from ${this.config.blockTime || 'default'} to ${updates.blockTime}`);
-      this.config.blockTime = updates.blockTime;
-      needsRestart = true;
+      if (errors.length === 0) {
+        console.log(`🔄 Updating block time from ${this.config.blockTime || 'default'} to ${updates.blockTime}`);
+        this.config.blockTime = updates.blockTime;
+        needsRestart = true;
+      }
+    }
+
+    // Si hay errores de validación, lanzar excepción con todos los errores
+    if (errors.length > 0) {
+      const errorMessages = errors.map(error => 
+        `${error.field}: ${error.message}`
+      ).join('\n');
+      throw new Error(`Network configuration update validation failed:\n${errorMessages}`);
     }
 
     // Si hay cambios que requieren reinicio
@@ -2576,6 +2607,286 @@ export class BesuNetwork {
     } else {
       console.log('ℹ️  No changes detected in configuration');
     }
+  }
+
+  /**
+   * Actualiza las cuentas de una red Besu existente sin modificar el genesis
+   * Solo actualiza la configuración interna de la red
+   */
+  /**
+   * Valida las actualizaciones de cuentas antes de aplicarlas
+   */
+  private validateAccountUpdates(updates: {
+    signerAccount?: { address: string; weiAmount: string };
+    accounts?: Array<{ address: string; weiAmount: string }>;
+  }): ValidationError[] {
+    const errors: ValidationError[] = [];
+    const usedAddresses = new Set<string>();
+
+    // Validar signerAccount
+    if (updates.signerAccount) {
+      if (!this.isValidEthereumAddress(updates.signerAccount.address)) {
+        errors.push({
+          field: 'signerAccount.address',
+          type: 'format',
+          message: 'Signer account address must be a valid Ethereum address (0x...)'
+        });
+      } else {
+        usedAddresses.add(updates.signerAccount.address.toLowerCase());
+      }
+
+      if (!this.isValidWeiAmount(updates.signerAccount.weiAmount)) {
+        errors.push({
+          field: 'signerAccount.weiAmount',
+          type: 'format',
+          message: 'Signer account wei amount must be a valid positive number'
+        });
+      } else if (!this.isReasonableWeiAmount(updates.signerAccount.weiAmount)) {
+        errors.push({
+          field: 'signerAccount.weiAmount',
+          type: 'range',
+          message: 'Signer account wei amount should be between 1 wei and 10^30 wei (reasonable range)'
+        });
+      }
+    }
+
+    // Validar accounts array
+    if (updates.accounts && updates.accounts.length > 0) {
+      updates.accounts.forEach((account, index) => {
+        if (!this.isValidEthereumAddress(account.address)) {
+          errors.push({
+            field: `accounts[${index}].address`,
+            type: 'format',
+            message: `Account ${index} address must be a valid Ethereum address (0x...)`
+          });
+        } else {
+          const lowerAddress = account.address.toLowerCase();
+          if (usedAddresses.has(lowerAddress)) {
+            errors.push({
+              field: `accounts[${index}].address`,
+              type: 'duplicate',
+              message: `Account ${index} address is duplicated`
+            });
+          } else {
+            usedAddresses.add(lowerAddress);
+          }
+        }
+
+        if (!this.isValidWeiAmount(account.weiAmount)) {
+          errors.push({
+            field: `accounts[${index}].weiAmount`,
+            type: 'format',
+            message: `Account ${index} wei amount must be a valid positive number`
+          });
+        } else if (!this.isReasonableWeiAmount(account.weiAmount)) {
+          errors.push({
+            field: `accounts[${index}].weiAmount`,
+            type: 'range',
+            message: `Account ${index} wei amount should be between 1 wei and 10^30 wei (reasonable range)`
+          });
+        }
+      });
+    }
+
+    return errors;
+  }
+
+  async updateNetworkAccounts(updates: {
+    signerAccount?: { address: string; weiAmount: string };
+    accounts?: Array<{ address: string; weiAmount: string }>;
+  }): Promise<void> {
+    console.log(`📝 Updating network accounts for: ${this.config.name}`);
+
+    // Validar las actualizaciones antes de aplicarlas
+    const validationErrors = this.validateAccountUpdates(updates);
+    if (validationErrors.length > 0) {
+      const errorMessages = validationErrors.map(error => `${error.field}: ${error.message}`).join('\n');
+      throw new Error(`Validation failed:\n${errorMessages}`);
+    }
+
+    // Actualizar signerAccount si se proporciona
+    if (updates.signerAccount) {
+      console.log(`🔄 Updating signer account to: ${updates.signerAccount.address} (${ethers.formatEther(updates.signerAccount.weiAmount)} ETH)`);
+      this.config.signerAccount = updates.signerAccount;
+    }
+
+    // Actualizar accounts si se proporciona
+    if (updates.accounts) {
+      console.log(`🔄 Updating accounts list with ${updates.accounts.length} accounts`);
+      this.config.accounts = updates.accounts;
+      
+      // Log de las cuentas actualizadas
+      for (const account of updates.accounts) {
+        const ethAmount = ethers.formatEther(account.weiAmount);
+        console.log(`   - ${account.address}: ${ethAmount} ETH`);
+      }
+    }
+
+    console.log('✅ Network accounts updated successfully');
+    console.log('💡 Note: Genesis file remains unchanged. New accounts only affect internal configuration.');
+  }
+
+  /**
+   * Versión estática para validar actualizaciones de cuentas
+   */
+  private static validateAccountUpdatesStatic(updates: {
+    signerAccount?: { address: string; weiAmount: string };
+    accounts?: Array<{ address: string; weiAmount: string }>;
+  }): ValidationError[] {
+    const errors: ValidationError[] = [];
+    const usedAddresses = new Set<string>();
+
+    // Función auxiliar para validar dirección Ethereum
+    const isValidEthereumAddress = (address: string): boolean => {
+      return /^0x[a-fA-F0-9]{40}$/.test(address);
+    };
+
+    // Función auxiliar para validar cantidad wei
+    const isValidWeiAmount = (weiAmount: string): boolean => {
+      try {
+        const amount = BigInt(weiAmount);
+        return amount > 0n;
+      } catch (error) {
+        return false;
+      }
+    };
+
+    // Función auxiliar para validar cantidad wei razonable
+    const isReasonableWeiAmount = (weiAmount: string): boolean => {
+      try {
+        const amount = BigInt(weiAmount);
+        const maxReasonable = BigInt("1000000000000000000000000000000"); // 10^30 wei
+        return amount > 0n && amount <= maxReasonable;
+      } catch (error) {
+        return false;
+      }
+    };
+
+    // Validar signerAccount
+    if (updates.signerAccount) {
+      if (!isValidEthereumAddress(updates.signerAccount.address)) {
+        errors.push({
+          field: 'signerAccount.address',
+          type: 'format',
+          message: 'Signer account address must be a valid Ethereum address (0x...)'
+        });
+      } else {
+        usedAddresses.add(updates.signerAccount.address.toLowerCase());
+      }
+
+      if (!isValidWeiAmount(updates.signerAccount.weiAmount)) {
+        errors.push({
+          field: 'signerAccount.weiAmount',
+          type: 'format',
+          message: 'Signer account wei amount must be a valid positive number'
+        });
+      } else if (!isReasonableWeiAmount(updates.signerAccount.weiAmount)) {
+        errors.push({
+          field: 'signerAccount.weiAmount',
+          type: 'range',
+          message: 'Signer account wei amount should be between 1 wei and 10^30 wei (reasonable range)'
+        });
+      }
+    }
+
+    // Validar accounts array
+    if (updates.accounts && updates.accounts.length > 0) {
+      updates.accounts.forEach((account, index) => {
+        if (!isValidEthereumAddress(account.address)) {
+          errors.push({
+            field: `accounts[${index}].address`,
+            type: 'format',
+            message: `Account ${index} address must be a valid Ethereum address (0x...)`
+          });
+        } else {
+          const lowerAddress = account.address.toLowerCase();
+          if (usedAddresses.has(lowerAddress)) {
+            errors.push({
+              field: `accounts[${index}].address`,
+              type: 'duplicate',
+              message: `Account ${index} address is duplicated`
+            });
+          } else {
+            usedAddresses.add(lowerAddress);
+          }
+        }
+
+        if (!isValidWeiAmount(account.weiAmount)) {
+          errors.push({
+            field: `accounts[${index}].weiAmount`,
+            type: 'format',
+            message: `Account ${index} wei amount must be a valid positive number`
+          });
+        } else if (!isReasonableWeiAmount(account.weiAmount)) {
+          errors.push({
+            field: `accounts[${index}].weiAmount`,
+            type: 'range',
+            message: `Account ${index} wei amount should be between 1 wei and 10^30 wei (reasonable range)`
+          });
+        }
+      });
+    }
+
+    return errors;
+  }
+
+  /**
+   * Método estático para actualizar las cuentas de una red existente por nombre
+   */
+  static async updateNetworkAccountsByName(
+    networkName: string,
+    updates: {
+      signerAccount?: { address: string; weiAmount: string };
+      accounts?: Array<{ address: string; weiAmount: string }>;
+    },
+    baseDir: string = "./networks"
+  ): Promise<void> {
+    console.log(`🔍 Loading network configuration for: ${networkName}`);
+
+    // Validar las actualizaciones antes de proceder
+    const validationErrors = BesuNetwork.validateAccountUpdatesStatic(updates);
+    if (validationErrors.length > 0) {
+      const errorMessages = validationErrors.map(error => `${error.field}: ${error.message}`).join('\n');
+      throw new Error(`Validation failed:\n${errorMessages}`);
+    }
+
+    // Construir la ruta del archivo de configuración
+    const networkPath = path.join(baseDir, networkName);
+    const configPath = path.join(networkPath, 'network-config.json');
+
+    // Verificar que existe el directorio de la red
+    if (!fs.existsSync(networkPath)) {
+      throw new Error(`Network directory not found: ${networkPath}`);
+    }
+
+    // Cargar la configuración existente
+    let config: BesuNetworkConfig;
+    if (fs.existsSync(configPath)) {
+      const configData = fs.readFileSync(configPath, 'utf-8');
+      config = JSON.parse(configData);
+    } else {
+      // Si no existe archivo de configuración, crear configuración básica
+      console.log('⚠️  No network-config.json found, creating basic configuration...');
+      config = {
+        name: networkName,
+        chainId: 1337, // Default chainId
+        subnet: '172.24.0.0/16', // Default subnet
+        consensus: 'clique',
+        gasLimit: '0x47E7C4'
+      };
+    }
+
+    // Crear instancia de la red con la configuración cargada
+    const network = new BesuNetwork(config, baseDir);
+
+    // Actualizar las cuentas (ya validadas)
+    await network.updateNetworkAccounts(updates);
+
+    // Guardar la configuración actualizada
+    const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
+    fs.writeFileSync(configPath, updatedConfigData);
+
+    console.log(`💾 Configuration saved to: ${configPath}`);
   }
 
   /**

@@ -368,6 +368,94 @@ describe('BesuNetwork', () => {
             }
         }
     });
+
+    test('should validate parameters in updateNetworkConfig', async () => {
+        const timestamp = Date.now();
+        const initialConfig = {
+            name: `test-validation-network-${timestamp}`,
+            chainId: 1337,
+            subnet: '172.26.0.0/16',
+            consensus: 'clique' as const,
+            gasLimit: '0x47E7C4',
+            blockTime: 5
+        };
+
+        const network = new BesuNetwork(initialConfig, tempDir);
+        
+        // Add nodes to the configuration (simulating a created network without actually creating it)
+        const fileService = new FileService(tempDir);
+        (network as any).nodes.set('bootnode1', new BesuNode(
+            { name: 'bootnode1', ip: '172.26.0.10', port: 30303, rpcPort: 8545, type: 'bootnode' }, 
+            fileService
+        ));
+        (network as any).nodes.set('miner1', new BesuNode(
+            { name: 'miner1', ip: '172.26.0.11', port: 30304, rpcPort: 8546, type: 'miner' }, 
+            fileService
+        ));
+
+        // Test invalid subnet validation
+        await expect(network.updateNetworkConfig({
+            subnet: 'invalid-subnet'
+        })).rejects.toThrow(/Invalid subnet format/);
+
+        // Test invalid gasLimit validation
+        await expect(network.updateNetworkConfig({
+            gasLimit: '0x100' // Too low (256)
+        })).rejects.toThrow(/Gas limit must be between/);
+
+        await expect(network.updateNetworkConfig({
+            gasLimit: '0xFFFFFFFFFF' // Too high
+        })).rejects.toThrow(/Gas limit must be between/);
+
+        // Test invalid blockTime validation
+        await expect(network.updateNetworkConfig({
+            blockTime: 0 // Too low
+        })).rejects.toThrow(/Block time must be between/);
+
+        await expect(network.updateNetworkConfig({
+            blockTime: 400 // Too high
+        })).rejects.toThrow(/Block time must be between/);
+
+        // Test multiple validation errors
+        await expect(network.updateNetworkConfig({
+            subnet: 'invalid',
+            gasLimit: '0x100',
+            blockTime: 0
+        })).rejects.toThrow(/Network configuration update validation failed/);
+
+        // Test valid updates (without Docker requirements)
+        // Mock the dockerManager to avoid Docker calls
+        const originalDockerManager = (network as any).dockerManager;
+        (network as any).dockerManager = {
+            removeNetwork: jest.fn(),
+            createNetwork: jest.fn(),
+            isNetworkCreated: jest.fn().mockReturnValue(false),
+            removeContainers: jest.fn()
+        };
+
+        // Mock the stop and updateNodeConfigurations methods to avoid file system operations
+        const originalStop = network.stop;
+        const originalUpdateNodeConfigs = (network as any).updateNodeConfigurations;
+        
+        (network as any).stop = jest.fn().mockResolvedValue(undefined);
+        (network as any).updateNodeConfigurations = jest.fn().mockResolvedValue(undefined);
+
+        await network.updateNetworkConfig({
+            subnet: '172.28.0.0/16',
+            gasLimit: '0x989680',
+            blockTime: 15
+        });
+
+        const updatedConfig = network.getConfig();
+        expect(updatedConfig.subnet).toBe('172.28.0.0/16');
+        expect(updatedConfig.gasLimit).toBe('0x989680');
+        expect(updatedConfig.blockTime).toBe(15);
+
+        // Restore original methods and dockerManager
+        (network as any).dockerManager = originalDockerManager;
+        (network as any).stop = originalStop;
+        (network as any).updateNodeConfigurations = originalUpdateNodeConfigs;
+    });
 });
 
 // ========================================
@@ -892,14 +980,14 @@ describe('Account Management Tests', () => {
             expect(config.accounts).toBeDefined();
             expect(config.accounts!.length).toBe(3);
 
-            // Verificar que la función getAllConfiguredAccounts incluye todas las cuentas
-            const allAccounts = (besuNetwork as any).getAllConfiguredAccounts();
-            expect(allAccounts).toContain('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1'); // signer account
-            expect(allAccounts).toContain('0x627306090abaB3A6e1400e9345bC60c78a8BEf57'); // account 1
-            expect(allAccounts).toContain('0xf17f52151EbEF6C7334FAD080c5704D77216b732'); // account 2
-            expect(allAccounts).toContain('0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9'); // account 3
-            // Should have 4 unique accounts total
-            expect(allAccounts.length).toBe(4);
+            // Verificar que las cuentas están correctamente configuradas
+            const networkConfig = besuNetwork.getConfig();
+            expect(networkConfig.signerAccount?.address).toBe('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1');
+            expect(networkConfig.accounts).toBeDefined();
+            expect(networkConfig.accounts!.length).toBe(3);
+            expect(networkConfig.accounts![0].address).toBe('0x627306090abaB3A6e1400e9345bC60c78a8BEf57');
+            expect(networkConfig.accounts![1].address).toBe('0xf17f52151EbEF6C7334FAD080c5704D77216b732');
+            expect(networkConfig.accounts![2].address).toBe('0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9');
 
             console.log('\n📊 Test Summary:');
             console.log('- Signer account has priority and 1M ETH balance');
@@ -963,7 +1051,7 @@ describe('Account Management Tests', () => {
             }
         };
 
-        expect(() => new BesuNetwork(invalidConfig1)).toThrow('Invalid account address format');
+        expect(() => new BesuNetwork(invalidConfig1)).toThrow('Invalid signer account address');
 
         // Test con dirección inválida (sin 0x)
         const invalidConfig2: BesuNetworkConfig = {
@@ -980,9 +1068,147 @@ describe('Account Management Tests', () => {
             ]
         };
 
-        expect(() => new BesuNetwork(invalidConfig2)).toThrow('Invalid account address format');
+        expect(() => new BesuNetwork(invalidConfig2)).toThrow('Invalid account address');
 
         console.log('✅ Validación de direcciones funcionando correctamente');
+    });
+
+    // ========================================
+    // TESTS DE VALIDACIÓN PARA UPDATE NETWORK ACCOUNTS
+    // ========================================
+
+    test('Should validate updateNetworkAccountsByName with invalid address format', async () => {
+        console.log('🧪 Test: Validation - Invalid address format\n');
+        
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
+            signerAccount: {
+                address: 'invalid-address',
+                weiAmount: '1000000000000000000'
+            }
+        })).rejects.toThrow('Signer account address must be a valid Ethereum address');
+        
+        console.log('✅ Invalid address format validation working correctly');
+    });
+
+    test('Should validate updateNetworkAccountsByName with negative wei amount', async () => {
+        console.log('🧪 Test: Validation - Negative wei amount\n');
+        
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
+            signerAccount: {
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
+                weiAmount: '-1000'
+            }
+        })).rejects.toThrow('Signer account wei amount must be a valid positive number');
+        
+        console.log('✅ Negative wei amount validation working correctly');
+    });
+
+    test('Should validate updateNetworkAccountsByName with invalid wei amount format', async () => {
+        console.log('🧪 Test: Validation - Invalid wei amount format\n');
+        
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
+            accounts: [{
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
+                weiAmount: 'not-a-number'
+            }]
+        })).rejects.toThrow('Account 0 wei amount must be a valid positive number');
+        
+        console.log('✅ Invalid wei amount format validation working correctly');
+    });
+
+    test('Should validate updateNetworkAccountsByName with duplicate addresses', async () => {
+        console.log('🧪 Test: Validation - Duplicate addresses\n');
+        
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
+            accounts: [
+                {
+                    address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
+                    weiAmount: '1000000000000000000'
+                },
+                {
+                    address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9', // Same address
+                    weiAmount: '2000000000000000000'
+                }
+            ]
+        })).rejects.toThrow('Account 1 address is duplicated');
+        
+        console.log('✅ Duplicate addresses validation working correctly');
+    });
+
+    test('Should validate updateNetworkAccountsByName with unreasonable wei amount', async () => {
+        console.log('🧪 Test: Validation - Unreasonable wei amount\n');
+        
+        const unreasonableAmount = '10000000000000000000000000000000'; // > 10^30 wei
+        
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
+            signerAccount: {
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
+                weiAmount: unreasonableAmount
+            }
+        })).rejects.toThrow('should be between 1 wei and 10^30 wei');
+        
+        console.log('✅ Unreasonable wei amount validation working correctly');
+    });
+
+    test('Should pass validation with valid inputs and fail on network not found', async () => {
+        console.log('🧪 Test: Validation - Valid inputs, network not found\n');
+        
+        await expect(BesuNetwork.updateNetworkAccountsByName('non-existent-network', {
+            signerAccount: {
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
+                weiAmount: '1000000000000000000'
+            }
+        })).rejects.toThrow('Network directory not found');
+        
+        console.log('✅ Valid input passed validation, correctly failed at network lookup');
+    });
+
+    test('Should validate instance method updateNetworkAccounts', async () => {
+        console.log('🧪 Test: Validation - Instance method updateNetworkAccounts\n');
+        
+        const config: BesuNetworkConfig = {
+            name: 'test-network',
+            chainId: 1337,
+            subnet: '172.24.0.0/16',
+            consensus: 'clique',
+            gasLimit: '0x47E7C4'
+        };
+        
+        const network = new BesuNetwork(config);
+        
+        // Test invalid address
+        await expect(network.updateNetworkAccounts({
+            signerAccount: {
+                address: 'invalid-address',
+                weiAmount: '1000000000000000000'
+            }
+        })).rejects.toThrow('Signer account address must be a valid Ethereum address');
+        
+        // Test valid update
+        await expect(network.updateNetworkAccounts({
+            signerAccount: {
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
+                weiAmount: '1000000000000000000'
+            }
+        })).resolves.not.toThrow();
+        
+        console.log('✅ Instance method validation working correctly');
+    });
+
+    // Helper function tests
+    test('Should test ethToWei helper function', () => {
+        console.log('🧪 Test: Helper function - ethToWei\n');
+        
+        const ethToWei = (ethAmount: string): string => {
+            // Use ethers for precise conversion
+            return ethers.parseEther(ethAmount).toString();
+        };
+        
+        expect(ethToWei('1')).toBe('1000000000000000000');
+        expect(ethToWei('0.5')).toBe('500000000000000000');
+        expect(ethToWei('1000')).toBe('1000000000000000000000');
+        
+        console.log('✅ Helper function working correctly');
     });
 });
 

@@ -427,224 +427,138 @@ getAllNodeConfigs(): Array<{...}>                   // Configuraciones completas
 // Información de red
 getNetworkInfo(rpcUrl?: string): Promise<any>        // Info de blockchain
 getBalance(address: string, rpcUrl?: string): Promise<bigint> // Balance de cuenta
+
+// Gestión de cuentas
+updateNetworkAccounts(updates: {                     // Actualizar cuentas de red existente
+  signerAccount?: { address: string; weiAmount: string };
+  accounts?: Array<{ address: string; weiAmount: string }>;
+}): Promise<void>
+
+// Método estático para actualizar por nombre de red
+BesuNetwork.updateNetworkAccountsByName(             // Actualizar cuentas por nombre
+  networkName: string,
+  updates: {
+    signerAccount?: { address: string; weiAmount: string };
+    accounts?: Array<{ address: string; weiAmount: string }>;
+  },
+  baseDir?: string
+): Promise<void>
 ```
 
-## Clases Utilitarias
+### Gestión de Cuentas de Red
 
-### CryptoLib
+#### Actualizar Cuentas sin Modificar Genesis
 
-Utilidades criptográficas para generar claves y firmar mensajes.
+Puedes modificar las cuentas de una red existente sin tocar el archivo genesis:
 
 ```typescript
-const crypto = new CryptoLib();
-const keyPair = crypto.generateKeyPair("192.168.1.100");
+// Método 1: Usando instancia de red existente
+const network = new BesuNetwork(config);
+await network.updateNetworkAccounts({
+  signerAccount: {
+    address: "0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9",
+    weiAmount: "5000000000000000000000", // 5000 ETH en wei
+  },
+  accounts: [
+    {
+      address: "0x8ba1f109551bD432803012645Hac136c22C501e5",
+      weiAmount: "1000000000000000000000", // 1000 ETH en wei
+    },
+    {
+      address: "0x617F2E2fD72FD9D5503197092aC168c91465E7f2",
+      weiAmount: "2000000000000000000000", // 2000 ETH en wei
+    },
+  ],
+});
+
+// Método 2: Usando método estático por nombre de red
+await BesuNetwork.updateNetworkAccountsByName(
+  "mi-red-besu",
+  {
+    signerAccount: {
+      address: "0x9fbD1EbdD54E8CE1776B2BE9aEF1dfB10C5b6DDA",
+      weiAmount: "10000000000000000000000", // 10000 ETH en wei
+    },
+    accounts: [
+      {
+        address: "0x23B608675a2B2fB1890d3ABBd85c5775c51f9641",
+        weiAmount: "3000000000000000000000", // 3000 ETH en wei
+      },
+    ],
+  },
+  "./networks" // Directorio base donde están las redes
+);
 ```
 
-### FileService
+#### Características de la Gestión de Cuentas
 
-Gestión de archivos y directorios.
+- ✅ **Sin modificar genesis**: El archivo genesis permanece intacto
+- ✅ **Configuración interna**: Solo actualiza la configuración interna de la red
+- ✅ **Persistencia**: La configuración se guarda en `network-config.json`
+- ✅ **Validación automática**: Direcciones Ethereum válidas (formato 0x...)
+- ✅ **Validación de cantidades**: Cantidades wei válidas y rangos razonables
+- ✅ **Detección de duplicados**: Previene direcciones duplicadas
+- ✅ **Formato flexible**: Soporta tanto wei como ETH (usar conversion helpers)
+
+#### Validaciones Aplicadas
+
+El método `updateNetworkAccountsByName` aplica las mismas validaciones que durante la creación de la red:
+
+- **Direcciones**: Formato hexadecimal válido (0x seguido de 40 caracteres hex)
+- **Cantidades Wei**: Números positivos válidos
+- **Rangos razonables**: Entre 1 wei y 10^30 wei
+- **Duplicados**: No se permiten direcciones duplicadas
 
 ```typescript
-const fileService = new FileService("./mi-directorio");
-fileService.createFile("ruta", "archivo.txt", "contenido");
+// Ejemplo que muestra manejo de errores de validación
+try {
+  await BesuNetwork.updateNetworkAccountsByName("mi-red", {
+    signerAccount: {
+      address: "direccion-invalida", // ❌ Formato inválido
+      weiAmount: "-1000", // ❌ Cantidad negativa
+    },
+  });
+} catch (error) {
+  console.log("Errores de validación:", error.message);
+  // Salida: Validation failed:
+  // signerAccount.address: Signer account address must be a valid Ethereum address (0x...)
+  // signerAccount.weiAmount: Signer account wei amount must be a valid positive number
+}
 ```
 
-### DockerNetworkManager
-
-Gestión de redes y contenedores Docker.
+#### Helper para Conversión ETH a Wei
 
 ```typescript
-const docker = new DockerNetworkManager("mi-red");
-docker.createNetwork("172.24.0.0/16");
-```
+function ethToWei(ethAmount: string): string {
+  // Usar ethers para conversión precisa
+  return ethers.parseEther(ethAmount).toString();
+}
 
-## Scripts
-
-```bash
-# Compilar TypeScript
-npm run build
-
-# Ejecutar tests consolidados (ubicados en _test_/besu.test.ts)
-npm run test
-npm run test:watch
-npm run test:coverage
-
-# Nota: Todos los tests están ahora en un solo archivo consolidado
-# que incluye tests unitarios, de integración, resolución de conflictos y conectividad
-
-# Compilar en modo watch
-npm run build:watch
-
-# Limpiar archivos compilados
-npm run clean
-
-# Limpiar redes Docker conflictivas
-npm run cleanup-networks
-
-# Ver información de redes Docker
-npm run networks:info
-```
-
-# Ejemplos de uso (ubicados en examples/)
-
-```bash
-npm run example # Ejemplo básico legacy
-npm run example:flexible # Ejemplos de flexibilidad total
-npm run example:simple # Ejemplo simple
-npm run demo # Demo rápido de flexibilidad
-npm run demo:multibootnode # Demo múltiples bootnodes
-```
-
-## Tests
-
-Los tests incluyen ejemplos completos de uso del `signerAccount` y del sistema de cuentas:
-
-```bash
-npm test # Ejecutar todos los tests (incluye tests de signerAccount y accounts)
-npm run test:watch # Ejecutar tests en modo watch
-npm run test:coverage # Ejecutar tests con cobertura
-```
-
-## Resolución de Problemas
-
-### Error: "Pool overlaps with other one on this address space"
-
-Este error ocurre cuando hay conflictos de subred Docker. La librería incluye resolución automática de conflictos:
-
-```typescript
-// Auto-resolución habilitada por defecto
-await besuNetwork.create({
-  bootnodeIp: "172.24.0.20",
-  minerIp: "172.24.0.22",
-  autoResolveSubnetConflicts: true, // Por defecto
+// Uso del helper
+await network.updateNetworkAccounts({
+  signerAccount: {
+    address: "0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9",
+    weiAmount: ethToWei("1000"), // 1000 ETH convertido a wei
+  },
 });
 ```
 
-También puedes limpiar manualmente las redes conflictivas:
+## Tests de Validación
+
+Todos los tests de validación para las funciones de actualización de cuentas están incluidos en `_test_/besu.test.ts` dentro de la sección "Account Management Tests". Los tests incluyen:
+
+- ✅ Validación de formato de direcciones inválidas
+- ✅ Validación de cantidades wei negativas
+- ✅ Validación de formatos de wei inválidos
+- ✅ Detección de direcciones duplicadas
+- ✅ Validación de cantidades fuera de rangos razonables
+- ✅ Validación tanto para método de instancia como estático
+- ✅ Test del helper de conversión ETH a Wei
 
 ```bash
-# Limpiar todas las redes Besu
-npm run cleanup-networks
+# Ejecutar todos los tests de validación de cuentas
+npm test -- --testNamePattern="Account Management Tests"
 
-# Ver información de redes actuales
-npm run networks:info
-```
-
-## Ejemplos de Uso
-
-### Ejemplo 1: Red Totalmente Personalizada
-
-```typescript
-const nodes: BesuNodeDefinition[] = [
-  // Bootnodes redundantes
-  { name: "bootnode1", ip: "172.24.0.10", rpcPort: 8545, type: "bootnode" },
-  { name: "bootnode2", ip: "172.24.0.11", rpcPort: 8546, type: "bootnode" },
-
-  // Cluster de miners
-  { name: "miner-alpha", ip: "172.24.0.20", rpcPort: 8550, type: "miner" },
-  { name: "miner-beta", ip: "172.24.0.21", rpcPort: 8551, type: "miner" },
-  { name: "miner-gamma", ip: "172.24.0.22", rpcPort: 8552, type: "miner" },
-
-  // RPC especializados
-  { name: "rpc-frontend", ip: "172.24.0.30", rpcPort: 8560, type: "rpc" },
-  { name: "rpc-backend", ip: "172.24.0.31", rpcPort: 8561, type: "rpc" },
-  { name: "rpc-analytics", ip: "172.24.0.32", rpcPort: 8562, type: "rpc" },
-
-  // Observadores
-  { name: "observer1", ip: "172.24.0.40", rpcPort: 8570, type: "node" },
-  { name: "observer2", ip: "172.24.0.41", rpcPort: 8571, type: "node" },
-];
-
-await besuNetwork.create({ nodes });
-```
-
-### Ejemplo 2: Red de Desarrollo Rápida
-
-```typescript
-// Crear 15 nodos automáticamente con distribución inteligente
-await besuNetwork.createScalableNetwork({
-  totalNodes: 15,
-  minerPercentage: 25, // ~4 miners
-  rpcPercentage: 35, // ~5 RPC endpoints
-  baseIp: "172.25.0",
-});
-```
-
-### Ejemplo 3: Alta Disponibilidad
-
-```typescript
-// Red robusta para producción
-await besuNetwork.createMultiMinerNetwork({
-  minerCount: 5, // 5 miners para redundancia
-  rpcNodeCount: 6, // 6 RPC para balanceo de carga
-  initialBalance: "10000000000000000000000000", // 10M ETH
-});
-```
-
-### Ejemplo 4: Gestión Dinámica
-
-```typescript
-// Empezar simple
-await besuNetwork.createSimpleNetwork();
-
-// Escalar dinámicamente
-await besuNetwork.addNode({
-  name: "rpc-extra",
-  ip: "172.24.0.50",
-  rpcPort: 8580,
-  type: "rpc",
-});
-
-// Optimizar recursos
-await besuNetwork.removeNode("rpc-extra");
-```
-
-## Arquitectura
-
-La librería está estructurada en varias clases principales:
-
-1. **BesuNetwork**: Clase principal que orquesta toda la red
-2. **BesuNode**: Representa un nodo individual de la red
-3. **DockerNetworkManager**: Gestiona la infraestructura Docker
-4. **FileService**: Maneja archivos y configuraciones
-5. **CryptoLib**: Utilidades criptográficas
-
-## Puertos
-
-Por defecto, los puertos RPC externos se mapean sumando 10000 al puerto interno:
-
-- Puerto interno 8545 → Puerto externo 18545
-- Puerto interno 8546 → Puerto externo 18546
-- Puerto interno 8547 → Puerto externo 18547
-
-## Requisitos
-
-- Node.js 18+
-- Docker
-- npm o yarn
-
-## Licencia
-
-MIT
-
-## Estructura del Proyecto
-
-```
-lib/
-├── src/
-│   ├── index.ts               # Librería principal
-│   └── cleanup-networks.ts    # Utilidad de limpieza Docker
-├── examples/                  # Todos los ejemplos de uso
-│   ├── example.ts             # Ejemplo básico
-│   ├── simple-example.ts      # Ejemplo simple
-│   ├── flexible-examples.ts   # Ejemplos de flexibilidad
-│   ├── demo-flexibility.ts    # Demo rápido
-│   └── multi-bootnode-example.ts # Ejemplo múltiples bootnodes
-├── _test_/                    # Todos los archivos de test
-│   ├── besu-network.test.ts   # Tests unitarios
-│   ├── test-multi-bootnode.ts # Test múltiples bootnodes
-│   └── test-conflict-resolution.ts # Test resolución conflictos
-├── networks/                  # Redes generadas (temporal)
-├── dist/                      # Código compilado
-└── coverage/                  # Reportes de cobertura
+# Ejecutar tests específicos de validación
+npm test -- --testNamePattern="Should validate updateNetworkAccountsByName"
 ```

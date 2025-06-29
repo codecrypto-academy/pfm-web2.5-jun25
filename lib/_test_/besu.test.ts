@@ -284,6 +284,7 @@ describe('BesuNetwork', () => {
 
         const network = new BesuNetwork(networkConfig, tempDir);
         const minerAddress = 'a'.repeat(40);
+        const addressWithPrefix = `0x${minerAddress}`;
         
         // Use reflection to access private method for testing
         const genesis = (network as any).generateGenesis(minerAddress, '1000000000000000000000000');
@@ -292,8 +293,8 @@ describe('BesuNetwork', () => {
         expect(genesis.config.clique).toBeDefined();
         expect(genesis.config.clique?.period).toBe(5);
         expect(genesis.gasLimit).toBe('0x47E7C4');
-        expect(genesis.alloc[minerAddress]).toBeDefined();
-        expect(genesis.alloc[minerAddress].balance).toBe('1000000000000000000000000');
+        expect(genesis.alloc[addressWithPrefix]).toBeDefined();
+        expect(genesis.alloc[addressWithPrefix].balance).toBe('1000000000000000000000000');
     });
 });
 
@@ -1652,6 +1653,65 @@ describe('Node Validation Tests', () => {
             );
         });
 
+        test('should reject Clique consensus with even number of miners', () => {
+            const config: BesuNetworkConfig = {
+                name: 'test-clique-even-miners',
+                chainId: 1337,
+                subnet: '172.50.0.0/16',
+                consensus: 'clique',
+                gasLimit: '0x47E7C4'
+            };
+
+            const network = new BesuNetwork(config, tempDir);
+            
+            const evenMinerNodes: BesuNodeDefinition[] = [
+                {
+                    name: 'bootnode1',
+                    ip: '172.50.0.20',
+                    rpcPort: 8545,
+                    type: 'bootnode'
+                },
+                {
+                    name: 'miner1',
+                    ip: '172.50.0.21',
+                    rpcPort: 8546,
+                    type: 'miner'
+                },
+                {
+                    name: 'miner2',
+                    ip: '172.50.0.22',
+                    rpcPort: 8547,
+                    type: 'miner'
+                },
+                {
+                    name: 'miner3',
+                    ip: '172.50.0.23',
+                    rpcPort: 8548,
+                    type: 'miner'
+                },
+                {
+                    name: 'miner4',
+                    ip: '172.50.0.24',
+                    rpcPort: 8549,
+                    type: 'miner'
+                }
+                // 4 miners (even number) - should be rejected for Clique
+            ];
+
+            const validation = network.validateNetworkConfiguration({ nodes: evenMinerNodes });
+            
+            expect(validation.isValid).toBe(false);
+            expect(validation.errors).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        field: 'consensus',
+                        type: 'invalid',
+                        message: 'Clique consensus requires an odd number of miners to avoid split voting. Currently: 4 miners'
+                    })
+                ])
+            );
+        });
+
         test('should reject IBFT2 consensus with insufficient validators', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-ibft2-insufficient',
@@ -1888,7 +1948,7 @@ describe('Node Validation Tests', () => {
             );
         });
 
-        test('should reject miner nodes with consecutive ports', () => {
+        test('should reject miner nodes with consecutive RPC ports', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-consecutive-ports',
                 chainId: 1337,
@@ -1915,8 +1975,14 @@ describe('Node Validation Tests', () => {
                 {
                     name: 'miner2',
                     ip: '172.50.0.22',
-                    rpcPort: 8547, // Puerto consecutivo
+                    rpcPort: 8547, // Puerto consecutivo al miner anterior
                     type: 'miner'
+                },
+                {
+                    name: 'rpc1',
+                    ip: '172.50.0.23',
+                    rpcPort: 8548, // RPC node can have consecutive port
+                    type: 'rpc'
                 }
             ];
 

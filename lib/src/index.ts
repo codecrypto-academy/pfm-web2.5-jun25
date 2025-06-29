@@ -767,20 +767,12 @@ export class BesuNetwork {
           });
         }
         
-        if (minerCount === 2) {
-          errors.push({
-            field: 'consensus',
-            type: 'invalid',
-            message: 'Clique consensus with exactly 2 miners can cause network splits. Use 1, 3, or more miners for better stability'
-          });
-        }
-
-        // Recomendaciones para Clique
+        // Clique requires odd number of miners to avoid split voting
         if (minerCount > 1 && minerCount % 2 === 0) {
           errors.push({
             field: 'consensus',
             type: 'invalid',
-            message: `Clique consensus with ${minerCount} miners (even number) may cause issues. Consider using an odd number of miners for better consensus`
+            message: `Clique consensus requires an odd number of miners to avoid split voting. Currently: ${minerCount} miners`
           });
         }
 

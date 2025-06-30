@@ -80,32 +80,47 @@ export async function deleteNodeAction(id: string, networkId: string) {
 }
 
 // Besu Network actions
-export async function createBesuNetwork(name: string, chainId: number, subnet: string, bootnodeIP: string, minerIP: string, listOfNodes: {nodeType: string, ip: string }[], prefundedAccounts: {address: string, amount: string }[] = []) {
-  besuManager.createBesuNetwork(name, chainId, subnet, bootnodeIP, minerIP, listOfNodes, prefundedAccounts);
+export async function createBesuNetwork(
+  name: string,
+  chainId: number,
+  subnet: string,
+  bootnodeIP: string,
+  minerIP: string,
+  listOfNodes: { nodeType: string; ip: string; name: string; port: number }[],
+  prefundedAccounts: { address: string; amount: string }[] = []
+) {
+  const result = await besuManager.createBesuNetwork(name, chainId, subnet, bootnodeIP, minerIP, listOfNodes, prefundedAccounts);
+  return result;
 }
 
 export async function removeBesuNetwork(name: string) {
-  return besuManager.removeBesuNetwork(name);
+  const result = await besuManager.removeBesuNetwork(name);
+  return result;
 }
 
 export async function getBesuNetwork(name: string) {
-  return besuManager.getBesuNetwork(name);
+  const result = await besuManager.getBesuNetwork(name);
+  return result;
 }
 
 export async function addBesuNode(networkName: string, nodeName: string, nodeType: string, port: string, ip?: string) {
-  return besuManager.addBesuNode(networkName, nodeName, nodeType, port, ip);
+  const result = await besuManager.addBesuNode(networkName, nodeName, nodeType, port, ip);
+  return result;
 }
 
 export async function removeBesuNode(networkName: string, nodeName: string) {
-  return besuManager.removeBesuNode(networkName, nodeName);
+  const result = await besuManager.removeBesuNode(networkName, nodeName);
+  return result;
 }
 
 export async function startBesuNetwork(name: string) {
-  return besuManager.startBesuNetwork(name);
+  const result = await besuManager.startBesuNetwork(name);
+  return result;
 }
 
 export async function stopBesuNetwork(name: string) {
-  return besuManager.stopBesuNetwork(name);
+  const result = await besuManager.stopBesuNetwork(name);
+  return result;
 }
 
 export async function getBesuBalance(networkName: string, address: string) {

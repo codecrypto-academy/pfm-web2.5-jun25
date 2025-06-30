@@ -4,8 +4,10 @@ export interface PrefundedAccount {
 }
 
 export interface Node {
-  type: 'rpc' | 'miner' | 'normal';
+  type: 'rpc' | 'miner' | 'node'; // type de noeud (rpc, miner, node)
   ip: string;
+  name: string; // nom unique du noeud (ex: rpc18550)
+  port: number; // port utilisé pour ce noeud
 }
 
 export interface Network {
@@ -17,4 +19,4 @@ export interface Network {
   prefundedAccounts: PrefundedAccount[];
   signerAccount: string;
   nodes: Node[];
-} 
+}

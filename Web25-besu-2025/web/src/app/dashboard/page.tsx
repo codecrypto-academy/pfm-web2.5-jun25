@@ -60,7 +60,7 @@ export default function DashboardPage() {
         <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-4">
           <Button asChild>
-            <Link href="/networks/create">Create New Network</Link>
+            <Link href="/networks?create=1">Create New Network</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link href="/networks">View All Networks</Link>
@@ -69,4 +69,4 @@ export default function DashboardPage() {
       </div>
     </div>
   );
-} 
+}

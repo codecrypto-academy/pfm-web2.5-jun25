@@ -12,8 +12,6 @@ import { ethers } from "ethers";
  * 
  * Este ejemplo demuestra:
  * - Red con múltiples bootnodes, miners, RPC y nodos regulares
- * - Gestión dinámica de nodos: remover miner y añadir RPC durante ejecución
- * - Gestión de cuentas: añadir nueva cuenta con transferencia de fondos
  * - Verificación de conectividad entre todos los nodos
  * - Múltiples transacciones entre diferentes cuentas
  * - Monitoreo de sincronización de la red
@@ -51,11 +49,10 @@ async function advancedExample() {
     try {
         console.log('📦 Creando red optimizada...');
         console.log('   - 2 Bootnodes para redundancia');
-        console.log('   - 3 Miners para distribución de minado estable (se reducirá a 2)');
-        console.log('   - 1 RPC node para acceso (se expandirá a 2)');
+        console.log('   - 3 Miners para distribución de minado estable (número impar)');
+        console.log('   - 1 RPC node para acceso');
         console.log('   - 1 Nodo regular para pruebas');
-        console.log('   - Cada nodo tiene puerto RPC único para evitar conflictos');
-        console.log('   - 🎯 Se demostrará gestión dinámica de nodos durante ejecución\n');
+        console.log('   - Cada nodo tiene puerto RPC único para evitar conflictos\n');
         
         // Crear la red con múltiples nodos - configuración optimizada para conectividad
         // Usando 3 miners (número impar) para evitar problemas de consenso Clique
@@ -89,57 +86,6 @@ async function advancedExample() {
         console.log('   📋 Orden: Bootnodes → Miners → RPC → Nodos regulares');
         await besuNetwork.start();
         console.log('✅ Todos los nodos iniciados\n');
-
-        // Demostrar funcionalidad de actualización de nodos
-        console.log('🔄 Demostrando gestión dinámica de nodos...');
-        console.log('   📝 Operaciones: Quitar miner3 + Añadir rpc2 + Añadir nueva cuenta');
-        
-        try {
-            // Importar funciones de actualización
-            const { removeNodesFromNetwork, addNodesToNetwork, BesuNetwork } = await import('../src/create-besu-networks');
-            
-            // 1. Quitar miner3 (dejando 2 miners para consenso estable)
-            console.log('   🗑️  Removiendo miner3...');
-            await removeNodesFromNetwork('advanced-besu-network', ['miner3']);
-            console.log('   ✅ Miner3 removido exitosamente');
-            
-            // 2. Añadir nuevo nodo RPC
-            console.log('   ➕ Añadiendo rpc2...');
-            await addNodesToNetwork('advanced-besu-network', [
-                { 
-                    name: 'rpc2', 
-                    ip: '172.40.0.31', 
-                    rpcPort: 8554, 
-                    type: 'rpc',
-                    p2pPort: 30303
-                }
-            ]);
-            console.log('   ✅ RPC2 añadido exitosamente');
-            
-            // 3. Añadir nueva cuenta con 10 ETH
-            console.log('   💰 Añadiendo nueva cuenta con 10 ETH...');
-            await BesuNetwork.updateNetworkAccountsByName('advanced-besu-network', [
-                {
-                    address: '0x1234567890123456789012345678901234567890', // Dirección de ejemplo
-                    weiAmount: ethers.parseEther('10').toString() // 10 ETH en wei
-                }
-            ], {
-                performTransfers: true, // Realizar transferencia real desde el miner
-                confirmTransactions: true
-            });
-            console.log('   ✅ Nueva cuenta añadida y financiada con 10 ETH');
-            
-            console.log('✅ Gestión dinámica de nodos completada\n');
-            
-            // Reiniciar la red con la nueva configuración
-            console.log('🔄 Reiniciando red con nueva configuración...');
-            await besuNetwork.start();
-            console.log('✅ Red reiniciada con cambios aplicados\n');
-            
-        } catch (error) {
-            console.error('❌ Error en gestión de nodos:', error instanceof Error ? error.message : error);
-            console.log('⚠️  Continuando con la red original...\n');
-        }
 
         // Esperar más tiempo para estabilización de red compleja
         console.log('⏳ Esperando estabilización inicial (60 segundos)...');
@@ -413,17 +359,15 @@ async function advancedExample() {
         console.log(`   - Transacciones procesadas: ${transactions.length}`);
 
         console.log('\n🎉 Ejemplo avanzado completado exitosamente!');
-        console.log('\n🔗 URLs de acceso a los nodos (después de modificaciones):');
+        console.log('\n🔗 URLs de acceso a los nodos:');
         console.log('   - Bootnode1: http://localhost:18545 (8545 + 10000)');
         console.log('   - Bootnode2: http://localhost:18546 (8546 + 10000)');
         console.log('   - Miner1: http://localhost:18547 (8547 + 10000)');
         console.log('   - Miner2: http://localhost:18549 (8549 + 10000)');
-        console.log('   - ❌ Miner3: REMOVIDO durante el ejemplo');
-        console.log('   - RPC1: http://localhost:18552 (8552 + 10000)');
-        console.log('   - ➕ RPC2: http://localhost:18554 (8554 + 10000) - AÑADIDO');
+        console.log('   - Miner3: http://localhost:18551 (8551 + 10000)');
+        console.log('   - RPC: http://localhost:18552 (8552 + 10000)');
         console.log('   - Node1: http://localhost:18553 (8553 + 10000)');
-        console.log('   💡 Configuración final: 2 bootnodes, 2 miners, 2 RPCs, 1 nodo regular');
-        console.log('   💰 Nueva cuenta financiada: 0x1234567890123456789012345678901234567890 (10 ETH)');
+        console.log('   💡 Puertos no consecutivos para miners según mejores prácticas');
 
     } catch (error) {
         console.error('❌ Error en el ejemplo avanzado:', error);

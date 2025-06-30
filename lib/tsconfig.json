@@ -19,7 +19,8 @@
   },
   "include": [
     "src/**/*",
-    "_test_/**/*"
+    "_test_/**/*",
+    "examples/**/*"
   ],
   "exclude": [
     "node_modules",

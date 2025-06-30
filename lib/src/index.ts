@@ -1621,6 +1621,24 @@ export class BesuNetwork {
     // Remove existing containers
     this.dockerManager.removeContainers();
 
+    // Ensure Docker network exists before starting containers
+    if (!this.dockerManager.networkExists()) {
+      console.log(`🔧 Docker network ${this.config.name} doesn't exist, creating it...`);
+      try {
+        this.dockerManager.createNetwork(this.config.subnet, {
+          network: this.config.name,
+          type: "besu",
+        });
+      } catch (error) {
+        console.log(`⚠️ Error creating network, attempting to resolve conflicts...`);
+        // If creation fails due to conflicts, try to resolve them
+        this.dockerManager.createNetwork(this.config.subnet, {
+          network: this.config.name,
+          type: "besu",
+        });
+      }
+    }
+
     const dataPath = path.resolve(this.fileService.folder);
 
     // Start nodes in order: bootnode, miner, then RPC and other nodes
@@ -3314,6 +3332,616 @@ export class BesuNetwork {
     }
     return result;
   }
+
+  /**
+   * Método estático para actualizar nodos de una red existente por nombre
+   */
+  static async updateNetworkNodesByName(
+    networkName: string,
+    updates: {
+      mainIp?: string;
+      nodes?: Array<{
+        name: string;
+        ip?: string;
+        rpcPort?: number;
+        p2pPort?: number;
+      }>;
+      addNodes?: BesuNodeDefinition[];
+      removeNodes?: string[];
+    },
+    options: {
+      baseDir?: string;
+    } = {}
+  ): Promise<void> {
+    return BesuNetworkUpdater.updateNetworkNodesByName(networkName, updates, options);
+  }
+}
+
+// ============================================================================
+// NETWORK NODES UPDATER - Funciones para actualizar nodos existentes
+// ============================================================================
+
+export class BesuNetworkUpdater {
+  private besuNetwork: BesuNetwork;
+
+  constructor(besuNetwork: BesuNetwork) {
+    this.besuNetwork = besuNetwork;
+  }
+
+  /**
+   * Actualiza los nodos de una red Besu existente
+   * Permite cambiar mainIp, configuraciones específicas de nodos, añadir y eliminar nodos
+   */
+  async updateNetworkNodes(updates: {
+    mainIp?: string;
+    nodes?: Array<{
+      name: string;
+      ip?: string;
+      rpcPort?: number;
+      p2pPort?: number;
+    }>;
+    addNodes?: BesuNodeDefinition[];
+    removeNodes?: string[]; // Array de nombres de nodos a eliminar
+  }): Promise<void> {
+    let needsRestart = false;
+    const errors: ValidationError[] = [];
+
+    const config = (this.besuNetwork as any).config;
+    const nodes = (this.besuNetwork as any).nodes;
+    console.log(`🔧 Updating network nodes for: ${config.name}`);
+
+    // Validar mainIp si se proporciona
+    if (updates.mainIp && updates.mainIp !== config.mainIp) {
+      if (!(this.besuNetwork as any).isValidIpAddress(updates.mainIp)) {
+        errors.push({
+          field: 'mainIp',
+          type: 'format',
+          message: 'Main IP must be a valid IP address'
+        });
+      } else {
+        console.log(`📍 Changing main IP from ${config.mainIp || 'not set'} to ${updates.mainIp}`);
+        config.mainIp = updates.mainIp;
+        needsRestart = true;
+      }
+    }
+
+    // Validar y aplicar actualizaciones específicas de nodos
+    if (updates.nodes && updates.nodes.length > 0) {
+      console.log(`🔧 Processing ${updates.nodes.length} node-specific updates...`);
+      
+      for (const nodeUpdate of updates.nodes) {
+        const node = nodes.get(nodeUpdate.name);
+        if (!node) {
+          errors.push({
+            field: `nodes[${nodeUpdate.name}]`,
+            type: 'invalid',
+            message: `Node '${nodeUpdate.name}' not found in network`
+          });
+          continue;
+        }
+
+        const currentNodeConfig = node.getConfig();
+        let nodeChanged = false;
+
+        // Validar y actualizar IP específica del nodo
+        if (nodeUpdate.ip && nodeUpdate.ip !== currentNodeConfig.ip) {
+          if (!(this.besuNetwork as any).isValidIpAddress(nodeUpdate.ip)) {
+            errors.push({
+              field: `nodes[${nodeUpdate.name}].ip`,
+              type: 'format',
+              message: `Invalid IP address for node '${nodeUpdate.name}': ${nodeUpdate.ip}`
+            });
+          } else {
+            console.log(`  📍 Node ${nodeUpdate.name}: IP ${currentNodeConfig.ip} → ${nodeUpdate.ip}`);
+            node.updateIp(nodeUpdate.ip);
+            nodeChanged = true;
+          }
+        }
+
+        // Validar y actualizar RPC Port
+        if (nodeUpdate.rpcPort && nodeUpdate.rpcPort !== currentNodeConfig.rpcPort) {
+          if (!this.isValidPort(nodeUpdate.rpcPort)) {
+            errors.push({
+              field: `nodes[${nodeUpdate.name}].rpcPort`,
+              type: 'range',
+              message: `Invalid RPC port for node '${nodeUpdate.name}': ${nodeUpdate.rpcPort}. Must be between 1024 and 65535`
+            });
+          } else if (this.isPortInUseByOtherNodes(nodeUpdate.rpcPort, nodeUpdate.name, nodes)) {
+            errors.push({
+              field: `nodes[${nodeUpdate.name}].rpcPort`,
+              type: 'duplicate',
+              message: `RPC port ${nodeUpdate.rpcPort} is already in use by another node`
+            });
+          } else {
+            console.log(`  🔌 Node ${nodeUpdate.name}: RPC Port ${currentNodeConfig.rpcPort} → ${nodeUpdate.rpcPort}`);
+            node.updateRpcPort(nodeUpdate.rpcPort);
+            nodeChanged = true;
+          }
+        }
+
+        // Validar y actualizar P2P Port
+        if (nodeUpdate.p2pPort && nodeUpdate.p2pPort !== (currentNodeConfig.p2pPort || 30303)) {
+          if (!this.isValidPort(nodeUpdate.p2pPort)) {
+            errors.push({
+              field: `nodes[${nodeUpdate.name}].p2pPort`,
+              type: 'range',
+              message: `Invalid P2P port for node '${nodeUpdate.name}': ${nodeUpdate.p2pPort}. Must be between 1024 and 65535`
+            });
+          } else if (this.isPortInUseByOtherNodes(nodeUpdate.p2pPort, nodeUpdate.name, nodes)) {
+            errors.push({
+              field: `nodes[${nodeUpdate.name}].p2pPort`,
+              type: 'duplicate',
+              message: `P2P port ${nodeUpdate.p2pPort} is already in use by another node`
+            });
+          } else {
+            const currentP2pPort = currentNodeConfig.p2pPort || 30303;
+            console.log(`  🔗 Node ${nodeUpdate.name}: P2P Port ${currentP2pPort} → ${nodeUpdate.p2pPort}`);
+            node.updateP2pPort(nodeUpdate.p2pPort);
+            nodeChanged = true;
+          }
+        }
+
+        if (nodeChanged) {
+          needsRestart = true;
+          console.log(`  ✅ Node ${nodeUpdate.name} configuration updated`);
+        } else {
+          console.log(`  ℹ️  Node ${nodeUpdate.name}: No changes detected`);
+        }
+      }
+    }
+
+    // Validar y procesar nodos a eliminar
+    if (updates.removeNodes && updates.removeNodes.length > 0) {
+      console.log(`🗑️  Processing ${updates.removeNodes.length} nodes for removal...`);
+      
+      for (const nodeName of updates.removeNodes) {
+        const node = nodes.get(nodeName);
+        if (!node) {
+          errors.push({
+            field: `removeNodes[${nodeName}]`,
+            type: 'invalid',
+            message: `Node '${nodeName}' not found in network`
+          });
+          continue;
+        }
+
+        // Validar que no se está eliminando el último nodo de un tipo crítico
+        const nodeConfig = node.getConfig();
+        if (nodeConfig.type === 'bootnode' && this.getNodeCountByType('bootnode', nodes) <= 1) {
+          errors.push({
+            field: `removeNodes[${nodeName}]`,
+            type: 'invalid',
+            message: `Cannot remove '${nodeName}': At least one bootnode is required in the network`
+          });
+        } else if (nodeConfig.type === 'miner' && this.getNodeCountByType('miner', nodes) <= 1) {
+          errors.push({
+            field: `removeNodes[${nodeName}]`,
+            type: 'invalid',
+            message: `Cannot remove '${nodeName}': At least one miner is required in the network`
+          });
+        } else {
+          console.log(`  🗑️  Node ${nodeName} (${nodeConfig.type}) marked for removal`);
+          needsRestart = true;
+        }
+      }
+    }
+
+    // Validar y procesar nodos a añadir usando las mismas validaciones que createNetwork
+    if (updates.addNodes && updates.addNodes.length > 0) {
+      console.log(`➕ Processing ${updates.addNodes.length} nodes for addition...`);
+      
+      // Crear un Set con todas las IPs, puertos y nombres existentes
+      const existingIps = new Set<string>();
+      const existingRpcEndpoints = new Set<string>();
+      const existingP2pEndpoints = new Set<string>();
+      const existingNames = new Set<string>();
+      
+      // Poblar con nodos existentes (excluyendo los que van a ser eliminados)
+      for (const [nodeName, node] of nodes) {
+        if (updates.removeNodes && updates.removeNodes.includes(nodeName)) continue;
+        
+        const nodeConfig = node.getConfig();
+        existingIps.add(nodeConfig.ip);
+        existingRpcEndpoints.add(`${nodeConfig.ip}:${nodeConfig.rpcPort}`);
+        existingP2pEndpoints.add(`${nodeConfig.ip}:${nodeConfig.port}`);
+        existingNames.add(nodeName);
+      }
+
+      // Validar cada nodo a añadir
+      for (let i = 0; i < updates.addNodes.length; i++) {
+        const newNode = updates.addNodes[i];
+        const p2pPort = newNode.p2pPort || 30303;
+
+        // Validar nombre del nodo
+        if (!newNode.name || newNode.name.trim().length === 0) {
+          errors.push({
+            field: `addNodes[${i}].name`,
+            type: 'required',
+            message: `New node ${i} name is required`
+          });
+        } else {
+          const nameRegex = /^[a-zA-Z0-9_-]+$/;
+          if (!nameRegex.test(newNode.name)) {
+            errors.push({
+              field: `addNodes[${i}].name`,
+              type: 'format',
+              message: `New node ${i} name can only contain letters, numbers, hyphens and underscores`
+            });
+          }
+
+          if (existingNames.has(newNode.name)) {
+            errors.push({
+              field: `addNodes[${i}].name`,
+              type: 'duplicate',
+              message: `Node name '${newNode.name}' already exists in the network`
+            });
+          } else {
+            existingNames.add(newNode.name);
+          }
+        }
+
+        // Validar IP del nodo
+        if (!(this.besuNetwork as any).isValidIpAddress(newNode.ip)) {
+          errors.push({
+            field: `addNodes[${i}].ip`,
+            type: 'format',
+            message: `New node ${i} IP address format is invalid`
+          });
+        } else {
+          if (existingIps.has(newNode.ip)) {
+            errors.push({
+              field: `addNodes[${i}].ip`,
+              type: 'duplicate',
+              message: `IP address '${newNode.ip}' is already in use by another node`
+            });
+          } else {
+            existingIps.add(newNode.ip);
+          }
+
+          // Validar que la IP está en la subnet
+          if (!(this.besuNetwork as any).isIpInSubnet(newNode.ip, config.subnet)) {
+            errors.push({
+              field: `addNodes[${i}].ip`,
+              type: 'invalid',
+              message: `New node ${i} IP '${newNode.ip}' is not in the configured subnet '${config.subnet}'`
+            });
+          }
+        }
+
+        // Validar puerto RPC
+        if (!this.isValidPort(newNode.rpcPort)) {
+          errors.push({
+            field: `addNodes[${i}].rpcPort`,
+            type: 'range',
+            message: `New node ${i} RPC port must be between 1024 and 65535`
+          });
+        } else {
+          const rpcEndpoint = `${newNode.ip}:${newNode.rpcPort}`;
+          if (existingRpcEndpoints.has(rpcEndpoint)) {
+            errors.push({
+              field: `addNodes[${i}].rpcPort`,
+              type: 'duplicate',
+              message: `RPC endpoint ${rpcEndpoint} is already in use`
+            });
+          } else {
+            existingRpcEndpoints.add(rpcEndpoint);
+          }
+        }
+
+        // Validar puerto P2P
+        if (!this.isValidPort(p2pPort)) {
+          errors.push({
+            field: `addNodes[${i}].p2pPort`,
+            type: 'range',
+            message: `New node ${i} P2P port must be between 1024 and 65535`
+          });
+        } else {
+          const p2pEndpoint = `${newNode.ip}:${p2pPort}`;
+          if (existingP2pEndpoints.has(p2pEndpoint)) {
+            errors.push({
+              field: `addNodes[${i}].p2pPort`,
+              type: 'duplicate',
+              message: `P2P endpoint ${p2pEndpoint} is already in use`
+            });
+          } else {
+            existingP2pEndpoints.add(p2pEndpoint);
+          }
+
+          // Verificar que P2P y RPC no conflicten en el mismo nodo
+          if (p2pPort === newNode.rpcPort) {
+            errors.push({
+              field: `addNodes[${i}].p2pPort`,
+              type: 'invalid',
+              message: `New node ${i} P2P port cannot be the same as RPC port`
+            });
+          }
+        }
+
+        // Validar tipo de nodo
+        const validNodeTypes = ['bootnode', 'miner', 'rpc', 'node'];
+        if (!validNodeTypes.includes(newNode.type)) {
+          errors.push({
+            field: `addNodes[${i}].type`,
+            type: 'invalid',
+            message: `New node ${i} type '${newNode.type}' is invalid. Valid types: ${validNodeTypes.join(', ')}`
+          });
+        } else {
+          console.log(`  ➕ Node ${newNode.name} (${newNode.type}) validated for addition`);
+          needsRestart = true;
+        }
+      }
+    }
+
+    // Si hay errores de validación, lanzar excepción
+    if (errors.length > 0) {
+      const errorMessages = errors.map(error => 
+        `${error.field}: ${error.message}`
+      ).join('\n');
+      throw new Error(`Network nodes update validation failed:\n${errorMessages}`);
+    }
+
+    // Si no hay cambios, informar y salir
+    if (!needsRestart) {
+      console.log('ℹ️  No changes detected in node configuration');
+      return;
+    }
+
+    // Si hay cambios que requieren reinicio
+    console.log('⏸️  Stopping network for node configuration update...');
+    await this.besuNetwork.stop();
+
+    // Procesar eliminaciones de nodos
+    if (updates.removeNodes && updates.removeNodes.length > 0) {
+      console.log('🗑️  Removing nodes...');
+      for (const nodeName of updates.removeNodes) {
+        if (nodes.has(nodeName)) {
+          // Eliminar archivos del nodo
+          const fileService = (this.besuNetwork as any).fileService;
+          fileService.removeFolder(nodeName);
+          
+          // Eliminar del mapa de nodos
+          nodes.delete(nodeName);
+          console.log(`  ✅ Node ${nodeName} removed successfully`);
+        }
+      }
+    }
+
+    // Procesar adiciones de nodos
+    if (updates.addNodes && updates.addNodes.length > 0) {
+      console.log('➕ Adding new nodes...');
+      
+      for (const newNodeDef of updates.addNodes) {
+        const nodeConfig = {
+          name: newNodeDef.name,
+          ip: newNodeDef.ip,
+          port: newNodeDef.p2pPort || 30303,
+          rpcPort: newNodeDef.rpcPort,
+          type: newNodeDef.type
+        };
+        
+        const fileService = (this.besuNetwork as any).fileService;
+        const node = new BesuNode(nodeConfig, fileService);
+        nodes.set(newNodeDef.name, node);
+        
+        console.log(`  ✅ Added ${newNodeDef.type} node: ${newNodeDef.name} (${newNodeDef.ip}:${newNodeDef.rpcPort})`);
+      }
+    }
+
+    // Actualizar las IPs de los nodos según el mainIp solo si se especifica
+    if (updates.mainIp) {
+      console.log('📝 Updating node IP addresses...');
+      await this.updateNodeIpAddresses(updates.mainIp);
+    }
+
+    // Actualizar archivos de configuración TOML con los nuevos parámetros
+    console.log('📝 Updating node configuration files...');
+    await this.updateNodeConfigurations();
+
+    console.log('✅ Network nodes updated successfully');
+    console.log('💡 Use start() to restart the network with new configuration');
+  }
+
+  /**
+   * Valida si un puerto es válido (rango 1024-65535)
+   */
+  private isValidPort(port: number): boolean {
+    return Number.isInteger(port) && port >= 1024 && port <= 65535;
+  }
+
+  /**
+   * Verifica si un puerto está siendo usado por otros nodos
+   */
+  private isPortInUseByOtherNodes(port: number, excludeNodeName: string, nodes: Map<string, any>): boolean {
+    for (const [nodeName, node] of nodes) {
+      if (nodeName === excludeNodeName) continue;
+      
+      const nodeConfig = node.getConfig();
+      if (nodeConfig.rpcPort === port || nodeConfig.p2pPort === port || (nodeConfig.p2pPort === undefined && port === 30303)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Cuenta cuántos nodos de un tipo específico existen
+   */
+  private getNodeCountByType(nodeType: string, nodes: Map<string, any>): number {
+    let count = 0;
+    for (const [, node] of nodes) {
+      const nodeConfig = node.getConfig();
+      if (nodeConfig.type === nodeType) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Actualiza las IPs de los nodos basándose en el nuevo mainIp
+   */
+  private async updateNodeIpAddresses(mainIp: string): Promise<void> {
+    const nodes = (this.besuNetwork as any).nodes;
+    const [baseIp1, baseIp2, baseIp3] = mainIp.split('.');
+    const basePrefix = `${baseIp1}.${baseIp2}.${baseIp3}`;
+    
+    let ipCounter = 10;
+    
+    for (const [nodeName, node] of nodes) {
+      const newIp = `${basePrefix}.${ipCounter}`;
+      
+      // Actualizar la IP del nodo usando el método updateIp
+      node.updateIp(newIp);
+      
+      console.log(`🔄 Updated ${nodeName} IP to ${newIp}`);
+      ipCounter++;
+    }
+  }
+
+  /**
+   * Actualiza las configuraciones de los nodos usando la lógica de BesuNetwork
+   */
+  private async updateNodeConfigurations(): Promise<void> {
+    console.log('📝 Updating node configurations...');
+    
+    // Usar el método privado de BesuNetwork para actualizar configuraciones
+    const updateMethod = (this.besuNetwork as any).updateNodeConfigurations;
+    if (updateMethod && typeof updateMethod === 'function') {
+      await updateMethod.call(this.besuNetwork);
+    } else {
+      console.log('⚠️  updateNodeConfigurations method not found in BesuNetwork');
+    }
+  }
+
+  /**
+   * Método estático para actualizar nodos por nombre de red
+   */
+  static async updateNetworkNodesByName(
+    networkName: string,
+    updates: {
+      mainIp?: string;
+      nodes?: Array<{
+        name: string;
+        ip?: string;
+        rpcPort?: number;
+        p2pPort?: number;
+      }>;
+      addNodes?: BesuNodeDefinition[];
+      removeNodes?: string[];
+    },
+    options: {
+      baseDir?: string;
+    } = {}
+  ): Promise<void> {
+    const baseDir = options.baseDir || "./networks";
+    console.log(`🔍 Loading network configuration for: ${networkName}`);
+
+    // Construir la ruta del archivo de configuración
+    const networkPath = path.join(baseDir, networkName);
+    const configPath = path.join(networkPath, 'network-config.json');
+
+    // Verificar que existe el directorio de la red
+    if (!fs.existsSync(networkPath)) {
+      throw new Error(`Network '${networkName}' not found. Directory does not exist: ${networkPath}`);
+    }
+
+    // Cargar la configuración existente
+    let config: BesuNetworkConfig;
+    if (fs.existsSync(configPath)) {
+      const configData = fs.readFileSync(configPath, 'utf-8');
+      config = JSON.parse(configData);
+    } else {
+      // Si no existe archivo de configuración, crear configuración básica
+      console.log('⚠️  No network-config.json found, creating basic configuration...');
+      config = {
+        name: networkName,
+        chainId: 1337, // Default chainId
+        subnet: '172.24.0.0/16', // Default subnet
+        consensus: 'clique',
+        gasLimit: '0x47E7C4'
+      };
+    }
+
+    // Crear instancia de la red con la configuración cargada
+    const network = new BesuNetwork(config, baseDir);
+    
+    // Crear el updater y ejecutar la actualización
+    const updater = new BesuNetworkUpdater(network);
+    
+    await updater.updateNetworkNodes(updates);
+    
+    // Guardar la configuración actualizada
+    const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
+    fs.writeFileSync(configPath, updatedConfigData);
+    console.log(`💾 Configuration saved to: ${configPath}`);
+    
+    console.log(`✅ Network ${networkName} nodes updated successfully`);
+  }
+}
+
+// ============================================================================
+// CONVENIENCE FUNCTIONS - Funciones de conveniencia para operaciones comunes
+// ============================================================================
+
+/**
+ * Función de conveniencia para actualizar mainIp de una red
+ */
+export async function updateMainIp(networkName: string, mainIp: string, baseDir?: string): Promise<void> {
+  await BesuNetworkUpdater.updateNetworkNodesByName(
+    networkName,
+    { mainIp },
+    { baseDir }
+  );
+}
+
+/**
+ * Función de conveniencia para actualizar configuración específica de nodos
+ */
+export async function updateNodeConfigs(
+  networkName: string, 
+  nodeUpdates: Array<{
+    name: string;
+    ip?: string;
+    rpcPort?: number;
+    p2pPort?: number;
+  }>, 
+  baseDir?: string
+): Promise<void> {
+  await BesuNetworkUpdater.updateNetworkNodesByName(
+    networkName,
+    { nodes: nodeUpdates },
+    { baseDir }
+  );
+}
+
+/**
+ * Función de conveniencia para añadir nodos a una red
+ */
+export async function addNodesToNetwork(
+  networkName: string,
+  newNodes: BesuNodeDefinition[],
+  baseDir?: string
+): Promise<void> {
+  await BesuNetworkUpdater.updateNetworkNodesByName(
+    networkName,
+    { addNodes: newNodes },
+    { baseDir }
+  );
+}
+
+/**
+ * Función de conveniencia para eliminar nodos de una red
+ */
+export async function removeNodesFromNetwork(
+  networkName: string,
+  nodeNames: string[],
+  baseDir?: string
+): Promise<void> {
+  await BesuNetworkUpdater.updateNetworkNodesByName(
+    networkName,
+    { removeNodes: nodeNames },
+    { baseDir }
+  );
 }
 
 // Export everything

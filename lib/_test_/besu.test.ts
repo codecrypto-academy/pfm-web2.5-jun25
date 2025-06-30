@@ -2317,5 +2317,107 @@ describe('Node Validation Tests', () => {
         });
     });
 
-    console.log('✅ Tests de validación de nodos completados');
+    // ========================================
+    // TESTS DE ACTUALIZACIÓN DE CUENTAS (FUNCIONANDO CON API ACTUAL)
+    // ========================================
+
+    describe('Network Account Updates', () => {
+        describe('updateNetworkAccountsByName functionality', () => {
+            test('should validate account updates correctly', async () => {
+                const { BesuNetwork } = await import('../src/index');
+                
+                // Test BesuNetwork.updateNetworkAccountsByName with non-existing network
+                try {
+                    await BesuNetwork.updateNetworkAccountsByName('non-existing-network', [
+                        { address: '0x742d35Cc6635C0532925a3b8D9C0d8a8b23F4Fa3', weiAmount: '1000000000000000000' }
+                    ], { performTransfers: false });
+                    fail('Should have thrown an error for non-existing network');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
+                    expect((error as Error).message).toContain('not found');
+                    console.log('✅ BesuNetwork.updateNetworkAccountsByName correctly throws error for non-existing network');
+                }
+
+                console.log('🎉 updateNetworkAccountsByName interface works correctly!');
+            });
+
+            test('should validate account format correctly', async () => {
+                const { BesuNetwork } = await import('../src/index');
+                
+                // Test with invalid address format
+                try {
+                    await BesuNetwork.updateNetworkAccountsByName('non-existing-network', [
+                        { address: 'invalid-address', weiAmount: '1000000000000000000' }
+                    ], { performTransfers: false });
+                    fail('Should have thrown validation error for invalid address');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
+                    expect((error as Error).message).toContain('Validation failed');
+                    console.log('✅ Correctly validates invalid address format');
+                }
+
+                // Test with invalid wei amount
+                try {
+                    await BesuNetwork.updateNetworkAccountsByName('non-existing-network', [
+                        { address: '0x742d35Cc6635C0532925a3b8D9C0d8a8b23F4Fa3', weiAmount: 'invalid-amount' }
+                    ], { performTransfers: false });
+                    fail('Should have thrown validation error for invalid wei amount');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
+                    expect((error as Error).message).toContain('Validation failed');
+                    console.log('✅ Correctly validates invalid wei amount');
+                }
+
+                console.log('✅ All account validation tests passed');
+            });
+
+            test('should handle duplicate addresses', async () => {
+                const { BesuNetwork } = await import('../src/index');
+                
+                // Test with duplicate addresses
+                try {
+                    await BesuNetwork.updateNetworkAccountsByName('non-existing-network', [
+                        { address: '0x742d35Cc6635C0532925a3b8D9C0d8a8b23F4Fa3', weiAmount: '1000000000000000000' },
+                        { address: '0x742d35Cc6635C0532925a3b8D9C0d8a8b23F4Fa3', weiAmount: '2000000000000000000' }
+                    ], { performTransfers: false });
+                    fail('Should have thrown validation error for duplicate addresses');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
+                    expect((error as Error).message).toContain('duplicated');
+                    console.log('✅ Correctly validates duplicate addresses');
+                }
+
+                console.log('✅ Duplicate address validation test passed');
+            });
+        });
+
+        describe('Network configuration validation', () => {
+            test('should validate network configurations properly', async () => {
+                const { BesuNetwork } = await import('../src/index');
+                
+                // Test validation with proper accounts array but non-existing network
+                const validAccounts = [
+                    { address: '0x742d35Cc6635C0532925a3b8D9C0d8a8b23F4Fa3', weiAmount: '1000000000000000000' },
+                    { address: '0x8ba1f109551bD432803012645Aac136c72a90e32', weiAmount: '2000000000000000000' }
+                ];
+
+                try {
+                    await BesuNetwork.updateNetworkAccountsByName('non-existing-network', validAccounts, { 
+                        performTransfers: false 
+                    });
+                    fail('Should have thrown error for non-existing network even with valid accounts');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
+                    expect((error as Error).message).toContain('not found');
+                    console.log('✅ Correctly handles non-existing network even with valid account data');
+                }
+
+                console.log('✅ All network configuration validation tests completed successfully');
+            });
+        });
+
+        console.log('✅ Network account update tests completed');
+    });
+
+    console.log('✅ Tests de validación de cuentas completados');
 });

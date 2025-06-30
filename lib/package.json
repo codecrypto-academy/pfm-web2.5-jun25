@@ -15,6 +15,7 @@
     "example": "npx ts-node examples/example.ts",
     "example:simple": "npx ts-node examples/example.ts",
     "example:advanced": "npx ts-node examples/advanced-example.ts",
+    "example:update-accounts": "npx ts-node examples/update-accounts-example.ts",
     "example:cleanup": "npx ts-node examples/example.ts cleanup",
     "example:advanced:cleanup": "npx ts-node examples/advanced-example.ts cleanup",
     "cleanup-networks": "npx ts-node src/cleanup-networks.ts",

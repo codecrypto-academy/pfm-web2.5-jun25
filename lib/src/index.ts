@@ -32,7 +32,8 @@ export interface BesuNetworkConfig {
   gasLimit: string;
   blockTime?: number;
   mainIp?: string; // IP principal de la red
-  signerAccount?: { address: string; weiAmount: string }; // Cuenta principal del firmante (con balance inicial en wei)
+  signerAccount?: { address: string; weiAmount: string }; // Cuenta principal del firmante (con balance inicial en wei) - DEPRECATED: Use signerAccounts instead
+  signerAccounts?: Array<{ address: string; weiAmount: string }>; // Lista de cuentas firmantes/validadores (para consenso PoA/IBFT2)
   accounts?: Array<{ address: string; weiAmount: string }>;// Lista de cuentas con balance inicial (en wei)
 }
 
@@ -54,6 +55,12 @@ export interface BesuGenesisConfig {
     ibft2?: {
       blockperiodseconds: number;
       epochlength: number;
+      validators?: string[];
+    };
+    qbft?: {
+      blockperiodseconds: number;
+      epochlength: number;
+      validators?: string[];
     };
   };
   extraData: string;
@@ -943,7 +950,7 @@ export class BesuNetwork {
   private validateNetworkAccounts(errors: ValidationError[]): void {
     const usedAddresses = new Set<string>();
 
-    // Validar signerAccount
+    // Validar signerAccount (legacy - mantener compatibilidad hacia atrás)
     if (this.config.signerAccount) {
       if (!this.isValidEthereumAddress(this.config.signerAccount.address)) {
         errors.push({
@@ -965,9 +972,71 @@ export class BesuNetwork {
         errors.push({
           field: 'signerAccount.weiAmount',
           type: 'range',
-          message: 'Signer account wei amount should be between 1 wei and 10^30 wei (reasonable range)'
+          message: 'Signer account wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)'
         });
       }
+    }
+
+    // Validar signerAccounts array (nuevo soporte múltiple)
+    if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
+      // Validación específica según el tipo de consenso
+      if (this.config.consensus === 'clique' && this.config.signerAccounts.length > 10) {
+        errors.push({
+          field: 'signerAccounts',
+          type: 'range',
+          message: 'Clique consensus supports a maximum of 10 signers for optimal performance'
+        });
+      } else if ((this.config.consensus === 'ibft2' || this.config.consensus === 'qbft') && this.config.signerAccounts.length > 20) {
+        errors.push({
+          field: 'signerAccounts',
+          type: 'range',
+          message: 'IBFT2/QBFT consensus supports a maximum of 20 validators for optimal performance'
+        });
+      }
+
+      this.config.signerAccounts.forEach((signer, index) => {
+        if (!this.isValidEthereumAddress(signer.address)) {
+          errors.push({
+            field: `signerAccounts[${index}].address`,
+            type: 'format',
+            message: `Signer account ${index} address must be a valid Ethereum address (0x...)`
+          });
+        } else {
+          const lowerAddress = signer.address.toLowerCase();
+          if (usedAddresses.has(lowerAddress)) {
+            errors.push({
+              field: `signerAccounts[${index}].address`,
+              type: 'duplicate',
+              message: `Signer account ${index} address is duplicated`
+            });
+          } else {
+            usedAddresses.add(lowerAddress);
+          }
+        }
+
+        if (!this.isValidWeiAmount(signer.weiAmount)) {
+          errors.push({
+            field: `signerAccounts[${index}].weiAmount`,
+            type: 'format',
+            message: `Signer account ${index} wei amount must be a valid positive number`
+          });
+        } else if (!this.isReasonableWeiAmount(signer.weiAmount)) {
+          errors.push({
+            field: `signerAccounts[${index}].weiAmount`,
+            type: 'range',
+            message: `Signer account ${index} wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)`
+          });
+        }
+      });
+    }
+
+    // Advertencia si se usan ambos formatos
+    if (this.config.signerAccount && this.config.signerAccounts && this.config.signerAccounts.length > 0) {
+      errors.push({
+        field: 'signerAccount',
+        type: 'invalid',
+        message: 'Cannot use both signerAccount (legacy) and signerAccounts (new). Please use only signerAccounts for multiple signers.'
+      });
     }
 
     // Validar accounts array
@@ -1002,7 +1071,7 @@ export class BesuNetwork {
           errors.push({
             field: `accounts[${index}].weiAmount`,
             type: 'range',
-            message: `Account ${index} wei amount should be between 1 wei and 10^30 wei (reasonable range)`
+            message: `Account ${index} wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)`
           });
         }
       });
@@ -1391,7 +1460,7 @@ export class BesuNetwork {
   private isReasonableWeiAmount(weiAmount: string): boolean {
     try {
       const amount = BigInt(weiAmount);
-      const maxReasonable = BigInt("1000000000000000000000000000000"); // 10^30 wei
+      const maxReasonable = BigInt("1000000000000000000000000"); // 1,000,000 ETH in wei (10^6 * 10^18)
       return amount > 0n && amount <= maxReasonable;
     } catch (error) {
       return false;
@@ -1516,7 +1585,7 @@ export class BesuNetwork {
     }
     
     // Convert initialBalance from ETH to Wei if provided
-    let initialBalanceWei = "1000000000000000000000000"; // Default: 1,000,000 ETH in Wei
+    let initialBalanceWei = "1000000000000000000000000000000"; // Default: 1,000,000,000,000 ETH (1 trillion ETH) for miner in Wei
     if (options.initialBalance) {
       initialBalanceWei = ethers.parseEther(options.initialBalance).toString();
     }
@@ -1977,19 +2046,31 @@ export class BesuNetwork {
   // Private helper methods
   private generateGenesis(
     minerAddress: string,
-    initialBalance: string = "1000000000000000000000000"
+    initialBalance: string = "1000000000000000000000000000000" // Default: 1,000,000,000,000 ETH (1 trillion ETH) for miner in Wei
   ): BesuGenesisConfig {
-    // Asegurar que la dirección tenga el formato correcto (sin 0x para extraData)
-    const addressWithoutPrefix = minerAddress.startsWith('0x') ? minerAddress.slice(2) : minerAddress;
-    // Asegurar que la dirección para alloc tenga el prefijo 0x
-    const addressWithPrefix = minerAddress.startsWith('0x') ? minerAddress : `0x${minerAddress}`;
+    // Obtener todas las direcciones de firmantes (signer accounts)
+    const signerAddresses = this.getAllSignerAddresses();
+    
+    // Para Clique, construir extraData con todos los firmantes
+    let extraData: string;
+    if (this.config.consensus === "clique" && signerAddresses.length > 0) {
+      // Formato Clique: 32 bytes de ceros + direcciones de firmantes (sin 0x) + 65 bytes de ceros
+      const signersHex = signerAddresses.map(addr => 
+        addr.startsWith('0x') ? addr.slice(2) : addr
+      ).join('');
+      extraData = `0x${'0'.repeat(64)}${signersHex}${'0'.repeat(130)}`;
+    } else {
+      // Fallback: usar solo la dirección del miner (comportamiento legacy)
+      const addressWithoutPrefix = minerAddress.startsWith('0x') ? minerAddress.slice(2) : minerAddress;
+      extraData = `0x${'0'.repeat(64)}${addressWithoutPrefix}${'0'.repeat(130)}`;
+    }
     
     const genesis: BesuGenesisConfig = {
       config: {
         chainId: this.config.chainId,
         londonBlock: 0,
       },
-      extraData: `0x0000000000000000000000000000000000000000000000000000000000000000${addressWithoutPrefix}0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000`,
+      extraData,
       gasLimit: this.config.gasLimit,
       difficulty: "0x1",
       alloc: {},
@@ -2006,17 +2087,45 @@ export class BesuNetwork {
         blockperiodseconds: this.config.blockTime || 5,
         epochlength: 30000,
       };
+      // Para IBFT2, agregar configuración de validadores
+      if (signerAddresses.length > 0) {
+        genesis.config.ibft2.validators = signerAddresses.map(addr => 
+          addr.startsWith('0x') ? addr : `0x${addr}`
+        );
+      }
+    } else if (this.config.consensus === "qbft") {
+      genesis.config.qbft = {
+        blockperiodseconds: this.config.blockTime || 5,
+        epochlength: 30000,
+      };
+      // Para QBFT, agregar configuración de validadores
+      if (signerAddresses.length > 0) {
+        genesis.config.qbft.validators = signerAddresses.map(addr => 
+          addr.startsWith('0x') ? addr : `0x${addr}`
+        );
+      }
     }
 
     // Track addresses that have been allocated to avoid duplicates
     const allocatedAddresses = new Set<string>();
 
-    // First, add the signer account if specified (highest priority)
+    // First, add the signer account if specified (legacy - mantener compatibilidad)
     if (this.config.signerAccount) {
       genesis.alloc[this.config.signerAccount.address] = { 
         balance: this.config.signerAccount.weiAmount 
       };
       allocatedAddresses.add(this.config.signerAccount.address);
+    }
+
+    // Add signer accounts (new multiple support)
+    if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
+      for (const signer of this.config.signerAccounts) {
+        const addressWithPrefix = signer.address.startsWith('0x') ? signer.address : `0x${signer.address}`;
+        if (!allocatedAddresses.has(addressWithPrefix)) {
+          genesis.alloc[addressWithPrefix] = { balance: signer.weiAmount };
+          allocatedAddresses.add(addressWithPrefix);
+        }
+      }
     }
 
     // Add balance to configured accounts if specified
@@ -2030,11 +2139,32 @@ export class BesuNetwork {
     }
 
     // Finalmente, agregar la dirección del miner si no está ya asignada
-    if (!allocatedAddresses.has(addressWithPrefix)) {
-      genesis.alloc[addressWithPrefix] = { balance: initialBalance };
+    const minerAddressWithPrefix = minerAddress.startsWith('0x') ? minerAddress : `0x${minerAddress}`;
+    if (!allocatedAddresses.has(minerAddressWithPrefix)) {
+      genesis.alloc[minerAddressWithPrefix] = { balance: initialBalance };
     }
 
     return genesis;
+  }
+
+  /**
+   * Obtiene todas las direcciones de firmantes configuradas (combinando legacy y nuevo formato)
+   */
+  private getAllSignerAddresses(): string[] {
+    const addresses: string[] = [];
+    
+    // Agregar signerAccount legacy si existe
+    if (this.config.signerAccount) {
+      addresses.push(this.config.signerAccount.address);
+    }
+    
+    // Agregar signerAccounts si existen
+    if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
+      addresses.push(...this.config.signerAccounts.map(signer => signer.address));
+    }
+    
+    // Remover duplicados y retornar
+    return [...new Set(addresses)];
   }
 
   private deriveAccountsFromMnemonic(
@@ -2248,10 +2378,19 @@ export class BesuNetwork {
       console.log(`   Main IP: ${this.config.mainIp}`);
     }
     
-    // Show signer account if configured
+    // Show signer account if configured (legacy - backward compatibility)
     if (this.config.signerAccount) {
       const ethAmount = ethers.formatEther(this.config.signerAccount.weiAmount);
-      console.log(`   Signer Account: ${this.config.signerAccount.address} (${ethAmount} ETH)`);
+      console.log(`   Signer Account (legacy): ${this.config.signerAccount.address} (${ethAmount} ETH)`);
+    }
+    
+    // Show multiple signer accounts if configured (new format)
+    if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
+      console.log(`   Signer Accounts: ${this.config.signerAccounts.length} accounts`);
+      for (const signer of this.config.signerAccounts) {
+        const ethAmount = ethers.formatEther(signer.weiAmount);
+        console.log(`     - ${signer.address}: ${ethAmount} ETH`);
+      }
     }
     
     // Show other configured accounts
@@ -2259,7 +2398,8 @@ export class BesuNetwork {
       console.log(`   Additional Accounts: ${this.config.accounts.length} accounts`);
       for (const account of this.config.accounts) {
         const ethAmount = ethers.formatEther(account.weiAmount);
-        const isDuplicate = this.config.signerAccount?.address === account.address;
+        const isDuplicate = this.config.signerAccount?.address === account.address ||
+          this.config.signerAccounts?.some(signer => signer.address === account.address);
         console.log(`     - ${account.address}: ${ethAmount} ETH${isDuplicate ? ' (duplicate - signer account balance takes priority)' : ''}`);
       }
     }
@@ -2616,123 +2756,289 @@ export class BesuNetwork {
   /**
    * Valida las actualizaciones de cuentas antes de aplicarlas
    */
-  private validateAccountUpdates(updates: {
-    signerAccount?: { address: string; weiAmount: string };
-    accounts?: Array<{ address: string; weiAmount: string }>;
-  }): ValidationError[] {
+  private validateAccountUpdates(accounts: Array<{ address: string; weiAmount: string }>): ValidationError[] {
     const errors: ValidationError[] = [];
     const usedAddresses = new Set<string>();
 
-    // Validar signerAccount
-    if (updates.signerAccount) {
-      if (!this.isValidEthereumAddress(updates.signerAccount.address)) {
+    if (!accounts || accounts.length === 0) {
+      errors.push({
+        field: 'accounts',
+        type: 'required',
+        message: 'At least one account must be provided'
+      });
+      return errors;
+    }
+
+    accounts.forEach((account, index) => {
+      if (!this.isValidEthereumAddress(account.address)) {
         errors.push({
-          field: 'signerAccount.address',
+          field: `accounts[${index}].address`,
           type: 'format',
-          message: 'Signer account address must be a valid Ethereum address (0x...)'
+          message: `Account ${index} address must be a valid Ethereum address (0x...)`
         });
       } else {
-        usedAddresses.add(updates.signerAccount.address.toLowerCase());
-      }
-
-      if (!this.isValidWeiAmount(updates.signerAccount.weiAmount)) {
-        errors.push({
-          field: 'signerAccount.weiAmount',
-          type: 'format',
-          message: 'Signer account wei amount must be a valid positive number'
-        });
-      } else if (!this.isReasonableWeiAmount(updates.signerAccount.weiAmount)) {
-        errors.push({
-          field: 'signerAccount.weiAmount',
-          type: 'range',
-          message: 'Signer account wei amount should be between 1 wei and 10^30 wei (reasonable range)'
-        });
-      }
-    }
-
-    // Validar accounts array
-    if (updates.accounts && updates.accounts.length > 0) {
-      updates.accounts.forEach((account, index) => {
-        if (!this.isValidEthereumAddress(account.address)) {
+        const lowerAddress = account.address.toLowerCase();
+        if (usedAddresses.has(lowerAddress)) {
           errors.push({
             field: `accounts[${index}].address`,
-            type: 'format',
-            message: `Account ${index} address must be a valid Ethereum address (0x...)`
+            type: 'duplicate',
+            message: `Account ${index} address is duplicated`
           });
         } else {
-          const lowerAddress = account.address.toLowerCase();
-          if (usedAddresses.has(lowerAddress)) {
-            errors.push({
-              field: `accounts[${index}].address`,
-              type: 'duplicate',
-              message: `Account ${index} address is duplicated`
-            });
-          } else {
-            usedAddresses.add(lowerAddress);
-          }
+          usedAddresses.add(lowerAddress);
         }
+      }
 
-        if (!this.isValidWeiAmount(account.weiAmount)) {
-          errors.push({
-            field: `accounts[${index}].weiAmount`,
-            type: 'format',
-            message: `Account ${index} wei amount must be a valid positive number`
-          });
-        } else if (!this.isReasonableWeiAmount(account.weiAmount)) {
-          errors.push({
-            field: `accounts[${index}].weiAmount`,
-            type: 'range',
-            message: `Account ${index} wei amount should be between 1 wei and 10^30 wei (reasonable range)`
-          });
-        }
-      });
-    }
+      if (!this.isValidWeiAmount(account.weiAmount)) {
+        errors.push({
+          field: `accounts[${index}].weiAmount`,
+          type: 'format',
+          message: `Account ${index} wei amount must be a valid positive number`
+        });
+      } else if (!this.isReasonableWeiAmount(account.weiAmount)) {
+        errors.push({
+          field: `accounts[${index}].weiAmount`,
+          type: 'range',
+          message: `Account ${index} wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)`
+        });
+      }
+    });
 
     return errors;
   }
 
-  async updateNetworkAccounts(updates: {
-    signerAccount?: { address: string; weiAmount: string };
-    accounts?: Array<{ address: string; weiAmount: string }>;
-  }): Promise<void> {
+  /**
+   * Actualiza las cuentas de una red Besu existente sin modificar el genesis
+   * Permite añadir nuevas cuentas o actualizar balances existentes en una red activa
+   */
+  async updateNetworkAccounts(
+    accounts: Array<{ address: string; weiAmount: string }>,
+    options: {
+      performTransfers?: boolean; // Si true, realiza transferencias reales desde el miner
+      rpcUrl?: string;
+      confirmTransactions?: boolean; // Si true, espera confirmación de transacciones
+    } = {}
+  ): Promise<{
+    success: boolean;
+    configUpdated: boolean;
+    transfersExecuted: Array<{
+      address: string;
+      amount: string;
+      transactionHash?: string;
+      success: boolean;
+      error?: string;
+    }>;
+  }> {
     console.log(`📝 Updating network accounts for: ${this.config.name}`);
+    
+    const performTransfers = options.performTransfers ?? false;
+    const confirmTransactions = options.confirmTransactions ?? true;
+    
+    const result = {
+      success: true,
+      configUpdated: false,
+      transfersExecuted: [] as Array<{
+        address: string;
+        amount: string;
+        transactionHash?: string;
+        success: boolean;
+        error?: string;
+      }>
+    };
 
     // Validar las actualizaciones antes de aplicarlas
-    const validationErrors = this.validateAccountUpdates(updates);
+    const validationErrors = this.validateAccountUpdates(accounts);
     if (validationErrors.length > 0) {
       const errorMessages = validationErrors.map(error => `${error.field}: ${error.message}`).join('\n');
       throw new Error(`Validation failed:\n${errorMessages}`);
     }
 
-    // Actualizar signerAccount si se proporciona
-    if (updates.signerAccount) {
-      console.log(`🔄 Updating signer account to: ${updates.signerAccount.address} (${ethers.formatEther(updates.signerAccount.weiAmount)} ETH)`);
-      this.config.signerAccount = updates.signerAccount;
-    }
-
-    // Actualizar accounts si se proporciona
-    if (updates.accounts) {
-      console.log(`🔄 Updating accounts list with ${updates.accounts.length} accounts`);
-      this.config.accounts = updates.accounts;
+    // Si se van a realizar transferencias, verificar que el miner esté disponible
+    let minerWallet: ethers.Wallet | null = null;
+    let provider: ethers.JsonRpcProvider | null = null;
+    
+    if (performTransfers) {
+      console.log(`💰 Preparing to perform actual transfers from miner...`);
       
-      // Log de las cuentas actualizadas
-      for (const account of updates.accounts) {
-        const ethAmount = ethers.formatEther(account.weiAmount);
-        console.log(`   - ${account.address}: ${ethAmount} ETH`);
+      // Obtener el nodo miner y crear wallet
+      const minerNode = this.getMinerNode();
+      if (!minerNode) {
+        throw new Error('No miner node found in the network. Cannot perform transfers.');
+      }
+      
+      const url = options.rpcUrl || `http://localhost:${this.getMinerRpcPort() + 10000}`;
+      provider = new ethers.JsonRpcProvider(url);
+      
+      // Crear wallet del miner
+      const rawPrivateKey = this.fileService.readFile(minerNode.getConfig().name, "key.priv");
+      const minerPrivateKey = rawPrivateKey.startsWith('0x') ? rawPrivateKey : `0x${rawPrivateKey}`;
+      minerWallet = new ethers.Wallet(minerPrivateKey, provider);
+      
+      // Verificar conectividad del miner
+      try {
+        await provider.getBlockNumber();
+        console.log(`✅ Connected to miner RPC at ${url}`);
+      } catch (error) {
+        throw new Error(`Cannot connect to miner RPC at ${url}. Make sure the network is running.`);
       }
     }
 
-    console.log('✅ Network accounts updated successfully');
-    console.log('💡 Note: Genesis file remains unchanged. New accounts only affect internal configuration.');
+    // Función auxiliar para realizar transferencias
+    const performTransfer = async (address: string, weiAmount: string): Promise<{
+      success: boolean;
+      transactionHash?: string;
+      error?: string;
+    }> => {
+      if (!performTransfers || !minerWallet || !provider) {
+        return { success: true }; // Sin transferencias, solo actualización de config
+      }
+
+      try {
+        // Verificar balance actual de la cuenta
+        const currentBalance = await provider.getBalance(address);
+        const targetBalance = BigInt(weiAmount);
+        
+        console.log(`   📊 Current balance for ${address}: ${ethers.formatEther(currentBalance)} ETH`);
+        console.log(`   🎯 Target balance: ${ethers.formatEther(targetBalance)} ETH`);
+        
+        if (currentBalance >= targetBalance) {
+          console.log(`   ⏭️  Account already has sufficient balance, skipping transfer`);
+          return { success: true };
+        }
+        
+        const transferAmount = targetBalance - currentBalance;
+        console.log(`   💸 Transfer amount needed: ${ethers.formatEther(transferAmount)} ETH`);
+        
+        // Verificar que el miner tiene suficiente balance
+        const minerBalance = await provider.getBalance(minerWallet.address);
+        const gasEstimate = BigInt(21000) * ethers.parseUnits('20', 'gwei');
+        const totalRequired = transferAmount + gasEstimate;
+        
+        if (minerBalance < totalRequired) {
+          const error = `Insufficient miner balance. Required: ${ethers.formatEther(totalRequired)} ETH, Available: ${ethers.formatEther(minerBalance)} ETH`;
+          console.log(`   ❌ ${error}`);
+          return { success: false, error };
+        }
+        
+        // Realizar la transferencia
+        console.log(`   📤 Sending ${ethers.formatEther(transferAmount)} ETH to ${address}...`);
+        
+        const transaction = {
+          to: address,
+          value: transferAmount,
+          gasLimit: 21000,
+          gasPrice: ethers.parseUnits('20', 'gwei')
+        };
+        
+        const txResponse = await minerWallet.sendTransaction(transaction);
+        console.log(`   ✅ Transaction sent: ${txResponse.hash}`);
+        
+        // Esperar confirmación si se solicita
+        if (confirmTransactions) {
+          console.log(`   ⏳ Waiting for transaction confirmation...`);
+          const receipt = await txResponse.wait();
+          console.log(`   ✅ Transaction confirmed in block ${receipt?.blockNumber}`);
+        }
+        
+        return {
+          success: true,
+          transactionHash: txResponse.hash
+        };
+        
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.log(`   ❌ Transfer failed: ${errorMessage}`);
+        return {
+          success: false,
+          error: errorMessage
+        };
+      }
+    };
+
+    // Procesar todas las cuentas
+    console.log(`🔄 Processing ${accounts.length} accounts...`);
+    
+    let allTransfersSuccessful = true;
+    const updatedAccounts = [];
+    
+    for (const account of accounts) {
+      console.log(`   📝 Processing account: ${account.address}`);
+      
+      const transferResult = await performTransfer(account.address, account.weiAmount);
+      result.transfersExecuted.push({
+        address: account.address,
+        amount: ethers.formatEther(account.weiAmount),
+        ...transferResult
+      });
+      
+      if (transferResult.success) {
+        updatedAccounts.push(account);
+        console.log(`   ✅ Account processed: ${account.address} (${ethers.formatEther(account.weiAmount)} ETH)`);
+      } else {
+        allTransfersSuccessful = false;
+        console.log(`   ❌ Failed to process account: ${account.address}`);
+      }
+    }
+    
+    // Actualizar configuración solo si todas las transferencias fueron exitosas
+    if (allTransfersSuccessful) {
+      // Actualizar o añadir cuentas a la configuración existente
+      if (!this.config.accounts) {
+        this.config.accounts = [];
+      }
+      
+      // Merge accounts - update existing or add new ones
+      for (const newAccount of updatedAccounts) {
+        const existingIndex = this.config.accounts.findIndex(
+          existing => existing.address.toLowerCase() === newAccount.address.toLowerCase()
+        );
+        
+        if (existingIndex >= 0) {
+          // Update existing account
+          this.config.accounts[existingIndex] = newAccount;
+        } else {
+          // Add new account
+          this.config.accounts.push(newAccount);
+        }
+      }
+      
+      result.configUpdated = true;
+      console.log(`   ✅ All accounts updated successfully`);
+    } else {
+      result.success = false;
+      console.log(`   ❌ Some account transfers failed, configuration not updated`);
+    }
+
+    // Resumen final
+    if (result.success) {
+      console.log('✅ Network accounts updated successfully');
+      if (performTransfers) {
+        const successfulTransfers = result.transfersExecuted.filter(t => t.success).length;
+        const totalTransfers = result.transfersExecuted.length;
+        console.log(`💸 Transfers completed: ${successfulTransfers}/${totalTransfers} successful`);
+      }
+      if (result.configUpdated) {
+        console.log('📝 Network configuration updated with new account balances');
+      }
+    } else {
+      console.log('❌ Network accounts update completed with errors');
+      const failedTransfers = result.transfersExecuted.filter(t => !t.success);
+      for (const transfer of failedTransfers) {
+        console.log(`   ❌ Failed transfer to ${transfer.address}: ${transfer.error}`);
+      }
+    }
+    
+    if (!performTransfers) {
+      console.log('💡 Note: Only configuration updated. Use performTransfers=true to execute actual transfers.');
+    }
+
+    return result;
   }
 
   /**
    * Versión estática para validar actualizaciones de cuentas
    */
-  private static validateAccountUpdatesStatic(updates: {
-    signerAccount?: { address: string; weiAmount: string };
-    accounts?: Array<{ address: string; weiAmount: string }>;
-  }): ValidationError[] {
+  private static validateAccountUpdatesStatic(accounts: Array<{ address: string; weiAmount: string }>): ValidationError[] {
     const errors: ValidationError[] = [];
     const usedAddresses = new Set<string>();
 
@@ -2755,77 +3061,56 @@ export class BesuNetwork {
     const isReasonableWeiAmount = (weiAmount: string): boolean => {
       try {
         const amount = BigInt(weiAmount);
-        const maxReasonable = BigInt("1000000000000000000000000000000"); // 10^30 wei
+        const maxReasonable = BigInt("1000000000000000000000000"); // 1,000,000 ETH in wei (10^6 * 10^18)
         return amount > 0n && amount <= maxReasonable;
       } catch (error) {
         return false;
       }
     };
 
-    // Validar signerAccount
-    if (updates.signerAccount) {
-      if (!isValidEthereumAddress(updates.signerAccount.address)) {
+    if (!accounts || accounts.length === 0) {
+      errors.push({
+        field: 'accounts',
+        type: 'required',
+        message: 'At least one account must be provided'
+      });
+      return errors;
+    }
+
+    accounts.forEach((account, index) => {
+      if (!isValidEthereumAddress(account.address)) {
         errors.push({
-          field: 'signerAccount.address',
+          field: `accounts[${index}].address`,
           type: 'format',
-          message: 'Signer account address must be a valid Ethereum address (0x...)'
+          message: `Account ${index} address must be a valid Ethereum address (0x...)`
         });
       } else {
-        usedAddresses.add(updates.signerAccount.address.toLowerCase());
-      }
-
-      if (!isValidWeiAmount(updates.signerAccount.weiAmount)) {
-        errors.push({
-          field: 'signerAccount.weiAmount',
-          type: 'format',
-          message: 'Signer account wei amount must be a valid positive number'
-        });
-      } else if (!isReasonableWeiAmount(updates.signerAccount.weiAmount)) {
-        errors.push({
-          field: 'signerAccount.weiAmount',
-          type: 'range',
-          message: 'Signer account wei amount should be between 1 wei and 10^30 wei (reasonable range)'
-        });
-      }
-    }
-
-    // Validar accounts array
-    if (updates.accounts && updates.accounts.length > 0) {
-      updates.accounts.forEach((account, index) => {
-        if (!isValidEthereumAddress(account.address)) {
+        const lowerAddress = account.address.toLowerCase();
+        if (usedAddresses.has(lowerAddress)) {
           errors.push({
             field: `accounts[${index}].address`,
-            type: 'format',
-            message: `Account ${index} address must be a valid Ethereum address (0x...)`
+            type: 'duplicate',
+            message: `Account ${index} address is duplicated`
           });
         } else {
-          const lowerAddress = account.address.toLowerCase();
-          if (usedAddresses.has(lowerAddress)) {
-            errors.push({
-              field: `accounts[${index}].address`,
-              type: 'duplicate',
-              message: `Account ${index} address is duplicated`
-            });
-          } else {
-            usedAddresses.add(lowerAddress);
-          }
+          usedAddresses.add(lowerAddress);
         }
+      }
 
-        if (!isValidWeiAmount(account.weiAmount)) {
-          errors.push({
-            field: `accounts[${index}].weiAmount`,
-            type: 'format',
-            message: `Account ${index} wei amount must be a valid positive number`
-          });
-        } else if (!isReasonableWeiAmount(account.weiAmount)) {
-          errors.push({
-            field: `accounts[${index}].weiAmount`,
-            type: 'range',
-            message: `Account ${index} wei amount should be between 1 wei and 10^30 wei (reasonable range)`
-          });
-        }
-      });
-    }
+      if (!isValidWeiAmount(account.weiAmount)) {
+        errors.push({
+          field: `accounts[${index}].weiAmount`,
+          type: 'format',
+          message: `Account ${index} wei amount must be a valid positive number`
+        });
+      } else if (!isReasonableWeiAmount(account.weiAmount)) {
+        errors.push({
+          field: `accounts[${index}].weiAmount`,
+          type: 'range',
+          message: `Account ${index} wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)`
+        });
+      }
+    });
 
     return errors;
   }
@@ -2835,16 +3120,29 @@ export class BesuNetwork {
    */
   static async updateNetworkAccountsByName(
     networkName: string,
-    updates: {
-      signerAccount?: { address: string; weiAmount: string };
-      accounts?: Array<{ address: string; weiAmount: string }>;
-    },
-    baseDir: string = "./networks"
-  ): Promise<void> {
+    accounts: Array<{ address: string; weiAmount: string }>,
+    options: {
+      performTransfers?: boolean; // Si true, realiza transferencias reales desde el miner
+      rpcUrl?: string;
+      confirmTransactions?: boolean; // Si true, espera confirmación de transacciones
+      baseDir?: string;
+    } = {}
+  ): Promise<{
+    success: boolean;
+    configUpdated: boolean;
+    transfersExecuted: Array<{
+      address: string;
+      amount: string;
+      transactionHash?: string;
+      success: boolean;
+      error?: string;
+    }>;
+  }> {
+    const baseDir = options.baseDir || "./networks";
     console.log(`🔍 Loading network configuration for: ${networkName}`);
 
     // Validar las actualizaciones antes de proceder
-    const validationErrors = BesuNetwork.validateAccountUpdatesStatic(updates);
+    const validationErrors = BesuNetwork.validateAccountUpdatesStatic(accounts);
     if (validationErrors.length > 0) {
       const errorMessages = validationErrors.map(error => `${error.field}: ${error.message}`).join('\n');
       throw new Error(`Validation failed:\n${errorMessages}`);
@@ -2856,7 +3154,7 @@ export class BesuNetwork {
 
     // Verificar que existe el directorio de la red
     if (!fs.existsSync(networkPath)) {
-      throw new Error(`Network directory not found: ${networkPath}`);
+      throw new Error(`Network '${networkName}' not found. Directory does not exist: ${networkPath}`);
     }
 
     // Cargar la configuración existente
@@ -2880,13 +3178,20 @@ export class BesuNetwork {
     const network = new BesuNetwork(config, baseDir);
 
     // Actualizar las cuentas (ya validadas)
-    await network.updateNetworkAccounts(updates);
+    const result = await network.updateNetworkAccounts(accounts, {
+      performTransfers: options.performTransfers,
+      rpcUrl: options.rpcUrl,
+      confirmTransactions: options.confirmTransactions
+    });
 
-    // Guardar la configuración actualizada
-    const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
-    fs.writeFileSync(configPath, updatedConfigData);
+    // Guardar la configuración actualizada solo si fue exitosa
+    if (result.configUpdated) {
+      const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
+      fs.writeFileSync(configPath, updatedConfigData);
+      console.log(`💾 Configuration saved to: ${configPath}`);
+    }
 
-    console.log(`💾 Configuration saved to: ${configPath}`);
+    return result;
   }
 
   /**

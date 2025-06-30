@@ -1080,12 +1080,12 @@ describe('Account Management Tests', () => {
     test('Should validate updateNetworkAccountsByName with invalid address format', async () => {
         console.log('🧪 Test: Validation - Invalid address format\n');
         
-        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
-            signerAccount: {
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', [
+            {
                 address: 'invalid-address',
                 weiAmount: '1000000000000000000'
             }
-        })).rejects.toThrow('Signer account address must be a valid Ethereum address');
+        ])).rejects.toThrow('Account 0 address must be a valid Ethereum address');
         
         console.log('✅ Invalid address format validation working correctly');
     });
@@ -1093,12 +1093,12 @@ describe('Account Management Tests', () => {
     test('Should validate updateNetworkAccountsByName with negative wei amount', async () => {
         console.log('🧪 Test: Validation - Negative wei amount\n');
         
-        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
-            signerAccount: {
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', [
+            {
                 address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
                 weiAmount: '-1000'
             }
-        })).rejects.toThrow('Signer account wei amount must be a valid positive number');
+        ])).rejects.toThrow('Account 0 wei amount must be a valid positive number');
         
         console.log('✅ Negative wei amount validation working correctly');
     });
@@ -1106,12 +1106,12 @@ describe('Account Management Tests', () => {
     test('Should validate updateNetworkAccountsByName with invalid wei amount format', async () => {
         console.log('🧪 Test: Validation - Invalid wei amount format\n');
         
-        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
-            accounts: [{
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', [
+            {
                 address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
                 weiAmount: 'not-a-number'
-            }]
-        })).rejects.toThrow('Account 0 wei amount must be a valid positive number');
+            }
+        ])).rejects.toThrow('Account 0 wei amount must be a valid positive number');
         
         console.log('✅ Invalid wei amount format validation working correctly');
     });
@@ -1119,18 +1119,16 @@ describe('Account Management Tests', () => {
     test('Should validate updateNetworkAccountsByName with duplicate addresses', async () => {
         console.log('🧪 Test: Validation - Duplicate addresses\n');
         
-        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
-            accounts: [
-                {
-                    address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
-                    weiAmount: '1000000000000000000'
-                },
-                {
-                    address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9', // Same address
-                    weiAmount: '2000000000000000000'
-                }
-            ]
-        })).rejects.toThrow('Account 1 address is duplicated');
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', [
+            {
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
+                weiAmount: '1000000000000000000'
+            },
+            {
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9', // Same address
+                weiAmount: '2000000000000000000'
+            }
+        ])).rejects.toThrow('Account 1 address is duplicated');
         
         console.log('✅ Duplicate addresses validation working correctly');
     });
@@ -1138,14 +1136,14 @@ describe('Account Management Tests', () => {
     test('Should validate updateNetworkAccountsByName with unreasonable wei amount', async () => {
         console.log('🧪 Test: Validation - Unreasonable wei amount\n');
         
-        const unreasonableAmount = '10000000000000000000000000000000'; // > 10^30 wei
+        const unreasonableAmount = '10000000000000000000000000'; // > 10^24 wei (exceeds 1M ETH limit)
         
-        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', {
-            signerAccount: {
+        await expect(BesuNetwork.updateNetworkAccountsByName('test-network', [
+            {
                 address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
                 weiAmount: unreasonableAmount
             }
-        })).rejects.toThrow('should be between 1 wei and 10^30 wei');
+        ])).rejects.toThrow('should be between 1 wei and 10^24 wei');
         
         console.log('✅ Unreasonable wei amount validation working correctly');
     });
@@ -1153,12 +1151,12 @@ describe('Account Management Tests', () => {
     test('Should pass validation with valid inputs and fail on network not found', async () => {
         console.log('🧪 Test: Validation - Valid inputs, network not found\n');
         
-        await expect(BesuNetwork.updateNetworkAccountsByName('non-existent-network', {
-            signerAccount: {
+        await expect(BesuNetwork.updateNetworkAccountsByName('non-existent-network', [
+            {
                 address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
                 weiAmount: '1000000000000000000'
             }
-        })).rejects.toThrow('Network directory not found');
+        ])).rejects.toThrow("Network 'non-existent-network' not found");
         
         console.log('✅ Valid input passed validation, correctly failed at network lookup');
     });
@@ -1177,20 +1175,24 @@ describe('Account Management Tests', () => {
         const network = new BesuNetwork(config);
         
         // Test invalid address
-        await expect(network.updateNetworkAccounts({
-            signerAccount: {
+        await expect(network.updateNetworkAccounts([
+            {
                 address: 'invalid-address',
                 weiAmount: '1000000000000000000'
             }
-        })).rejects.toThrow('Signer account address must be a valid Ethereum address');
+        ])).rejects.toThrow('Account 0 address must be a valid Ethereum address');
         
-        // Test valid update
-        await expect(network.updateNetworkAccounts({
-            signerAccount: {
+        // Test valid update (should not throw, just update config)
+        const result = await network.updateNetworkAccounts([
+            {
                 address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
                 weiAmount: '1000000000000000000'
             }
-        })).resolves.not.toThrow();
+        ]);
+        
+        expect(result.success).toBe(true);
+        expect(result.configUpdated).toBe(true);
+        expect(result.transfersExecuted).toHaveLength(1);
         
         console.log('✅ Instance method validation working correctly');
     });

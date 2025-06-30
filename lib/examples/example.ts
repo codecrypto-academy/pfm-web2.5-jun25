@@ -57,10 +57,12 @@ async function simpleExample() {
         gasLimit: '0x47E7C4',
         blockTime: 5,
         mainIp: '172.31.0.1', // IP principal opcional
-        signerAccount: { // Cuenta principal con prioridad
-            address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
-            weiAmount: '100000000000000000000000' // 100,000 ETH
-        },
+        signerAccounts: [ // Cuentas de firmantes/validadores
+            {
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
+                weiAmount: '100000000000000000000000' // 100,000 ETH
+            }
+        ],
         accounts: [ // Cuentas adicionales
             {
                 address: '0x8ba1f109551bD432803012645Hac136c770077b1',

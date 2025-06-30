@@ -541,10 +541,19 @@ export class DockerNetworkManager {
       // First remove all containers in this network
       this.removeContainers();
       
-      // Then remove the network
-      executeCommand(`docker network rm ${this.networkName}`);
+      // Check if network exists before trying to remove it
+      try {
+        const networkExists = executeCommand(`docker network ls -q --filter "name=^${this.networkName}$"`);
+        if (networkExists.trim()) {
+          executeCommand(`docker network rm ${this.networkName}`);
+        }
+      } catch (networkError) {
+        // Network might not exist or already removed, that's ok
+        console.log(`ℹ️  Network ${this.networkName} already removed or doesn't exist`);
+      }
     } catch (error) {
-      // Network might not exist, that's ok
+      // Overall error handling - should not fail the operation
+      console.log(`ℹ️  Network cleanup completed for ${this.networkName}`);
     }
   }
 
@@ -554,12 +563,23 @@ export class DockerNetworkManager {
         `docker ps -aq --filter "label=network=${this.networkName}"`
       );
       if (containers.trim()) {
+        // Stop containers first
+        try {
+          executeCommand(
+            `docker stop ${containers.trim().split("\n").join(" ")}`
+          );
+        } catch (stopError) {
+          // Some containers might already be stopped
+        }
+        
+        // Then remove them
         executeCommand(
           `docker rm -f ${containers.trim().split("\n").join(" ")}`
         );
       }
     } catch (error) {
-      // No containers to remove
+      // No containers to remove or already removed
+      console.log(`ℹ️  Container cleanup completed for network ${this.networkName}`);
     }
   }
 
@@ -609,6 +629,101 @@ export class BesuNetwork {
     
     // Validate account addresses if provided
     this.validateAccountAddresses();
+  }
+
+  /**
+   * Valida que las direcciones de cuentas tengan el formato correcto
+   */
+  private validateAccountAddresses(): void {
+    if (this.config.signerAccount) {
+      if (!this.isValidEthereumAddress(this.config.signerAccount.address)) {
+        throw new Error(`Invalid signer account address: ${this.config.signerAccount.address}`);
+      }
+    }
+
+    if (this.config.accounts && this.config.accounts.length > 0) {
+      for (const account of this.config.accounts) {
+        if (!this.isValidEthereumAddress(account.address)) {
+          throw new Error(`Invalid account address: ${account.address}`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Genera IPs para los nodos basándose en la IP principal o subnet de la red
+   */
+  private generateNodeIp(nodeIndex: number): string {
+    if (this.config.mainIp) {
+      // Si hay una IP principal definida, usarla como base
+      const parts = this.config.mainIp.split('.');
+      parts[3] = (parseInt(parts[3]) + nodeIndex + 1).toString();
+      return parts.join('.');
+    } else {
+      // Usar la subnet para generar IPs
+      const [baseNetwork] = this.config.subnet.split('/');
+      const baseParts = baseNetwork.split('.');
+      const baseIp = `${baseParts[0]}.${baseParts[1]}.${baseParts[2]}.${10 + nodeIndex}`;
+      return baseIp;
+    }
+  }
+
+  // Getters
+  getNodes(): Map<string, BesuNode> {
+    return this.nodes;
+  }
+
+  getConfig(): BesuNetworkConfig {
+    return this.config;
+  }
+
+  getFileService(): FileService {
+    return this.fileService;
+  }
+
+  getNodeByName(name: string): BesuNode | undefined {
+    return this.nodes.get(name);
+  }
+
+  getNodesByType(type: 'bootnode' | 'miner' | 'rpc' | 'node'): BesuNode[] {
+    const result: BesuNode[] = [];
+    for (const [name, node] of this.nodes) {
+      if (node.getConfig().type === type) {
+        result.push(node);
+      }
+    }
+    return result;
+  }
+
+  getAllNodeConfigs(): Array<{ name: string; config: BesuNodeConfig; keys: KeyPair }> {
+    const result = [];
+    for (const [name, node] of this.nodes) {
+      result.push({
+        name,
+        config: node.getConfig(),
+        keys: node.getKeys()
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Obtiene el nodo miner de la red
+   */
+  private getMinerNode(): BesuNode | null {
+    const minerNodes = this.getNodesByType('miner');
+    return minerNodes.length > 0 ? minerNodes[0] : null;
+  }
+
+  /**
+   * Obtiene el puerto RPC del miner
+   */
+  private getMinerRpcPort(): number {
+    const minerNode = this.getMinerNode();
+    if (!minerNode) {
+      throw new Error('No miner node found in the network');
+    }
+    return minerNode.getConfig().rpcPort;
   }
 
   /**
@@ -1614,28 +1729,49 @@ export class BesuNetwork {
 
   /**
    * Inicia todos los nodos de la red
+   * @param besuImage Imagen de Docker de Besu a usar
+   * @param options Opciones para el inicio de la red
    */
-  async start(besuImage: string = "hyperledger/besu:latest"): Promise<void> {
+  async start(
+    besuImage: string = "hyperledger/besu:latest", 
+    options: { 
+      autoCreateNetwork?: boolean;
+      failIfNetworkNotFound?: boolean;
+    } = {}
+  ): Promise<void> {
+    const { 
+      autoCreateNetwork = true, 
+      failIfNetworkNotFound = false 
+    } = options;
+    
     console.log(`Starting Besu network: ${this.config.name}`);
 
     // Remove existing containers
     this.dockerManager.removeContainers();
 
-    // Ensure Docker network exists before starting containers
+    // Check if Docker network exists
     if (!this.dockerManager.networkExists()) {
-      console.log(`🔧 Docker network ${this.config.name} doesn't exist, creating it...`);
-      try {
-        this.dockerManager.createNetwork(this.config.subnet, {
-          network: this.config.name,
-          type: "besu",
-        });
-      } catch (error) {
-        console.log(`⚠️ Error creating network, attempting to resolve conflicts...`);
-        // If creation fails due to conflicts, try to resolve them
-        this.dockerManager.createNetwork(this.config.subnet, {
-          network: this.config.name,
-          type: "besu",
-        });
+      if (failIfNetworkNotFound) {
+        throw new Error(`Docker network '${this.config.name}' not found. Network must be created before starting.`);
+      }
+      
+      if (autoCreateNetwork) {
+        console.log(`🔧 Docker network ${this.config.name} doesn't exist, creating it...`);
+        try {
+          this.dockerManager.createNetwork(this.config.subnet, {
+            network: this.config.name,
+            type: "besu",
+          });
+        } catch (error) {
+          console.log(`⚠️ Error creating network, attempting to resolve conflicts...`);
+          // If creation fails due to conflicts, try to resolve them
+          this.dockerManager.createNetwork(this.config.subnet, {
+            network: this.config.name,
+            type: "besu",
+          });
+        }
+      } else {
+        throw new Error(`Docker network '${this.config.name}' not found and autoCreateNetwork is disabled.`);
       }
     }
 
@@ -2207,26 +2343,6 @@ export class BesuNetwork {
     return accounts;
   }
 
-  private getMinerRpcPort(): number {
-    // Buscar el primer nodo miner
-    for (const [name, node] of this.nodes) {
-      if (node.getConfig().type === 'miner') {
-        return node.getConfig().rpcPort;
-      }
-    }
-    return 8546; // fallback por defecto
-  }
-
-  private getMinerNode(): BesuNode | null {
-    // Buscar el primer nodo miner
-    for (const [name, node] of this.nodes) {
-      if (node.getConfig().type === 'miner') {
-        return node;
-      }
-    }
-    return null;
-  }
-
   /**
    * Verifica si un puerto está abierto y accesible
    */
@@ -2652,688 +2768,6 @@ export class BesuNetwork {
   }
 
   /**
-   * Modifica la configuración de una red Besu existente sin afectar el genesis
-   * Solo permite cambios en subnet, gasLimit y blockTime
-   */
-  async updateNetworkConfig(updates: {
-    subnet?: string;
-    gasLimit?: string;
-    blockTime?: number;
-  }): Promise<void> {
-    let needsRestart = false;
-    let needsSubnetUpdate = false;
-
-    // Validar los cambios propuestos usando las mismas validaciones que en createNetwork
-    const errors: ValidationError[] = [];
-
-    // Actualizar subnet si se proporciona
-    if (updates.subnet && updates.subnet !== this.config.subnet) {
-      // Usar las mismas validaciones que en validateNetworkBasicConfig
-      if (!this.isValidSubnet(updates.subnet)) {
-        errors.push({
-          field: 'subnet',
-          type: 'format',
-          message: 'Invalid subnet format. Expected format: xxx.xxx.xxx.xxx/xx (e.g., 172.24.0.0/16)'
-        });
-      } else if (!isSubnetAvailable(updates.subnet)) {
-        errors.push({
-          field: 'subnet',
-          type: 'duplicate',
-          message: `Subnet ${updates.subnet} is already in use by another Docker network`
-        });
-      }
-
-      if (errors.length === 0) {
-        console.log(`🔄 Updating subnet from ${this.config.subnet} to ${updates.subnet}`);
-        this.config.subnet = updates.subnet;
-        needsSubnetUpdate = true;
-        needsRestart = true;
-      }
-    }
-
-    // Actualizar gasLimit si se proporciona
-    if (updates.gasLimit && updates.gasLimit !== this.config.gasLimit) {
-      // Usar las mismas validaciones que en validateNetworkBasicConfig
-      const gasLimit = parseInt(updates.gasLimit, 16);
-      if (isNaN(gasLimit) || gasLimit < 4712388 || gasLimit > 100000000) {
-        errors.push({
-          field: 'gasLimit',
-          type: 'range',
-          message: 'Gas limit must be between 4,712,388 (0x47E7C4) and 100,000,000 (0x5F5E100)'
-        });
-      }
-
-      if (errors.length === 0) {
-        console.log(`🔄 Updating gas limit from ${this.config.gasLimit} to ${updates.gasLimit}`);
-        this.config.gasLimit = updates.gasLimit;
-        needsRestart = true;
-      }
-    }
-
-    // Actualizar blockTime si se proporciona
-    if (updates.blockTime !== undefined && updates.blockTime !== this.config.blockTime) {
-      // Usar las mismas validaciones que en validateNetworkBasicConfig
-      if (!Number.isInteger(updates.blockTime) || updates.blockTime < 1 || updates.blockTime > 300) {
-        errors.push({
-          field: 'blockTime',
-          type: 'range',
-          message: 'Block time must be between 1 and 300 seconds'
-        });
-      }
-
-      if (errors.length === 0) {
-        console.log(`🔄 Updating block time from ${this.config.blockTime || 'default'} to ${updates.blockTime}`);
-        this.config.blockTime = updates.blockTime;
-        needsRestart = true;
-      }
-    }
-
-    // Si hay errores de validación, lanzar excepción con todos los errores
-    if (errors.length > 0) {
-      const errorMessages = errors.map(error => 
-        `${error.field}: ${error.message}`
-      ).join('\n');
-      throw new Error(`Network configuration update validation failed:\n${errorMessages}`);
-    }
-
-    // Si hay cambios que requieren reinicio
-    if (needsRestart) {
-      console.log('⏸️  Stopping network for configuration update...');
-      await this.stop();
-
-      // Si cambió la subnet, recrear la red Docker
-      if (needsSubnetUpdate) {
-        console.log('🔧 Recreating Docker network with new subnet...');
-        this.dockerManager.removeNetwork();
-        
-        // Actualizar IPs de los nodos para la nueva subnet
-        this.updateNodesForNewSubnet(updates.subnet!);
-        
-        // Crear nueva red Docker
-        this.dockerManager.createNetwork(updates.subnet!, {
-          network: this.config.name,
-          type: "besu",
-        });
-      }
-
-      // Regenerar archivos de configuración TOML con los nuevos parámetros
-      console.log('📝 Updating node configuration files...');
-      await this.updateNodeConfigurations();
-
-      console.log('✅ Network configuration updated successfully');
-      console.log('💡 Use start() to restart the network with new configuration');
-    } else {
-      console.log('ℹ️  No changes detected in configuration');
-    }
-  }
-
-  /**
-   * Actualiza las cuentas de una red Besu existente sin modificar el genesis
-   * Solo actualiza la configuración interna de la red
-   */
-  /**
-   * Valida las actualizaciones de cuentas antes de aplicarlas
-   */
-  private validateAccountUpdates(accounts: Array<{ address: string; weiAmount: string }>): ValidationError[] {
-    const errors: ValidationError[] = [];
-    const usedAddresses = new Set<string>();
-
-    if (!accounts || accounts.length === 0) {
-      errors.push({
-        field: 'accounts',
-        type: 'required',
-        message: 'At least one account must be provided'
-      });
-      return errors;
-    }
-
-    accounts.forEach((account, index) => {
-      if (!this.isValidEthereumAddress(account.address)) {
-        errors.push({
-          field: `accounts[${index}].address`,
-          type: 'format',
-          message: `Account ${index} address must be a valid Ethereum address (0x...)`
-        });
-      } else {
-        const lowerAddress = account.address.toLowerCase();
-        if (usedAddresses.has(lowerAddress)) {
-          errors.push({
-            field: `accounts[${index}].address`,
-            type: 'duplicate',
-            message: `Account ${index} address is duplicated`
-          });
-        } else {
-          usedAddresses.add(lowerAddress);
-        }
-      }
-
-      if (!this.isValidWeiAmount(account.weiAmount)) {
-        errors.push({
-          field: `accounts[${index}].weiAmount`,
-          type: 'format',
-          message: `Account ${index} wei amount must be a valid positive number`
-        });
-      } else if (!this.isReasonableWeiAmount(account.weiAmount)) {
-        errors.push({
-          field: `accounts[${index}].weiAmount`,
-          type: 'range',
-          message: `Account ${index} wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)`
-        });
-      }
-    });
-
-    return errors;
-  }
-
-  /**
-   * Actualiza las cuentas de una red Besu existente sin modificar el genesis
-   * Permite añadir nuevas cuentas o actualizar balances existentes en una red activa
-   */
-  async updateNetworkAccounts(
-    accounts: Array<{ address: string; weiAmount: string }>,
-    options: {
-      performTransfers?: boolean; // Si true, realiza transferencias reales desde el miner
-      rpcUrl?: string;
-      confirmTransactions?: boolean; // Si true, espera confirmación de transacciones
-    } = {}
-  ): Promise<{
-    success: boolean;
-    configUpdated: boolean;
-    transfersExecuted: Array<{
-      address: string;
-      amount: string;
-      transactionHash?: string;
-      success: boolean;
-      error?: string;
-    }>;
-  }> {
-    console.log(`📝 Updating network accounts for: ${this.config.name}`);
-    
-    const performTransfers = options.performTransfers ?? false;
-    const confirmTransactions = options.confirmTransactions ?? true;
-    
-    const result = {
-      success: true,
-      configUpdated: false,
-      transfersExecuted: [] as Array<{
-        address: string;
-        amount: string;
-        transactionHash?: string;
-        success: boolean;
-        error?: string;
-      }>
-    };
-
-    // Validar las actualizaciones antes de aplicarlas
-    const validationErrors = this.validateAccountUpdates(accounts);
-    if (validationErrors.length > 0) {
-      const errorMessages = validationErrors.map(error => `${error.field}: ${error.message}`).join('\n');
-      throw new Error(`Validation failed:\n${errorMessages}`);
-    }
-
-    // Si se van a realizar transferencias, verificar que el miner esté disponible
-    let minerWallet: ethers.Wallet | null = null;
-    let provider: ethers.JsonRpcProvider | null = null;
-    
-    if (performTransfers) {
-      console.log(`💰 Preparing to perform actual transfers from miner...`);
-      
-      // Obtener el nodo miner y crear wallet
-      const minerNode = this.getMinerNode();
-      if (!minerNode) {
-        throw new Error('No miner node found in the network. Cannot perform transfers.');
-      }
-      
-      const url = options.rpcUrl || `http://localhost:${this.getMinerRpcPort() + 10000}`;
-      provider = new ethers.JsonRpcProvider(url);
-      
-      // Crear wallet del miner
-      const rawPrivateKey = this.fileService.readFile(minerNode.getConfig().name, "key.priv");
-      const minerPrivateKey = rawPrivateKey.startsWith('0x') ? rawPrivateKey : `0x${rawPrivateKey}`;
-      minerWallet = new ethers.Wallet(minerPrivateKey, provider);
-      
-      // Verificar conectividad del miner
-      try {
-        await provider.getBlockNumber();
-        console.log(`✅ Connected to miner RPC at ${url}`);
-      } catch (error) {
-        throw new Error(`Cannot connect to miner RPC at ${url}. Make sure the network is running.`);
-      }
-    }
-
-    // Función auxiliar para realizar transferencias
-    const performTransfer = async (address: string, weiAmount: string): Promise<{
-      success: boolean;
-      transactionHash?: string;
-      error?: string;
-    }> => {
-      if (!performTransfers || !minerWallet || !provider) {
-        return { success: true }; // Sin transferencias, solo actualización de config
-      }
-
-      try {
-        // Verificar balance actual de la cuenta
-        const currentBalance = await provider.getBalance(address);
-        const targetBalance = BigInt(weiAmount);
-        
-        console.log(`   📊 Current balance for ${address}: ${ethers.formatEther(currentBalance)} ETH`);
-        console.log(`   🎯 Target balance: ${ethers.formatEther(targetBalance)} ETH`);
-        
-        if (currentBalance >= targetBalance) {
-          console.log(`   ⏭️  Account already has sufficient balance, skipping transfer`);
-          return { success: true };
-        }
-        
-        const transferAmount = targetBalance - currentBalance;
-        console.log(`   💸 Transfer amount needed: ${ethers.formatEther(transferAmount)} ETH`);
-        
-        // Verificar que el miner tiene suficiente balance
-        const minerBalance = await provider.getBalance(minerWallet.address);
-        const gasEstimate = BigInt(21000) * ethers.parseUnits('20', 'gwei');
-        const totalRequired = transferAmount + gasEstimate;
-        
-        if (minerBalance < totalRequired) {
-          const error = `Insufficient miner balance. Required: ${ethers.formatEther(totalRequired)} ETH, Available: ${ethers.formatEther(minerBalance)} ETH`;
-          console.log(`   ❌ ${error}`);
-          return { success: false, error };
-        }
-        
-        // Realizar la transferencia
-        console.log(`   📤 Sending ${ethers.formatEther(transferAmount)} ETH to ${address}...`);
-        
-        const transaction = {
-          to: address,
-          value: transferAmount,
-          gasLimit: 21000,
-          gasPrice: ethers.parseUnits('20', 'gwei')
-        };
-        
-        const txResponse = await minerWallet.sendTransaction(transaction);
-        console.log(`   ✅ Transaction sent: ${txResponse.hash}`);
-        
-        // Esperar confirmación si se solicita
-        if (confirmTransactions) {
-          console.log(`   ⏳ Waiting for transaction confirmation...`);
-          const receipt = await txResponse.wait();
-          console.log(`   ✅ Transaction confirmed in block ${receipt?.blockNumber}`);
-        }
-        
-        return {
-          success: true,
-          transactionHash: txResponse.hash
-        };
-        
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.log(`   ❌ Transfer failed: ${errorMessage}`);
-        return {
-          success: false,
-          error: errorMessage
-        };
-      }
-    };
-
-    // Procesar todas las cuentas
-    console.log(`🔄 Processing ${accounts.length} accounts...`);
-    
-    let allTransfersSuccessful = true;
-    const updatedAccounts = [];
-    
-    for (const account of accounts) {
-      console.log(`   📝 Processing account: ${account.address}`);
-      
-      const transferResult = await performTransfer(account.address, account.weiAmount);
-      result.transfersExecuted.push({
-        address: account.address,
-        amount: ethers.formatEther(account.weiAmount),
-        ...transferResult
-      });
-      
-      if (transferResult.success) {
-        updatedAccounts.push(account);
-        console.log(`   ✅ Account processed: ${account.address} (${ethers.formatEther(account.weiAmount)} ETH)`);
-      } else {
-        allTransfersSuccessful = false;
-        console.log(`   ❌ Failed to process account: ${account.address}`);
-      }
-    }
-    
-    // Actualizar configuración solo si todas las transferencias fueron exitosas
-    if (allTransfersSuccessful) {
-      // Actualizar o añadir cuentas a la configuración existente
-      if (!this.config.accounts) {
-        this.config.accounts = [];
-      }
-      
-      // Merge accounts - update existing or add new ones
-      for (const newAccount of updatedAccounts) {
-        const existingIndex = this.config.accounts.findIndex(
-          existing => existing.address.toLowerCase() === newAccount.address.toLowerCase()
-        );
-        
-        if (existingIndex >= 0) {
-          // Update existing account
-          this.config.accounts[existingIndex] = newAccount;
-        } else {
-          // Add new account
-          this.config.accounts.push(newAccount);
-        }
-      }
-      
-      result.configUpdated = true;
-      console.log(`   ✅ All accounts updated successfully`);
-    } else {
-      result.success = false;
-      console.log(`   ❌ Some account transfers failed, configuration not updated`);
-    }
-
-    // Resumen final
-    if (result.success) {
-      console.log('✅ Network accounts updated successfully');
-      if (performTransfers) {
-        const successfulTransfers = result.transfersExecuted.filter(t => t.success).length;
-        const totalTransfers = result.transfersExecuted.length;
-        console.log(`💸 Transfers completed: ${successfulTransfers}/${totalTransfers} successful`);
-      }
-      if (result.configUpdated) {
-        console.log('📝 Network configuration updated with new account balances');
-      }
-    } else {
-      console.log('❌ Network accounts update completed with errors');
-      const failedTransfers = result.transfersExecuted.filter(t => !t.success);
-      for (const transfer of failedTransfers) {
-        console.log(`   ❌ Failed transfer to ${transfer.address}: ${transfer.error}`);
-      }
-    }
-    
-    if (!performTransfers) {
-      console.log('💡 Note: Only configuration updated. Use performTransfers=true to execute actual transfers.');
-    }
-
-    return result;
-  }
-
-  /**
-   * Versión estática para validar actualizaciones de cuentas
-   */
-  private static validateAccountUpdatesStatic(accounts: Array<{ address: string; weiAmount: string }>): ValidationError[] {
-    const errors: ValidationError[] = [];
-    const usedAddresses = new Set<string>();
-
-    // Función auxiliar para validar dirección Ethereum
-    const isValidEthereumAddress = (address: string): boolean => {
-      return /^0x[a-fA-F0-9]{40}$/.test(address);
-    };
-
-    // Función auxiliar para validar cantidad wei
-    const isValidWeiAmount = (weiAmount: string): boolean => {
-      try {
-        const amount = BigInt(weiAmount);
-        return amount > 0n;
-      } catch (error) {
-        return false;
-      }
-    };
-
-    // Función auxiliar para validar cantidad wei razonable
-    const isReasonableWeiAmount = (weiAmount: string): boolean => {
-      try {
-        const amount = BigInt(weiAmount);
-        const maxReasonable = BigInt("1000000000000000000000000"); // 1,000,000 ETH in wei (10^6 * 10^18)
-        return amount > 0n && amount <= maxReasonable;
-      } catch (error) {
-        return false;
-      }
-    };
-
-    if (!accounts || accounts.length === 0) {
-      errors.push({
-        field: 'accounts',
-        type: 'required',
-        message: 'At least one account must be provided'
-      });
-      return errors;
-    }
-
-    accounts.forEach((account, index) => {
-      if (!isValidEthereumAddress(account.address)) {
-        errors.push({
-          field: `accounts[${index}].address`,
-          type: 'format',
-          message: `Account ${index} address must be a valid Ethereum address (0x...)`
-        });
-      } else {
-        const lowerAddress = account.address.toLowerCase();
-        if (usedAddresses.has(lowerAddress)) {
-          errors.push({
-            field: `accounts[${index}].address`,
-            type: 'duplicate',
-            message: `Account ${index} address is duplicated`
-          });
-        } else {
-          usedAddresses.add(lowerAddress);
-        }
-      }
-
-      if (!isValidWeiAmount(account.weiAmount)) {
-        errors.push({
-          field: `accounts[${index}].weiAmount`,
-          type: 'format',
-          message: `Account ${index} wei amount must be a valid positive number`
-        });
-      } else if (!isReasonableWeiAmount(account.weiAmount)) {
-        errors.push({
-          field: `accounts[${index}].weiAmount`,
-          type: 'range',
-          message: `Account ${index} wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)`
-        });
-      }
-    });
-
-    return errors;
-  }
-
-  /**
-   * Método estático para actualizar las cuentas de una red existente por nombre
-   */
-  static async updateNetworkAccountsByName(
-    networkName: string,
-    accounts: Array<{ address: string; weiAmount: string }>,
-    options: {
-      performTransfers?: boolean; // Si true, realiza transferencias reales desde el miner
-      rpcUrl?: string;
-      confirmTransactions?: boolean; // Si true, espera confirmación de transacciones
-      baseDir?: string;
-    } = {}
-  ): Promise<{
-    success: boolean;
-    configUpdated: boolean;
-    transfersExecuted: Array<{
-      address: string;
-      amount: string;
-      transactionHash?: string;
-      success: boolean;
-      error?: string;
-    }>;
-  }> {
-    const baseDir = options.baseDir || "./networks";
-    console.log(`🔍 Loading network configuration for: ${networkName}`);
-
-    // Validar las actualizaciones antes de proceder
-    const validationErrors = BesuNetwork.validateAccountUpdatesStatic(accounts);
-    if (validationErrors.length > 0) {
-      const errorMessages = validationErrors.map(error => `${error.field}: ${error.message}`).join('\n');
-      throw new Error(`Validation failed:\n${errorMessages}`);
-    }
-
-    // Construir la ruta del archivo de configuración
-    const networkPath = path.join(baseDir, networkName);
-    const configPath = path.join(networkPath, 'network-config.json');
-
-    // Verificar que existe el directorio de la red
-    if (!fs.existsSync(networkPath)) {
-      throw new Error(`Network '${networkName}' not found. Directory does not exist: ${networkPath}`);
-    }
-
-    // Cargar la configuración existente
-    let config: BesuNetworkConfig;
-    if (fs.existsSync(configPath)) {
-      const configData = fs.readFileSync(configPath, 'utf-8');
-      config = JSON.parse(configData);
-    } else {
-      // Si no existe archivo de configuración, crear configuración básica
-      console.log('⚠️  No network-config.json found, creating basic configuration...');
-      config = {
-        name: networkName,
-        chainId: 1337, // Default chainId
-        subnet: '172.24.0.0/16', // Default subnet
-        consensus: 'clique',
-        gasLimit: '0x47E7C4'
-      };
-    }
-
-    // Crear instancia de la red con la configuración cargada
-    const network = new BesuNetwork(config, baseDir);
-
-    // Actualizar las cuentas (ya validadas)
-    const result = await network.updateNetworkAccounts(accounts, {
-      performTransfers: options.performTransfers,
-      rpcUrl: options.rpcUrl,
-      confirmTransactions: options.confirmTransactions
-    });
-
-    // Guardar la configuración actualizada solo si fue exitosa
-    if (result.configUpdated) {
-      const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
-      fs.writeFileSync(configPath, updatedConfigData);
-      console.log(`💾 Configuration saved to: ${configPath}`);
-    }
-
-    return result;
-  }
-
-  /**
-   * Actualiza las IPs de los nodos para una nueva subnet
-   */
-  private updateNodesForNewSubnet(newSubnet: string): void {
-    const [baseNetwork] = newSubnet.split('/');
-    const baseParts = baseNetwork.split('.');
-    const basePrefix = `${baseParts[0]}.${baseParts[1]}.${baseParts[2]}`;
-    
-    let ipCounter = 10;
-    
-    for (const [nodeName, node] of this.nodes) {
-      const currentConfig = node.getConfig();
-      const newIp = `${basePrefix}.${ipCounter}`;
-      
-      // Actualizar la IP del nodo
-      node.updateIp(newIp);
-      
-      console.log(`🔄 Updated ${nodeName} IP to ${newIp}`);
-      ipCounter++;
-    }
-  }
-
-  /**
-   * Actualiza los archivos de configuración TOML de todos los nodos
-   */
-  private async updateNodeConfigurations(): Promise<void> {
-    const bootnodeNodes = this.getNodesByType('bootnode');
-    const bootnodeEnodes = bootnodeNodes.map(node => node.getKeys().enode);
-    
-    for (const [nodeName, node] of this.nodes) {
-      const nodeConfig = node.getConfig();
-      
-      // Generar nueva configuración TOML
-      let tomlConfig: string;
-      if (nodeConfig.type === 'bootnode') {
-        tomlConfig = node.generateTomlConfig(this.config);
-      } else {
-        tomlConfig = node.generateTomlConfig(this.config, bootnodeEnodes);
-      }
-      
-      // Guardar nueva configuración
-      this.fileService.createFile(nodeConfig.name, 'config.toml', tomlConfig);
-    }
-  }
-
-  /**
-   * Valida que las direcciones de cuentas tengan el formato correcto
-   */
-  private validateAccountAddresses(): void {
-    if (this.config.signerAccount) {
-      if (!this.isValidEthereumAddress(this.config.signerAccount.address)) {
-        throw new Error(`Invalid signer account address: ${this.config.signerAccount.address}`);
-      }
-    }
-
-    if (this.config.accounts && this.config.accounts.length > 0) {
-      for (const account of this.config.accounts) {
-        if (!this.isValidEthereumAddress(account.address)) {
-          throw new Error(`Invalid account address: ${account.address}`);
-        }
-      }
-    }
-  }
-
-  /**
-   * Genera IPs para los nodos basándose en la IP principal o subnet de la red
-   */
-  private generateNodeIp(nodeIndex: number): string {
-    if (this.config.mainIp) {
-      // Si hay una IP principal definida, usarla como base
-      const parts = this.config.mainIp.split('.');
-      parts[3] = (parseInt(parts[3]) + nodeIndex + 1).toString();
-      return parts.join('.');
-    } else {
-      // Usar la subnet para generar IPs
-      const [baseNetwork] = this.config.subnet.split('/');
-      const baseParts = baseNetwork.split('.');
-      const baseIp = `${baseParts[0]}.${baseParts[1]}.${baseParts[2]}.${10 + nodeIndex}`;
-      return baseIp;
-    }
-  }
-
-  // Getters
-  getNodes(): Map<string, BesuNode> {
-    return this.nodes;
-  }
-
-  getConfig(): BesuNetworkConfig {
-    return this.config;
-  }
-
-  getFileService(): FileService {
-    return this.fileService;
-  }
-
-  getNodeByName(name: string): BesuNode | undefined {
-    return this.nodes.get(name);
-  }
-
-  getNodesByType(type: 'bootnode' | 'miner' | 'rpc' | 'node'): BesuNode[] {
-    const result: BesuNode[] = [];
-    for (const [name, node] of this.nodes) {
-      if (node.getConfig().type === type) {
-        result.push(node);
-      }
-    }
-    return result;
-  }
-
-  getAllNodeConfigs(): Array<{ name: string; config: BesuNodeConfig; keys: KeyPair }> {
-    const result = [];
-    for (const [name, node] of this.nodes) {
-      result.push({
-        name,
-        config: node.getConfig(),
-        keys: node.getKeys()
-      });
-    }
-    return result;
-  }
-
-  /**
    * Método estático para actualizar nodos de una red existente por nombre
    */
   static async updateNetworkNodesByName(
@@ -3353,529 +2787,72 @@ export class BesuNetwork {
       baseDir?: string;
     } = {}
   ): Promise<void> {
+    const { BesuNetworkUpdater } = await import('./update-besu-networks');
     return BesuNetworkUpdater.updateNetworkNodesByName(networkName, updates, options);
   }
-}
-
-// ============================================================================
-// NETWORK NODES UPDATER - Funciones para actualizar nodos existentes
-// ============================================================================
-
-export class BesuNetworkUpdater {
-  private besuNetwork: BesuNetwork;
-
-  constructor(besuNetwork: BesuNetwork) {
-    this.besuNetwork = besuNetwork;
-  }
 
   /**
-   * Actualiza los nodos de una red Besu existente
-   * Permite cambiar mainIp, configuraciones específicas de nodos, añadir y eliminar nodos
+   * Método estático para actualizar las cuentas de una red existente por nombre
    */
-  async updateNetworkNodes(updates: {
-    mainIp?: string;
-    nodes?: Array<{
-      name: string;
-      ip?: string;
-      rpcPort?: number;
-      p2pPort?: number;
-    }>;
-    addNodes?: BesuNodeDefinition[];
-    removeNodes?: string[]; // Array de nombres de nodos a eliminar
-  }): Promise<void> {
-    let needsRestart = false;
-    const errors: ValidationError[] = [];
-
-    const config = (this.besuNetwork as any).config;
-    const nodes = (this.besuNetwork as any).nodes;
-    console.log(`🔧 Updating network nodes for: ${config.name}`);
-
-    // Validar mainIp si se proporciona
-    if (updates.mainIp && updates.mainIp !== config.mainIp) {
-      if (!(this.besuNetwork as any).isValidIpAddress(updates.mainIp)) {
-        errors.push({
-          field: 'mainIp',
-          type: 'format',
-          message: 'Main IP must be a valid IP address'
-        });
-      } else {
-        console.log(`📍 Changing main IP from ${config.mainIp || 'not set'} to ${updates.mainIp}`);
-        config.mainIp = updates.mainIp;
-        needsRestart = true;
-      }
-    }
-
-    // Validar y aplicar actualizaciones específicas de nodos
-    if (updates.nodes && updates.nodes.length > 0) {
-      console.log(`🔧 Processing ${updates.nodes.length} node-specific updates...`);
-      
-      for (const nodeUpdate of updates.nodes) {
-        const node = nodes.get(nodeUpdate.name);
-        if (!node) {
-          errors.push({
-            field: `nodes[${nodeUpdate.name}]`,
-            type: 'invalid',
-            message: `Node '${nodeUpdate.name}' not found in network`
-          });
-          continue;
-        }
-
-        const currentNodeConfig = node.getConfig();
-        let nodeChanged = false;
-
-        // Validar y actualizar IP específica del nodo
-        if (nodeUpdate.ip && nodeUpdate.ip !== currentNodeConfig.ip) {
-          if (!(this.besuNetwork as any).isValidIpAddress(nodeUpdate.ip)) {
-            errors.push({
-              field: `nodes[${nodeUpdate.name}].ip`,
-              type: 'format',
-              message: `Invalid IP address for node '${nodeUpdate.name}': ${nodeUpdate.ip}`
-            });
-          } else {
-            console.log(`  📍 Node ${nodeUpdate.name}: IP ${currentNodeConfig.ip} → ${nodeUpdate.ip}`);
-            node.updateIp(nodeUpdate.ip);
-            nodeChanged = true;
-          }
-        }
-
-        // Validar y actualizar RPC Port
-        if (nodeUpdate.rpcPort && nodeUpdate.rpcPort !== currentNodeConfig.rpcPort) {
-          if (!this.isValidPort(nodeUpdate.rpcPort)) {
-            errors.push({
-              field: `nodes[${nodeUpdate.name}].rpcPort`,
-              type: 'range',
-              message: `Invalid RPC port for node '${nodeUpdate.name}': ${nodeUpdate.rpcPort}. Must be between 1024 and 65535`
-            });
-          } else if (this.isPortInUseByOtherNodes(nodeUpdate.rpcPort, nodeUpdate.name, nodes)) {
-            errors.push({
-              field: `nodes[${nodeUpdate.name}].rpcPort`,
-              type: 'duplicate',
-              message: `RPC port ${nodeUpdate.rpcPort} is already in use by another node`
-            });
-          } else {
-            console.log(`  🔌 Node ${nodeUpdate.name}: RPC Port ${currentNodeConfig.rpcPort} → ${nodeUpdate.rpcPort}`);
-            node.updateRpcPort(nodeUpdate.rpcPort);
-            nodeChanged = true;
-          }
-        }
-
-        // Validar y actualizar P2P Port
-        if (nodeUpdate.p2pPort && nodeUpdate.p2pPort !== (currentNodeConfig.p2pPort || 30303)) {
-          if (!this.isValidPort(nodeUpdate.p2pPort)) {
-            errors.push({
-              field: `nodes[${nodeUpdate.name}].p2pPort`,
-              type: 'range',
-              message: `Invalid P2P port for node '${nodeUpdate.name}': ${nodeUpdate.p2pPort}. Must be between 1024 and 65535`
-            });
-          } else if (this.isPortInUseByOtherNodes(nodeUpdate.p2pPort, nodeUpdate.name, nodes)) {
-            errors.push({
-              field: `nodes[${nodeUpdate.name}].p2pPort`,
-              type: 'duplicate',
-              message: `P2P port ${nodeUpdate.p2pPort} is already in use by another node`
-            });
-          } else {
-            const currentP2pPort = currentNodeConfig.p2pPort || 30303;
-            console.log(`  🔗 Node ${nodeUpdate.name}: P2P Port ${currentP2pPort} → ${nodeUpdate.p2pPort}`);
-            node.updateP2pPort(nodeUpdate.p2pPort);
-            nodeChanged = true;
-          }
-        }
-
-        if (nodeChanged) {
-          needsRestart = true;
-          console.log(`  ✅ Node ${nodeUpdate.name} configuration updated`);
-        } else {
-          console.log(`  ℹ️  Node ${nodeUpdate.name}: No changes detected`);
-        }
-      }
-    }
-
-    // Validar y procesar nodos a eliminar
-    if (updates.removeNodes && updates.removeNodes.length > 0) {
-      console.log(`🗑️  Processing ${updates.removeNodes.length} nodes for removal...`);
-      
-      for (const nodeName of updates.removeNodes) {
-        const node = nodes.get(nodeName);
-        if (!node) {
-          errors.push({
-            field: `removeNodes[${nodeName}]`,
-            type: 'invalid',
-            message: `Node '${nodeName}' not found in network`
-          });
-          continue;
-        }
-
-        // Validar que no se está eliminando el último nodo de un tipo crítico
-        const nodeConfig = node.getConfig();
-        if (nodeConfig.type === 'bootnode' && this.getNodeCountByType('bootnode', nodes) <= 1) {
-          errors.push({
-            field: `removeNodes[${nodeName}]`,
-            type: 'invalid',
-            message: `Cannot remove '${nodeName}': At least one bootnode is required in the network`
-          });
-        } else if (nodeConfig.type === 'miner' && this.getNodeCountByType('miner', nodes) <= 1) {
-          errors.push({
-            field: `removeNodes[${nodeName}]`,
-            type: 'invalid',
-            message: `Cannot remove '${nodeName}': At least one miner is required in the network`
-          });
-        } else {
-          console.log(`  🗑️  Node ${nodeName} (${nodeConfig.type}) marked for removal`);
-          needsRestart = true;
-        }
-      }
-    }
-
-    // Validar y procesar nodos a añadir usando las mismas validaciones que createNetwork
-    if (updates.addNodes && updates.addNodes.length > 0) {
-      console.log(`➕ Processing ${updates.addNodes.length} nodes for addition...`);
-      
-      // Crear un Set con todas las IPs, puertos y nombres existentes
-      const existingIps = new Set<string>();
-      const existingRpcEndpoints = new Set<string>();
-      const existingP2pEndpoints = new Set<string>();
-      const existingNames = new Set<string>();
-      
-      // Poblar con nodos existentes (excluyendo los que van a ser eliminados)
-      for (const [nodeName, node] of nodes) {
-        if (updates.removeNodes && updates.removeNodes.includes(nodeName)) continue;
-        
-        const nodeConfig = node.getConfig();
-        existingIps.add(nodeConfig.ip);
-        existingRpcEndpoints.add(`${nodeConfig.ip}:${nodeConfig.rpcPort}`);
-        existingP2pEndpoints.add(`${nodeConfig.ip}:${nodeConfig.port}`);
-        existingNames.add(nodeName);
-      }
-
-      // Validar cada nodo a añadir
-      for (let i = 0; i < updates.addNodes.length; i++) {
-        const newNode = updates.addNodes[i];
-        const p2pPort = newNode.p2pPort || 30303;
-
-        // Validar nombre del nodo
-        if (!newNode.name || newNode.name.trim().length === 0) {
-          errors.push({
-            field: `addNodes[${i}].name`,
-            type: 'required',
-            message: `New node ${i} name is required`
-          });
-        } else {
-          const nameRegex = /^[a-zA-Z0-9_-]+$/;
-          if (!nameRegex.test(newNode.name)) {
-            errors.push({
-              field: `addNodes[${i}].name`,
-              type: 'format',
-              message: `New node ${i} name can only contain letters, numbers, hyphens and underscores`
-            });
-          }
-
-          if (existingNames.has(newNode.name)) {
-            errors.push({
-              field: `addNodes[${i}].name`,
-              type: 'duplicate',
-              message: `Node name '${newNode.name}' already exists in the network`
-            });
-          } else {
-            existingNames.add(newNode.name);
-          }
-        }
-
-        // Validar IP del nodo
-        if (!(this.besuNetwork as any).isValidIpAddress(newNode.ip)) {
-          errors.push({
-            field: `addNodes[${i}].ip`,
-            type: 'format',
-            message: `New node ${i} IP address format is invalid`
-          });
-        } else {
-          if (existingIps.has(newNode.ip)) {
-            errors.push({
-              field: `addNodes[${i}].ip`,
-              type: 'duplicate',
-              message: `IP address '${newNode.ip}' is already in use by another node`
-            });
-          } else {
-            existingIps.add(newNode.ip);
-          }
-
-          // Validar que la IP está en la subnet
-          if (!(this.besuNetwork as any).isIpInSubnet(newNode.ip, config.subnet)) {
-            errors.push({
-              field: `addNodes[${i}].ip`,
-              type: 'invalid',
-              message: `New node ${i} IP '${newNode.ip}' is not in the configured subnet '${config.subnet}'`
-            });
-          }
-        }
-
-        // Validar puerto RPC
-        if (!this.isValidPort(newNode.rpcPort)) {
-          errors.push({
-            field: `addNodes[${i}].rpcPort`,
-            type: 'range',
-            message: `New node ${i} RPC port must be between 1024 and 65535`
-          });
-        } else {
-          const rpcEndpoint = `${newNode.ip}:${newNode.rpcPort}`;
-          if (existingRpcEndpoints.has(rpcEndpoint)) {
-            errors.push({
-              field: `addNodes[${i}].rpcPort`,
-              type: 'duplicate',
-              message: `RPC endpoint ${rpcEndpoint} is already in use`
-            });
-          } else {
-            existingRpcEndpoints.add(rpcEndpoint);
-          }
-        }
-
-        // Validar puerto P2P
-        if (!this.isValidPort(p2pPort)) {
-          errors.push({
-            field: `addNodes[${i}].p2pPort`,
-            type: 'range',
-            message: `New node ${i} P2P port must be between 1024 and 65535`
-          });
-        } else {
-          const p2pEndpoint = `${newNode.ip}:${p2pPort}`;
-          if (existingP2pEndpoints.has(p2pEndpoint)) {
-            errors.push({
-              field: `addNodes[${i}].p2pPort`,
-              type: 'duplicate',
-              message: `P2P endpoint ${p2pEndpoint} is already in use`
-            });
-          } else {
-            existingP2pEndpoints.add(p2pEndpoint);
-          }
-
-          // Verificar que P2P y RPC no conflicten en el mismo nodo
-          if (p2pPort === newNode.rpcPort) {
-            errors.push({
-              field: `addNodes[${i}].p2pPort`,
-              type: 'invalid',
-              message: `New node ${i} P2P port cannot be the same as RPC port`
-            });
-          }
-        }
-
-        // Validar tipo de nodo
-        const validNodeTypes = ['bootnode', 'miner', 'rpc', 'node'];
-        if (!validNodeTypes.includes(newNode.type)) {
-          errors.push({
-            field: `addNodes[${i}].type`,
-            type: 'invalid',
-            message: `New node ${i} type '${newNode.type}' is invalid. Valid types: ${validNodeTypes.join(', ')}`
-          });
-        } else {
-          console.log(`  ➕ Node ${newNode.name} (${newNode.type}) validated for addition`);
-          needsRestart = true;
-        }
-      }
-    }
-
-    // Si hay errores de validación, lanzar excepción
-    if (errors.length > 0) {
-      const errorMessages = errors.map(error => 
-        `${error.field}: ${error.message}`
-      ).join('\n');
-      throw new Error(`Network nodes update validation failed:\n${errorMessages}`);
-    }
-
-    // Si no hay cambios, informar y salir
-    if (!needsRestart) {
-      console.log('ℹ️  No changes detected in node configuration');
-      return;
-    }
-
-    // Si hay cambios que requieren reinicio
-    console.log('⏸️  Stopping network for node configuration update...');
-    await this.besuNetwork.stop();
-
-    // Procesar eliminaciones de nodos
-    if (updates.removeNodes && updates.removeNodes.length > 0) {
-      console.log('🗑️  Removing nodes...');
-      for (const nodeName of updates.removeNodes) {
-        if (nodes.has(nodeName)) {
-          // Eliminar archivos del nodo
-          const fileService = (this.besuNetwork as any).fileService;
-          fileService.removeFolder(nodeName);
-          
-          // Eliminar del mapa de nodos
-          nodes.delete(nodeName);
-          console.log(`  ✅ Node ${nodeName} removed successfully`);
-        }
-      }
-    }
-
-    // Procesar adiciones de nodos
-    if (updates.addNodes && updates.addNodes.length > 0) {
-      console.log('➕ Adding new nodes...');
-      
-      for (const newNodeDef of updates.addNodes) {
-        const nodeConfig = {
-          name: newNodeDef.name,
-          ip: newNodeDef.ip,
-          port: newNodeDef.p2pPort || 30303,
-          rpcPort: newNodeDef.rpcPort,
-          type: newNodeDef.type
-        };
-        
-        const fileService = (this.besuNetwork as any).fileService;
-        const node = new BesuNode(nodeConfig, fileService);
-        nodes.set(newNodeDef.name, node);
-        
-        console.log(`  ✅ Added ${newNodeDef.type} node: ${newNodeDef.name} (${newNodeDef.ip}:${newNodeDef.rpcPort})`);
-      }
-    }
-
-    // Actualizar las IPs de los nodos según el mainIp solo si se especifica
-    if (updates.mainIp) {
-      console.log('📝 Updating node IP addresses...');
-      await this.updateNodeIpAddresses(updates.mainIp);
-    }
-
-    // Actualizar archivos de configuración TOML con los nuevos parámetros
-    console.log('📝 Updating node configuration files...');
-    await this.updateNodeConfigurations();
-
-    console.log('✅ Network nodes updated successfully');
-    console.log('💡 Use start() to restart the network with new configuration');
-  }
-
-  /**
-   * Valida si un puerto es válido (rango 1024-65535)
-   */
-  private isValidPort(port: number): boolean {
-    return Number.isInteger(port) && port >= 1024 && port <= 65535;
-  }
-
-  /**
-   * Verifica si un puerto está siendo usado por otros nodos
-   */
-  private isPortInUseByOtherNodes(port: number, excludeNodeName: string, nodes: Map<string, any>): boolean {
-    for (const [nodeName, node] of nodes) {
-      if (nodeName === excludeNodeName) continue;
-      
-      const nodeConfig = node.getConfig();
-      if (nodeConfig.rpcPort === port || nodeConfig.p2pPort === port || (nodeConfig.p2pPort === undefined && port === 30303)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Cuenta cuántos nodos de un tipo específico existen
-   */
-  private getNodeCountByType(nodeType: string, nodes: Map<string, any>): number {
-    let count = 0;
-    for (const [, node] of nodes) {
-      const nodeConfig = node.getConfig();
-      if (nodeConfig.type === nodeType) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  /**
-   * Actualiza las IPs de los nodos basándose en el nuevo mainIp
-   */
-  private async updateNodeIpAddresses(mainIp: string): Promise<void> {
-    const nodes = (this.besuNetwork as any).nodes;
-    const [baseIp1, baseIp2, baseIp3] = mainIp.split('.');
-    const basePrefix = `${baseIp1}.${baseIp2}.${baseIp3}`;
-    
-    let ipCounter = 10;
-    
-    for (const [nodeName, node] of nodes) {
-      const newIp = `${basePrefix}.${ipCounter}`;
-      
-      // Actualizar la IP del nodo usando el método updateIp
-      node.updateIp(newIp);
-      
-      console.log(`🔄 Updated ${nodeName} IP to ${newIp}`);
-      ipCounter++;
-    }
-  }
-
-  /**
-   * Actualiza las configuraciones de los nodos usando la lógica de BesuNetwork
-   */
-  private async updateNodeConfigurations(): Promise<void> {
-    console.log('📝 Updating node configurations...');
-    
-    // Usar el método privado de BesuNetwork para actualizar configuraciones
-    const updateMethod = (this.besuNetwork as any).updateNodeConfigurations;
-    if (updateMethod && typeof updateMethod === 'function') {
-      await updateMethod.call(this.besuNetwork);
-    } else {
-      console.log('⚠️  updateNodeConfigurations method not found in BesuNetwork');
-    }
-  }
-
-  /**
-   * Método estático para actualizar nodos por nombre de red
-   */
-  static async updateNetworkNodesByName(
+  static async updateNetworkAccountsByName(
     networkName: string,
-    updates: {
-      mainIp?: string;
-      nodes?: Array<{
-        name: string;
-        ip?: string;
-        rpcPort?: number;
-        p2pPort?: number;
-      }>;
-      addNodes?: BesuNodeDefinition[];
-      removeNodes?: string[];
-    },
+    accounts: Array<{ address: string; weiAmount: string }>,
     options: {
+      performTransfers?: boolean;
+      rpcUrl?: string;
+      confirmTransactions?: boolean;
       baseDir?: string;
     } = {}
-  ): Promise<void> {
-    const baseDir = options.baseDir || "./networks";
-    console.log(`🔍 Loading network configuration for: ${networkName}`);
+  ): Promise<{
+    success: boolean;
+    configUpdated: boolean;
+    transfersExecuted: Array<{
+      address: string;
+      amount: string;
+      transactionHash?: string;
+      success: boolean;
+      error?: string;
+    }>;
+  }> {
+    const { updateNetworkAccountsByName } = await import('./update-besu-networks');
+    return updateNetworkAccountsByName(networkName, accounts, options);
+  }
 
-    // Construir la ruta del archivo de configuración
-    const networkPath = path.join(baseDir, networkName);
-    const configPath = path.join(networkPath, 'network-config.json');
+  /**
+   * Actualiza la configuración de red (subnet, gasLimit, blockTime)
+   */
+  async updateNetworkConfig(updates: {
+    subnet?: string;
+    gasLimit?: string;
+    blockTime?: number;
+  }): Promise<void> {
+    const { updateNetworkConfig } = await import('./update-besu-networks');
+    return updateNetworkConfig(this, updates);
+  }
 
-    // Verificar que existe el directorio de la red
-    if (!fs.existsSync(networkPath)) {
-      throw new Error(`Network '${networkName}' not found. Directory does not exist: ${networkPath}`);
-    }
-
-    // Cargar la configuración existente
-    let config: BesuNetworkConfig;
-    if (fs.existsSync(configPath)) {
-      const configData = fs.readFileSync(configPath, 'utf-8');
-      config = JSON.parse(configData);
-    } else {
-      // Si no existe archivo de configuración, crear configuración básica
-      console.log('⚠️  No network-config.json found, creating basic configuration...');
-      config = {
-        name: networkName,
-        chainId: 1337, // Default chainId
-        subnet: '172.24.0.0/16', // Default subnet
-        consensus: 'clique',
-        gasLimit: '0x47E7C4'
-      };
-    }
-
-    // Crear instancia de la red con la configuración cargada
-    const network = new BesuNetwork(config, baseDir);
-    
-    // Crear el updater y ejecutar la actualización
-    const updater = new BesuNetworkUpdater(network);
-    
-    await updater.updateNetworkNodes(updates);
-    
-    // Guardar la configuración actualizada
-    const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
-    fs.writeFileSync(configPath, updatedConfigData);
-    console.log(`💾 Configuration saved to: ${configPath}`);
-    
-    console.log(`✅ Network ${networkName} nodes updated successfully`);
+  /**
+   * Actualiza las cuentas de la red
+   */
+  async updateNetworkAccounts(
+    accounts: Array<{ address: string; weiAmount: string }>,
+    options: {
+      performTransfers?: boolean;
+      rpcUrl?: string;
+      confirmTransactions?: boolean;
+    } = {}
+  ): Promise<{
+    success: boolean;
+    configUpdated: boolean;
+    transfersExecuted: Array<{
+      address: string;
+      amount: string;
+      transactionHash?: string;
+      success: boolean;
+      error?: string;
+    }>;
+  }> {
+    const { updateNetworkAccounts } = await import('./update-besu-networks');
+    return updateNetworkAccounts(this, accounts, options);
   }
 }
 
@@ -3887,11 +2864,8 @@ export class BesuNetworkUpdater {
  * Función de conveniencia para actualizar mainIp de una red
  */
 export async function updateMainIp(networkName: string, mainIp: string, baseDir?: string): Promise<void> {
-  await BesuNetworkUpdater.updateNetworkNodesByName(
-    networkName,
-    { mainIp },
-    { baseDir }
-  );
+  const { updateMainIp } = await import('./update-besu-networks');
+  return updateMainIp(networkName, mainIp, baseDir);
 }
 
 /**
@@ -3907,11 +2881,8 @@ export async function updateNodeConfigs(
   }>, 
   baseDir?: string
 ): Promise<void> {
-  await BesuNetworkUpdater.updateNetworkNodesByName(
-    networkName,
-    { nodes: nodeUpdates },
-    { baseDir }
-  );
+  const { updateNodeConfigs } = await import('./update-besu-networks');
+  return updateNodeConfigs(networkName, nodeUpdates, baseDir);
 }
 
 /**
@@ -3922,11 +2893,8 @@ export async function addNodesToNetwork(
   newNodes: BesuNodeDefinition[],
   baseDir?: string
 ): Promise<void> {
-  await BesuNetworkUpdater.updateNetworkNodesByName(
-    networkName,
-    { addNodes: newNodes },
-    { baseDir }
-  );
+  const { addNodesToNetwork } = await import('./update-besu-networks');
+  return addNodesToNetwork(networkName, newNodes, baseDir);
 }
 
 /**
@@ -3937,11 +2905,8 @@ export async function removeNodesFromNetwork(
   nodeNames: string[],
   baseDir?: string
 ): Promise<void> {
-  await BesuNetworkUpdater.updateNetworkNodesByName(
-    networkName,
-    { removeNodes: nodeNames },
-    { baseDir }
-  );
+  const { removeNodesFromNetwork } = await import('./update-besu-networks');
+  return removeNodesFromNetwork(networkName, nodeNames, baseDir);
 }
 
 // Export everything

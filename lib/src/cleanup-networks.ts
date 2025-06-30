@@ -1,6 +1,6 @@
 #!/usr/bin/env ts-node
 
-import { executeCommand } from './index';
+import { executeCommand } from './create-besu-networks';
 
 /**
  * Script para limpiar redes Docker que pueden estar causando conflictos

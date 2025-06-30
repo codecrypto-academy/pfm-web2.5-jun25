@@ -1,4 +1,4 @@
-import { BesuNetwork, BesuNetworkConfig } from "../src/index";
+import { BesuNetwork, BesuNetworkConfig } from "../src/create-besu-networks";
 import { ethers } from "ethers";
 
 /**

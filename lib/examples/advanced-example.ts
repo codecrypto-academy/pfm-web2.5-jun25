@@ -1,4 +1,4 @@
-import { BesuNetwork, BesuNetworkConfig } from "../src/index";
+import { BesuNetwork, BesuNetworkConfig } from "../src/create-besu-networks";
 import { ethers } from "ethers";
 
 /**
@@ -96,7 +96,7 @@ async function advancedExample() {
         
         try {
             // Importar funciones de actualización
-            const { removeNodesFromNetwork, addNodesToNetwork, BesuNetwork } = await import('../src/index');
+            const { removeNodesFromNetwork, addNodesToNetwork, BesuNetwork } = await import('../src/create-besu-networks');
             
             // 1. Quitar miner3 (dejando 2 miners para consenso estable)
             console.log('   🗑️  Removiendo miner3...');

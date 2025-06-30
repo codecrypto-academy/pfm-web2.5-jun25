@@ -35,12 +35,18 @@ mkdir -p nodo2
 cd bootnode
 node ../../../scripts/index.mjs create-keys $BOOTNODE_IP
 cd ../nodo1
-#besu --data-path=nodo1 public-key export-address --to=nodo1/address
 node ../../../scripts/index.mjs create-keys $NODE1_IP
 cd ../nodo2
-#besu --data-path=nodo2 public-key export-address --to=nodo2/address
 node ../../../scripts/index.mjs create-keys $NODE2_IP
-cd ../../..
+cd ../..
+# Crear dos cuentas prefunded para el alloc
+mkdir -p account1
+mkdir -p account2
+cd account1
+node ../../../scripts/index.mjs create-keys 192.168.1.101
+cd ../account2
+node ../../../scripts/index.mjs create-keys 192.168.1.102
+cd ../..
 
 # crear el archivo genesis.json con la configuración de Clique PoA
 cat > networks/besu-network/genesis.json << EOF
@@ -60,6 +66,12 @@ cat > networks/besu-network/genesis.json << EOF
   "alloc": {
     "$(cat networks/besu-network/bootnode/address)": {
       "balance": "0x20000000000000000000000000000000000000000000"
+    },
+    "$(cat networks/besu-network/nodo1/address)": {
+      "balance": "0x10000000000000000000000000000000000000000000"
+    },
+    "6243A64dd2E56F164E1f08e99433A7DEC132AB4E": {
+      "balance": "0x10000000000000000000000000000000000000000000"
     }
   }
 }

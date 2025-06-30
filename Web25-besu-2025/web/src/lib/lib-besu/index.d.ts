@@ -35,7 +35,7 @@ export declare class DockerNetwork {
     get containers(): any[];
     get besuNodes(): BesuNode[];
     get chainId(): number;
-    static create(name: string, chainId: number, subnet: string, label: KeyValue[]): DockerNetwork;
+    static create(name: string, chainId: number, subnet: string, label: KeyValue[], minerAddress?: string, prefundedAddresses?: string[], values?: (string | bigint)[]): DockerNetwork;
     static createDockerNetwork(name: string, subnet: string, label: KeyValue[]): DockerNetwork;
     static removeDockerNetwork(name: string): void;
     private addNode;

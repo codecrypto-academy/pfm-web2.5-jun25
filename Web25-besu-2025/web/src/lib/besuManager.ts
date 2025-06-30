@@ -3,14 +3,16 @@ import { DockerNetwork, KeyValue, typeNode, BesuNode, KeyPair } from './lib-besu
 
 let lastPortUsed = 18545; // Puerto inicial para el bootnode
 
-export async function createBesuNetwork(name: string, chainId: number, subnet: string, bootnodeIP: string, minerIP: string, listOfNodes: {nodeType: string, ip: string }[]) {
-  const dockerNetwork = await DockerNetwork.create(name, chainId, subnet, []);
+export async function createBesuNetwork(name: string, chainId: number, subnet: string, bootnodeIP: string, minerAddress: string, 
+    listOfNodes: {nodeType: string, ip: string }[], prefundedAccounts: {address: string, amount: string }[] = []) {
+  
+  // Création des listes à partir de prefundedAccounts
+  const prefundedAddresses = prefundedAccounts.map(acc => acc.address);
+  const prefundedValues = prefundedAccounts.map(acc => acc.amount);
+
+  const dockerNetwork = await DockerNetwork.create(name, chainId, subnet, [], minerAddress,prefundedAddresses, prefundedValues);
   await dockerNetwork.addBootnode('bootnode', lastPortUsed.toString(), bootnodeIP);
   lastPortUsed += 1; // Incrementar el puerto para el siguiente nodo
-  if (bootnodeIP !== minerIP) {
-    await dockerNetwork.addMiner('miner', lastPortUsed.toString(), minerIP);
-    lastPortUsed += 1; // Incrementar el puerto para el siguiente nodo
-  }
   for (const node of listOfNodes) {
     switch (node.nodeType) {
       case 'signer':
@@ -38,7 +40,7 @@ export async function getBesuNetwork(name: string) {
   return new DockerNetwork(name);
 }
 
-export async function addBesuNode(networkName: string, nodeName: string, nodeType: typeNode, port: string, ip?: string) {
+export async function addBesuNode(networkName: string, nodeName: string, nodeType: string, port: string, ip?: string) {
   const network = new DockerNetwork(networkName);
   switch (nodeType) {
     case 'bootnode':

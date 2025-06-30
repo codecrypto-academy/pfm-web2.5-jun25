@@ -80,8 +80,8 @@ export async function deleteNodeAction(id: string, networkId: string) {
 }
 
 // Besu Network actions
-export async function createBesuNetwork(name: string, chainId: number, subnet: string, bootnodeIP: string, minerIP: string, listOfNodes: {nodeType: string, ip: string }[]) {
-  besuManager.createBesuNetwork(name, chainId, subnet, bootnodeIP, minerIP, listOfNodes);
+export async function createBesuNetwork(name: string, chainId: number, subnet: string, bootnodeIP: string, minerIP: string, listOfNodes: {nodeType: string, ip: string }[], prefundedAccounts: {address: string, amount: string }[] = []) {
+  besuManager.createBesuNetwork(name, chainId, subnet, bootnodeIP, minerIP, listOfNodes, prefundedAccounts);
 }
 
 export async function removeBesuNetwork(name: string) {
@@ -92,7 +92,7 @@ export async function getBesuNetwork(name: string) {
   return besuManager.getBesuNetwork(name);
 }
 
-export async function addBesuNode(networkName: string, nodeName: string, nodeType: typeNode, port: string, ip?: string) {
+export async function addBesuNode(networkName: string, nodeName: string, nodeType: string, port: string, ip?: string) {
   return besuManager.addBesuNode(networkName, nodeName, nodeType, port, ip);
 }
 

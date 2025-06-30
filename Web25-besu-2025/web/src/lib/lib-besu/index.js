@@ -107,7 +107,7 @@ class DockerNetwork {
     get chainId() {
         return this._chainId;
     }
-    static create(name, chainId, subnet, label) {
+    static create(name, chainId, subnet, label, minerAddress = '', prefundedAddresses = [], values = []) {
         const fileService = new FileService(path_1.default.join(process.cwd(), "networks"));
         // create folder
         fileService.createFolder(name);
@@ -117,11 +117,17 @@ class DockerNetwork {
         const dockerNetwork = DockerNetwork.createDockerNetwork(name, subnet, label);
         // Generate keys for different node types
         const bootnodeKeys = createKeys(fileService, name, subnet, "bootnode");
-        const minerKeys = createKeys(fileService, name, subnet, "miner");
+        var validatorAddress;
+        if (minerAddress !== '') {
+            const minerKeys = createKeys(fileService, name, subnet, "miner");
+            validatorAddress = minerKeys.address;
+        }
+        else
+            validatorAddress = minerAddress;
         const rpcKeys = createKeys(fileService, name, subnet, "rpc");
         const nodeKeys = createKeys(fileService, name, subnet, "node");
-        // Create genesis with miner as initial signatory
-        const genesis = createGenesis(chainId, minerKeys.address);
+        // Create genesis with miner as initial signatory and prefunded addresses
+        const genesis = createGenesis(chainId, validatorAddress, prefundedAddresses, values);
         fileService.createFile(name, "genesis.json", JSON.stringify(genesis, null, 2));
         // Create config with bootnode enode
         const config = createConfig(bootnodeKeys.enode);
@@ -166,8 +172,26 @@ p2p-enabled=true
 bootnodes=["${bootnode}"]
 `;
         }
-        function createGenesis(chainId, address) {
-            const cleanAddress = address.replace("0x", "");
+        function createGenesis(chainId, address, prefunded = [], values = []) {
+            const validatorAddress = address.replace("0x", "");
+            const alloc = {};
+            // Add miner address
+            alloc[`0x${validatorAddress}`] = {
+                "balance": "0x2000000000000000000000000000000000000000000000000000000000000"
+            };
+            // Add prefunded addresses
+            for (let i = 0; i < prefunded.length; i++) {
+                const addr = prefunded[i].replace("0x", "");
+                let value = values[i] !== undefined ? values[i] : "0x1000000000000000000000000000000000000000000000000000000000000";
+                // Conversion ETH -> wei if string
+                if (typeof value === "string" && !value.startsWith("0x")) {
+                    // Use ethers for conversion ETH -> wei
+                    value = BigInt(ethers_1.ethers.parseEther(value).toString());
+                }
+                if (typeof value === "bigint")
+                    value = "0x" + value.toString(16);
+                alloc[`0x${addr}`] = { balance: value };
+            }
             return {
                 "config": {
                     "chainId": chainId,
@@ -187,14 +211,10 @@ bootnodes=["${bootnode}"]
                         "createemptyblocks": true
                     }
                 },
-                "extraData": `0x0000000000000000000000000000000000000000000000000000000000000000${cleanAddress}0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000`,
+                "extraData": `0x0000000000000000000000000000000000000000000000000000000000000000${validatorAddress}0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000`,
                 "gasLimit": "0x47b760",
                 "difficulty": "0x1",
-                "alloc": {
-                    [`0x${cleanAddress}`]: {
-                        "balance": "0x2000000000000000000000000000000000000000000000000000000000000"
-                    }
-                }
+                "alloc": alloc
             };
         }
     }
@@ -246,25 +266,6 @@ bootnodes=["${bootnode}"]
                 createKeys(this._fileService, this._name, subnet, nodeName);
             }
         }
-        // Auto-assign IP if not provided
-        /*if (!ip) {
-            const networkInfo = this._networkData?.[0];
-            if (networkInfo && networkInfo.IPAM && networkInfo.IPAM.Config) {
-                const subnet = networkInfo.IPAM.Config[0].Subnet;
-                const baseIP = subnet.split('/')[0].split('.').slice(0, -1).join('.');
-                switch (nodeType) {
-                    case 'bootnode':
-                        ip = `${baseIP}.10`;
-                        break;
-                    case 'miner':
-                        ip = `${baseIP}.11`;
-                        break;
-                    case 'rpc':
-                        ip = `${baseIP}.12`;
-                        break;
-                }
-            }
-        }*/
         try {
             let dockerCommand;
             if (nodeType === "bootnode") {
@@ -349,7 +350,7 @@ bootnodes=["${bootnode}"]
                     --data-path=/data/${nodeName}/data \
                     --genesis-file=/data/genesis.json`;
             }
-            console.log('\x1b[34m%s\x1b[0m', `Executing command: ${dockerCommand}`);
+            //console.log('\x1b[34m%s\x1b[0m', `Executing command: ${dockerCommand}`);
             executeCommand(dockerCommand);
             console.log(`Node ${nodeType} added to network ${this._name}`);
             // Add node to nodes list

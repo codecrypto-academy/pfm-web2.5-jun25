@@ -46,7 +46,7 @@ export interface KeyPair {
 }
 
 export class DockerNetwork {
-    private static readonly BASE_PATH = path.resolve(__dirname, "../networks");
+    private static readonly BASE_PATH = path.resolve(__dirname, "networks");
     private _networkData: any;
     private _name: string;
     private _fileService: FileService;
@@ -193,7 +193,7 @@ rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
 rpc-http-port=8545
 rpc-http-cors-origins=["*"]
-rpc-http-api=["ETH","NET","CLIQUE","ADMIN","TRACE","DEBUG","TXPOOL","PERM"]
+rpc-http-api=["ETH","NET","CLIQUE","ADMIN","MINER","TRACE","DEBUG","TXPOOL","PERM"]
 host-allowlist=["*"]
 
 # Mining (will be enabled only for miner nodes)

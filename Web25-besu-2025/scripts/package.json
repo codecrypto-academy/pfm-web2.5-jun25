@@ -12,8 +12,9 @@
   "dependencies": {
     "docker-manager": "^0.4.4",
     "dockerode": "^4.0.7",
+    "dotenv": "^17.0.1",
     "elliptic": "^6.6.1",
-    "ethers": "^6.13.5",
+    "ethers": "^6.14.4",
     "keccak256": "^1.0.6"
   },
   "devDependencies": {

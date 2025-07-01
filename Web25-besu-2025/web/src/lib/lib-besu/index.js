@@ -26,7 +26,7 @@ function executeCommand(command) {
     }
 }
 class DockerNetwork {
-    static BASE_PATH = path_1.default.resolve(__dirname, "../networks");
+    static BASE_PATH = path_1.default.resolve(__dirname, "networks");
     _networkData;
     _name;
     _fileService;
@@ -112,7 +112,9 @@ class DockerNetwork {
     static create(name, chainId, subnet, label, signerAddress = '', prefundedAddresses = [], values = []) {
         const fileService = new FileService(DockerNetwork.BASE_PATH);
         // create folder
-        fileService.createFolder(name);
+        if (!fs_1.default.existsSync(DockerNetwork.BASE_PATH)) {
+            fileService.createFolder(name);
+        }
         // create docker network
         label.push({ key: "folderBase", value: path_1.default.join(process.cwd(), "networks") });
         label.push({ key: "folder", value: path_1.default.join(process.cwd(), "networks", name) });
@@ -154,7 +156,7 @@ rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
 rpc-http-port=8545
 rpc-http-cors-origins=["*"]
-rpc-http-api=["ETH","NET","CLIQUE","ADMIN","TRACE","DEBUG","TXPOOL","PERM"]
+rpc-http-api=["ETH","NET","CLIQUE","ADMIN","MINER","TRACE","DEBUG","TXPOOL","PERM"]
 host-allowlist=["*"]
 
 # Mining (will be enabled only for miner nodes)
@@ -378,7 +380,7 @@ bootnodes=["${bootnode}"]
     async addMiner(name, port, ip) {
         await this.addNode(name, 'miner', port, ip);
         // Wait for miner to be ready
-        await this._sleep(10000);
+        await this._sleep(2500);
         // Add the miner as a signatory in Clique consensus via bootnode
         try {
             const bootnodePort = this._besuNodes.find(node => node.type === 'bootnode')?.port;
@@ -576,7 +578,6 @@ class FileService {
     }
     createFolder(folder) {
         fs_1.default.mkdirSync(path_1.default.join(this.path, folder), { recursive: true });
-        return folder;
     }
     async readFile(folder, file) {
         return fs_1.default.readFileSync(path_1.default.join(this.path, folder, file), 'utf8');

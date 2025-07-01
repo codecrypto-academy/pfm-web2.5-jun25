@@ -70,7 +70,7 @@ export declare class CryptoLib {
 export declare class FileService {
     private path;
     constructor(path: string);
-    createFolder(folder: string): string;
+    createFolder(folder: string): void;
     readFile(folder: string, file: string): Promise<string>;
     readFileSync(folder: string, file: string): string;
     createFile(folder: string, file: string, content: string): Promise<string>;

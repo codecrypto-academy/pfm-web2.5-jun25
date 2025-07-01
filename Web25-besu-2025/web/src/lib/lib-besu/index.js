@@ -13,6 +13,7 @@ const keccak256_1 = __importDefault(require("keccak256"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const child_process_1 = require("child_process");
+const __dirname = path_1.default.resolve();
 function executeCommand(command) {
     try {
         return (0, child_process_1.execSync)(command, { encoding: 'utf-8' });
@@ -25,6 +26,7 @@ function executeCommand(command) {
     }
 }
 class DockerNetwork {
+    static BASE_PATH = path_1.default.resolve(__dirname, "../networks");
     _networkData;
     _name;
     _fileService;
@@ -33,7 +35,7 @@ class DockerNetwork {
     _chainId;
     constructor(name) {
         this._name = name;
-        this._fileService = new FileService(path_1.default.join(process.cwd(), "networks"));
+        this._fileService = new FileService(DockerNetwork.BASE_PATH);
         try {
             // Get network metadata from docker inspect
             const networkData = JSON.parse(executeCommand(`docker network inspect ${name}`));
@@ -107,8 +109,8 @@ class DockerNetwork {
     get chainId() {
         return this._chainId;
     }
-    static create(name, chainId, subnet, label, minerAddress = '', prefundedAddresses = [], values = []) {
-        const fileService = new FileService(path_1.default.join(process.cwd(), "networks"));
+    static create(name, chainId, subnet, label, signerAddress = '', prefundedAddresses = [], values = []) {
+        const fileService = new FileService(DockerNetwork.BASE_PATH);
         // create folder
         fileService.createFolder(name);
         // create docker network
@@ -117,13 +119,12 @@ class DockerNetwork {
         const dockerNetwork = DockerNetwork.createDockerNetwork(name, subnet, label);
         // Generate keys for different node types
         const bootnodeKeys = createKeys(fileService, name, subnet, "bootnode");
-        var validatorAddress;
-        if (minerAddress !== '') {
-            const minerKeys = createKeys(fileService, name, subnet, "miner");
-            validatorAddress = minerKeys.address;
-        }
+        var minerKeys;
+        if (signerAddress !== '')
+            minerKeys = createKeys(fileService, name, subnet, "miner", signerAddress);
         else
-            validatorAddress = minerAddress;
+            minerKeys = createKeys(fileService, name, subnet, "miner");
+        const validatorAddress = minerKeys.address;
         const rpcKeys = createKeys(fileService, name, subnet, "rpc");
         const nodeKeys = createKeys(fileService, name, subnet, "node");
         // Create genesis with miner as initial signatory and prefunded addresses
@@ -229,9 +230,12 @@ bootnodes=["${bootnode}"]
         }
         return new DockerNetwork(name);
     }
-    static removeDockerNetwork(name) {
+    static async removeDockerNetwork(name) {
+        const networkPath = path_1.default.join(DockerNetwork.BASE_PATH, name);
         // remove folder
-        fs_1.default.rmSync(path_1.default.join(process.cwd(), "networks", name), { recursive: true, force: true });
+        if (fs_1.default.existsSync(networkPath)) {
+            fs_1.default.rmSync(networkPath, { recursive: true, force: true });
+        }
         // remove containers from docker network
         try {
             executeCommand(`docker rm -f $(docker ps -aq --filter "network=${name}")`);
@@ -239,6 +243,7 @@ bootnodes=["${bootnode}"]
         catch (error) {
             console.log(`Error removing containers from network: ${error}`);
         }
+        await new Promise(resolve => setTimeout(resolve, 2000));
         // remove docker network
         try {
             executeCommand(`docker network rm ${name}`);
@@ -412,6 +417,7 @@ bootnodes=["${bootnode}"]
         catch (error) {
             throw new Error(`Error removing node ${nodeName}: ${error}`);
         }
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
     async start() {
         for (const besuNode of this._besuNodes) {
@@ -422,6 +428,7 @@ bootnodes=["${bootnode}"]
             catch (error) {
                 console.log(`Error starting container ${besuNode.name}: ${error}`);
             }
+            await new Promise(resolve => setTimeout(resolve, 2500));
         }
     }
     async stop() {
@@ -433,6 +440,7 @@ bootnodes=["${bootnode}"]
             catch (error) {
                 console.log(`Error stopping besu node ${besuNode.name}: ${error}`);
             }
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
     async getBalance(address) {
@@ -498,6 +506,7 @@ class CryptoLib {
     constructor() {
         this.ec = new elliptic_1.ec('secp256k1');
     }
+    // Generate a new random key pair
     generateKeyPair() {
         const keyPair = this.ec.genKeyPair();
         const privateKey = keyPair.getPrivate('hex');
@@ -510,6 +519,24 @@ class CryptoLib {
             enode: ""
         };
     }
+    /*// Generate a key pair from a deterministic seed
+    generateKeyPairFromSeed(seed: string): KeyPair {
+        // Create a deterministic seed using keccak256
+        const seedHash = keccak256(Buffer.from(seed, 'utf8'));
+        
+        // Generate key pair from the seed hash
+        const keyPair = this.ec.keyFromPrivate(seedHash);
+        const privateKey = keyPair.getPrivate('hex');
+        const publicKey = keyPair.getPublic('hex');
+        const address = this.publicKeyToAddress(publicKey);
+        
+        return {
+            privateKey,
+            publicKey,
+            address,
+            enode: ""
+        };
+    }*/
     sign(message, privateKey) {
         const keyPair = this.ec.keyFromPrivate(privateKey);
         const msgHash = (0, keccak256_1.default)(message);
@@ -567,9 +594,46 @@ class FileService {
 }
 exports.FileService = FileService;
 // --- Utility function to create node keys and files ---
-function createKeys(fileService, name, subnet, nodeType) {
+function createKeys(fileService, name, subnet, nodeType, signerAddress = '') {
     const cryptoLib = new CryptoLib();
-    const keys = cryptoLib.generateKeyPair();
+    var keys;
+    if (signerAddress !== '') {
+        // Search in Keypair directory if signerAddress exists
+        const baseDir = path_1.default.join(fileService.folder, "Keypair");
+        console.log(`Searching for existing keys in ${baseDir} for address ${signerAddress}`);
+        if (fs_1.default.existsSync(baseDir)) {
+            const subdirs = fs_1.default.readdirSync(baseDir, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+            let found = false;
+            for (const dir of subdirs) {
+                const addressPath = path_1.default.join(baseDir, dir, 'address');
+                if (fs_1.default.existsSync(addressPath)) {
+                    const addr = fs_1.default.readFileSync(addressPath, 'utf8').trim();
+                    if (addr.toLowerCase() === signerAddress.toLowerCase()) {
+                        // Load keys from the directory
+                        const privPath = path_1.default.join(baseDir, dir, 'key');
+                        const pubPath = path_1.default.join(baseDir, dir, 'publicKey');
+                        if (fs_1.default.existsSync(privPath) && fs_1.default.existsSync(pubPath)) {
+                            keys = {
+                                privateKey: fs_1.default.readFileSync(privPath, 'utf8').trim(),
+                                publicKey: fs_1.default.readFileSync(pubPath, 'utf8').trim(),
+                                address: addr,
+                                enode: ''
+                            };
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (!keys) {
+            keys = cryptoLib.generateKeyPair();
+        }
+    }
+    else
+        keys = cryptoLib.generateKeyPair();
     fileService.createFolder(`${name}/${nodeType}`);
     fileService.createFile(`${name}/${nodeType}`, "key", keys.privateKey);
     fileService.createFile(`${name}/${nodeType}`, "address", keys.address);

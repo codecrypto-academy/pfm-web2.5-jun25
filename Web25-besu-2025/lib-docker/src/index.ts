@@ -5,6 +5,7 @@ import keccak256 from 'keccak256';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+const __dirname = path.resolve();
 
 export function executeCommand(command: string): string {
     try {
@@ -45,6 +46,7 @@ export interface KeyPair {
 }
 
 export class DockerNetwork {
+    private static readonly BASE_PATH = path.resolve(__dirname, "../networks");
     private _networkData: any;
     private _name: string;
     private _fileService: FileService;
@@ -54,7 +56,7 @@ export class DockerNetwork {
     
     constructor(name: string) {
         this._name = name;
-        this._fileService = new FileService(path.join(process.cwd(), "networks"));
+        this._fileService = new FileService(DockerNetwork.BASE_PATH);
         
         try {
             // Get network metadata from docker inspect
@@ -136,11 +138,13 @@ export class DockerNetwork {
         return this._chainId;
     }
 
-    static create(name: string, chainId: number, subnet: string, label: KeyValue[], minerAddress: string = '', prefundedAddresses: string[] = [], values: (string | bigint)[] = []) {
-        const fileService = new FileService(path.join(process.cwd(), "networks"));
+    static create(name: string, chainId: number, subnet: string, label: KeyValue[], signerAddress: string = '', prefundedAddresses: string[] = [], values: (string | bigint)[] = []) {
+        const fileService = new FileService(DockerNetwork.BASE_PATH);
         
         // create folder
-        fileService.createFolder(name);
+        if (!fs.existsSync(DockerNetwork.BASE_PATH)) {
+            fileService.createFolder(name);
+        }
         
         // create docker network
         label.push({ key: "folderBase", value: path.join(process.cwd(), "networks") });
@@ -149,13 +153,12 @@ export class DockerNetwork {
         
         // Generate keys for different node types
         const bootnodeKeys = createKeys(fileService, name, subnet, "bootnode");
-        var validatorAddress
-        if (minerAddress !== '') {
-            const minerKeys = createKeys(fileService, name, subnet, "miner");
-            validatorAddress = minerKeys.address;
-        }
-        else validatorAddress = minerAddress;
-
+        var minerKeys;
+        if (signerAddress !== '') 
+            minerKeys = createKeys(fileService, name, subnet, "miner", signerAddress);
+        else 
+            minerKeys = createKeys(fileService, name, subnet, "miner");
+        const validatorAddress = minerKeys.address;
         const rpcKeys = createKeys(fileService, name, subnet, "rpc");
         const nodeKeys = createKeys(fileService, name, subnet, "node");
         
@@ -272,15 +275,22 @@ bootnodes=["${bootnode}"]
         return new DockerNetwork(name);
     }
 
-    static removeDockerNetwork(name: string) {
+    static async removeDockerNetwork(name: string) {
+        const networkPath = path.join(DockerNetwork.BASE_PATH, name);
+    
         // remove folder
-        fs.rmSync(path.join(process.cwd(), "networks", name), { recursive: true, force: true });
+        if (fs.existsSync(networkPath)) {
+            fs.rmSync(networkPath, { recursive: true, force: true });
+        }
+
         // remove containers from docker network
         try {
             executeCommand(`docker rm -f $(docker ps -aq --filter "network=${name}")`);
         } catch (error) {
             console.log(`Error removing containers from network: ${error}`);
         }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         // remove docker network
         try {
             executeCommand(`docker network rm ${name}`);
@@ -430,7 +440,7 @@ bootnodes=["${bootnode}"]
         await this.addNode(name, 'miner', port, ip);
         
         // Wait for miner to be ready
-        await this._sleep(10000);
+        await this._sleep(2500);
         
         // Add the miner as a signatory in Clique consensus via bootnode
         try {
@@ -478,6 +488,8 @@ bootnodes=["${bootnode}"]
         } catch (error) {
             throw new Error(`Error removing node ${nodeName}: ${error}`);
         }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     async start(): Promise<void> {
@@ -488,6 +500,7 @@ bootnodes=["${bootnode}"]
             } catch (error) {
                 console.log(`Error starting container ${besuNode.name}: ${error}`);
             }
+            await new Promise(resolve => setTimeout(resolve, 2500));
         }
     }
 
@@ -499,6 +512,7 @@ bootnodes=["${bootnode}"]
             } catch (error) {
                 console.log(`Error stopping besu node ${besuNode.name}: ${error}`);
             }
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
 
@@ -580,6 +594,7 @@ export class CryptoLib {
         this.ec = new EC('secp256k1');
     }
 
+    // Generate a new random key pair
     generateKeyPair(): KeyPair {
         const keyPair = this.ec.genKeyPair();
         const privateKey = keyPair.getPrivate('hex');
@@ -593,6 +608,25 @@ export class CryptoLib {
             enode: ""
         };
     }
+
+    /*// Generate a key pair from a deterministic seed
+    generateKeyPairFromSeed(seed: string): KeyPair {
+        // Create a deterministic seed using keccak256
+        const seedHash = keccak256(Buffer.from(seed, 'utf8'));
+        
+        // Generate key pair from the seed hash
+        const keyPair = this.ec.keyFromPrivate(seedHash);
+        const privateKey = keyPair.getPrivate('hex');
+        const publicKey = keyPair.getPublic('hex');
+        const address = this.publicKeyToAddress(publicKey);
+        
+        return {
+            privateKey,
+            publicKey,
+            address,
+            enode: ""
+        };
+    }*/
 
     sign(message: string, privateKey: string) {
         const keyPair = this.ec.keyFromPrivate(privateKey);
@@ -641,9 +675,8 @@ export class FileService {
         this.path = path;
     }
 
-    createFolder(folder: string): string {
+    createFolder(folder: string) {
         fs.mkdirSync(path.join(this.path, folder), { recursive: true });
-        return folder;
     }
 
     async readFile(folder: string, file: string): Promise<string> {
@@ -666,9 +699,45 @@ export class FileService {
 }
 
 // --- Utility function to create node keys and files ---
-export function createKeys(fileService: FileService, name: string, subnet: string, nodeType: string): KeyPair {
+export function createKeys(fileService: FileService, name: string, subnet: string, nodeType: string, signerAddress: string = ''): KeyPair {
     const cryptoLib = new CryptoLib();
-    const keys = cryptoLib.generateKeyPair();
+    var keys;
+    if (signerAddress !== '') {
+        // Search in Keypair directory if signerAddress exists
+        const baseDir = path.join(fileService.folder, "Keypair");
+        console.log(`Searching for existing keys in ${baseDir} for address ${signerAddress}`);
+        if (fs.existsSync(baseDir)) {
+            const subdirs = fs.readdirSync(baseDir, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+            let found = false;
+            for (const dir of subdirs) {
+                const addressPath = path.join(baseDir, dir, 'address');
+                if (fs.existsSync(addressPath)) {
+                    const addr = fs.readFileSync(addressPath, 'utf8').trim();
+                    if (addr.toLowerCase() === signerAddress.toLowerCase()) {
+                        // Load keys from the directory
+                        const privPath = path.join(baseDir, dir, 'key');
+                        const pubPath = path.join(baseDir, dir, 'publicKey');
+                        if (fs.existsSync(privPath) && fs.existsSync(pubPath)) {
+                            keys = {
+                                privateKey: fs.readFileSync(privPath, 'utf8').trim(),
+                                publicKey: fs.readFileSync(pubPath, 'utf8').trim(),
+                                address: addr,
+                                enode: ''
+                            };
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (!keys) {
+            keys = cryptoLib.generateKeyPair();
+        }
+    }
+    else keys = cryptoLib.generateKeyPair();
     fileService.createFolder(`${name}/${nodeType}`);
     fileService.createFile(`${name}/${nodeType}`, "key", keys.privateKey);
     fileService.createFile(`${name}/${nodeType}`, "address", keys.address);

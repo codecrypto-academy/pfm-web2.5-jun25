@@ -85,11 +85,11 @@ export async function createBesuNetwork(
   chainId: number,
   subnet: string,
   bootnodeIP: string,
-  minerIP: string,
+  signerAccount: string,
   listOfNodes: { nodeType: string; ip: string; name: string; port: number }[],
   prefundedAccounts: { address: string; amount: string }[] = []
 ) {
-  const result = await besuManager.createBesuNetwork(name, chainId, subnet, bootnodeIP, minerIP, listOfNodes, prefundedAccounts);
+  const result = await besuManager.createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccount, listOfNodes, prefundedAccounts);
   return result;
 }
 

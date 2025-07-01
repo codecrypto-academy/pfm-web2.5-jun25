@@ -22,6 +22,7 @@ export interface KeyPair {
     enode: string;
 }
 export declare class DockerNetwork {
+    private static readonly BASE_PATH;
     private _networkData;
     private _name;
     private _fileService;
@@ -35,9 +36,9 @@ export declare class DockerNetwork {
     get containers(): any[];
     get besuNodes(): BesuNode[];
     get chainId(): number;
-    static create(name: string, chainId: number, subnet: string, label: KeyValue[], minerAddress?: string, prefundedAddresses?: string[], values?: (string | bigint)[]): DockerNetwork;
+    static create(name: string, chainId: number, subnet: string, label: KeyValue[], signerAddress?: string, prefundedAddresses?: string[], values?: (string | bigint)[]): DockerNetwork;
     static createDockerNetwork(name: string, subnet: string, label: KeyValue[]): DockerNetwork;
-    static removeDockerNetwork(name: string): void;
+    static removeDockerNetwork(name: string): Promise<void>;
     private addNode;
     addBootnode(name: string, port: string, ip: string): Promise<void>;
     addMiner(name: string, port: string, ip?: string): Promise<void>;
@@ -75,4 +76,4 @@ export declare class FileService {
     createFile(folder: string, file: string, content: string): Promise<string>;
     get folder(): string;
 }
-export declare function createKeys(fileService: FileService, name: string, subnet: string, nodeType: string): KeyPair;
+export declare function createKeys(fileService: FileService, name: string, subnet: string, nodeType: string, signerAddress?: string): KeyPair;

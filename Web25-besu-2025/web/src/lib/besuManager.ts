@@ -1,22 +1,27 @@
 // Importe de la biblioteca lib-besu que maneja las redes y nodos de Besu
-import { DockerNetwork, KeyValue, typeNode, BesuNode, KeyPair } from './lib-besu/index';
+import { DockerNetwork } from './lib-besu/index';
 
-const bootnodePort = '18545'; // Puerto inicial para el bootnode
+const bootnodePort  = '18545'; // Puerto inicial para el bootnode
+const signerPort    = '18546'; // Puerto inicial para el nodo que firma
 
 export async function createBesuNetwork(
   name: string,
   chainId: number,
   subnet: string,
   bootnodeIP: string,
-  minerAddress: string,
+  signerAccount: string = '',
   listOfNodes: { nodeType: string; ip: string; name: string; port: number }[],
   prefundedAccounts: { address: string; amount: string }[] = []
 ) {
   try {
     const prefundedAddresses = prefundedAccounts.map(acc => acc.address);
     const prefundedValues = prefundedAccounts.map(acc => acc.amount);
-    const dockerNetwork = await DockerNetwork.create(name, chainId, subnet, [], minerAddress, prefundedAddresses, prefundedValues);
+    const dockerNetwork = await DockerNetwork.create(name, chainId, subnet, [], signerAccount, prefundedAddresses, prefundedValues);
     await dockerNetwork.addBootnode('bootnode', bootnodePort, bootnodeIP);
+    const subnetParts = subnet.split('/');
+    const baseIP = subnetParts[0].split('.');
+    const signerIP = `${baseIP[0]}.${baseIP[1]}.${baseIP[2]}.2`; // IP del nodo firmante
+    if (signerAccount !== '') await dockerNetwork.addMiner('miner', signerPort, signerIP);
     for (const node of listOfNodes) {
       switch (node.nodeType) {
         case 'miner':

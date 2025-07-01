@@ -1,1 +1,7 @@
 tests/
+jest-results.json
+coverage
+*.log
+*.map
+jest.config.js
+examples/

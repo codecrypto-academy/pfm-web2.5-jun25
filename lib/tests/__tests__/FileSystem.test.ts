@@ -14,12 +14,22 @@ describe('FileSystem', () => {
     const exists = await fs.exists('file.txt');
     expect(exists).toBe(true);
   });
+  it('should handle error in removeFile', async () => {
+    const fs = new FileSystem();
+    fs.exists = jest.fn().mockRejectedValue(new Error('fail'));
+    await expect(fs.removeFile('file.txt')).rejects.toThrow('fail');
+  });
   it('should remove file if exists', async () => {
     const fs = new FileSystem();
     fs.exists = jest.fn().mockResolvedValue(true);
     fs.removeFile = jest.fn().mockResolvedValue(undefined);
     await fs.removeFile('file.txt');
     expect(fs.removeFile).toHaveBeenCalledWith('file.txt');
+  });
+  it('should handle error in removeDir', async () => {
+    const fs = new FileSystem();
+    fs.exists = jest.fn().mockRejectedValue(new Error('fail'));
+    await expect(fs.removeDir('dir')).rejects.toThrow('fail');
   });
   it('should remove dir if exists', async () => {
     const fs = new FileSystem();
@@ -85,5 +95,83 @@ describe('FileSystem', () => {
     const calledWith = (fs.copyFile as jest.Mock).mock.calls[0];
     expect(expectedSrc).toContain(calledWith[0]);
     expect(expectedDest).toContain(calledWith[1]);
+  });
+  it('should read file as string', async () => {
+    const fs = new FileSystem();
+    fs.readFile = jest.fn().mockResolvedValue('contenido');
+    const content = await fs.readFile('file.txt');
+    expect(content).toBe('contenido');
+  });
+  it('should read file as buffer', async () => {
+    const fs = new FileSystem();
+    const buffer = Buffer.from('contenido');
+    fs.readFileBuffer = jest.fn().mockResolvedValue(buffer);
+    const result = await fs.readFileBuffer('file.txt');
+    expect(result).toEqual(buffer);
+  });
+  it('should stat file', async () => {
+    const fs = new FileSystem();
+    const stats = { isDirectory: () => false };
+    fs.stat = jest.fn().mockResolvedValue(stats);
+    const result = await fs.stat('file.txt');
+    expect(result).toBe(stats);
+  });
+  it('should ensureDir only if not exists', async () => {
+    const fs = new FileSystem();
+    fs.exists = jest.fn().mockResolvedValue(false);
+    fs.ensureDir = jest.fn().mockResolvedValue(undefined);
+    await fs.ensureDir('dir');
+    expect(fs.ensureDir).toHaveBeenCalledWith('dir');
+  });
+  it('should handle error in copyDir when readDir fails', async () => {
+    const fs = new FileSystem();
+    fs.ensureDir = jest.fn().mockResolvedValue(undefined);
+    fs.readDir = jest.fn().mockRejectedValue(new Error('fail readDir'));
+    await expect(fs.copyDir('src', 'dest')).rejects.toThrow('fail readDir');
+  });
+
+  it('should handle error in copyDir when stat fails', async () => {
+    const fs = new FileSystem();
+    fs.ensureDir = jest.fn().mockResolvedValue(undefined);
+    fs.readDir = jest.fn().mockResolvedValue(['file1']);
+    fs.stat = jest.fn().mockRejectedValue(new Error('fail stat'));
+    await expect(fs.copyDir('src', 'dest')).rejects.toThrow('fail stat');
+  });
+
+  it('should handle error in copyDir when copyFile fails', async () => {
+    const fs = new FileSystem();
+    fs.ensureDir = jest.fn().mockResolvedValue(undefined);
+    fs.readDir = jest.fn().mockResolvedValue(['file1']);
+    fs.stat = jest.fn().mockResolvedValue({ isDirectory: () => false });
+    fs.copyFile = jest.fn().mockRejectedValue(new Error('fail copyFile'));
+    await expect(fs.copyDir('src', 'dest')).rejects.toThrow('fail copyFile');
+  });
+
+  it('should handle error in moveFile when copyFile fails', async () => {
+    const fs = new FileSystem();
+    fs.copyFile = jest.fn().mockRejectedValue(new Error('fail copyFile'));
+    await expect(fs.moveFile('src', 'dest')).rejects.toThrow('fail copyFile');
+  });
+
+  it('should handle error in moveFile when removeFile fails', async () => {
+    const fs = new FileSystem();
+    fs.copyFile = jest.fn().mockResolvedValue(undefined);
+    fs.removeFile = jest.fn().mockRejectedValue(new Error('fail removeFile'));
+    await expect(fs.moveFile('src', 'dest')).rejects.toThrow('fail removeFile');
+  });
+
+  it('should handle error in ensureDir when mkdir fails', async () => {
+    const fs = new FileSystem();
+    fs.exists = jest.fn().mockResolvedValue(false);
+    // Sobrescribir fs.promises.mkdir en el contexto global
+    const origMkdir = require('fs').promises.mkdir;
+    require('fs').promises.mkdir = jest.fn().mockRejectedValue(new Error('fail mkdir'));
+    await expect(fs.ensureDir('dir')).rejects.toThrow('fail mkdir');
+    require('fs').promises.mkdir = origMkdir;
+  });
+  it('should handle error in copyDir', async () => {
+    const fs = new FileSystem();
+    fs.ensureDir = jest.fn().mockRejectedValue(new Error('fail'));
+    await expect(FileSystem.prototype.copyDir.call(fs, 'src', 'dest')).rejects.toThrow('fail');
   });
 });

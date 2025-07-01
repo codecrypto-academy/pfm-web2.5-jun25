@@ -91,7 +91,12 @@ async function main() {
 
         // Esperar a un nuevo bloque
         console.log('\nEsperando a un nuevo bloque...');
-        const newBlockNumber = await txService.waitForNewBlock();
+        let currentBlock = await txService.getBlockNumber();
+        let newBlockNumber = currentBlock;
+        while (newBlockNumber === currentBlock) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          newBlockNumber = await txService.getBlockNumber();
+        }
         console.log(`Nuevo bloque detectado: ${newBlockNumber}`);
       }
     }

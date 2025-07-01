@@ -50,4 +50,54 @@ describe('KeyGenerator', () => {
     const result = await generator.loadNodeKeys('nodeDir');
     expect(result).toBeNull();
   });
+
+  it('should generate encrypted node keys', async () => {
+    const generator = new KeyGenerator(logger, fs);
+    const mockWallet = {
+      privateKey: '0xpriv',
+      publicKey: '0xpub',
+      address: '0xaddr',
+      encrypt: jest.fn().mockResolvedValue('encrypted')
+    };
+    jest.spyOn(require('ethers').Wallet, 'createRandom').mockReturnValue(mockWallet);
+    fs.ensureDir = jest.fn().mockResolvedValue(undefined); // Acepta cualquier string
+    fs.writeFile = jest.fn().mockResolvedValue(undefined);
+    const result = await generator.generateEncryptedNodeKeys('nodeDir', 'pass');
+    expect(fs.writeFile).toHaveBeenCalled();
+    expect(result).toHaveProperty('privateKey', '0xpriv');
+    expect(result).toHaveProperty('address', '0xaddr');
+  });
+
+  it('should handle error when writeFile fails in generateEncryptedNodeKeys', async () => {
+    const generator = new KeyGenerator(logger, fs);
+    const mockWallet = {
+      privateKey: '0xpriv',
+      publicKey: '0xpub',
+      address: '0xaddr',
+      encrypt: jest.fn().mockResolvedValue('encrypted')
+    };
+    jest.spyOn(require('ethers').Wallet, 'createRandom').mockReturnValue(mockWallet);
+    fs.ensureDir = jest.fn().mockResolvedValue(undefined);
+    fs.writeFile = jest.fn().mockRejectedValueOnce(new Error('write error'));
+    await expect(generator.generateEncryptedNodeKeys('nodeDir', 'pass')).rejects.toThrow('write error');
+  });
+
+  it('should generate password file with provided password', async () => {
+    const generator = new KeyGenerator(logger, fs);
+    fs.ensureDir = jest.fn().mockResolvedValue(undefined);
+    fs.writeFile = jest.fn().mockResolvedValue(undefined);
+    const password = await generator.generatePasswordFile('nodeDir', 'mypassword');
+    expect(password).toBe('mypassword');
+    expect(fs.writeFile).toHaveBeenCalledWith(expect.any(String), 'mypassword');
+  });
+
+  it('should generate password file with random password', async () => {
+    const generator = new KeyGenerator(logger, fs);
+    fs.ensureDir = jest.fn().mockResolvedValue(undefined);
+    fs.writeFile = jest.fn().mockResolvedValue(undefined);
+    jest.spyOn(generator as any, 'generateRandomPassword').mockReturnValue('randompass');
+    const password = await generator.generatePasswordFile('nodeDir');
+    expect(password).toBe('randompass');
+    expect(fs.writeFile).toHaveBeenCalledWith(expect.any(String), 'randompass');
+  });
 });

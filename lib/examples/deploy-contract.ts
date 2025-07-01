@@ -87,24 +87,19 @@ async function main() {
       if (deployerNode.validatorAddress && deployerNode.privateKey) {
         console.log(`\nDesplegando contrato desde ${deployerNode.validatorAddress}...`);
 
-        // Desplegar el contrato
-        const deployResult = await txService.deployContract(
-          CONTRACT_BYTECODE,
-          CONTRACT_ABI,
-          deployerNode.privateKey
-        );
-
-        console.log('Contrato desplegado:');
-        console.log(JSON.stringify(deployResult, null, 2));
-
-        // Interactuar con el contrato
-        console.log('\nInteractuando con el contrato...');
-
-        // Crear una instancia del contrato usando ethers.js
+        // Desplegar el contrato usando ethers.js directamente
         const { ethers } = require('ethers');
         const provider = new ethers.JsonRpcProvider(rpcUrl);
         const wallet = new ethers.Wallet(deployerNode.privateKey, provider);
-        const contract = new ethers.Contract(deployResult.address, CONTRACT_ABI, wallet);
+        const factory = new ethers.ContractFactory(CONTRACT_ABI, CONTRACT_BYTECODE, wallet);
+        const contract = await factory.deploy();
+        await contract.deployed();
+
+        console.log('Contrato desplegado:');
+        console.log(JSON.stringify({ address: contract.address, deployTx: contract.deployTransaction.hash }, null, 2));
+
+        // Interactuar con el contrato
+        console.log('\nInteractuando con el contrato...');
 
         // Llamar a la función store
         console.log('Almacenando el valor 42...');

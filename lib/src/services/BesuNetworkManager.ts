@@ -419,12 +419,12 @@ export class BesuNetworkManager {
     });
     
     const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(`Error al obtener el número de bloque: ${data.error.message}`);
+    // Type assertion para evitar error TS18046
+    const result = data as { result?: any; error?: { message: string } };
+    if (result.error) {
+      throw new Error(`Error al obtener el número de bloque: ${result.error.message}`);
     }
-    
-    return parseInt(data.result, 16);
+    return parseInt(result.result, 16);
   }
 
   /**
@@ -443,12 +443,12 @@ export class BesuNetworkManager {
     });
     
     const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(`Error al obtener el número de peers: ${data.error.message}`);
+    // Type assertion para evitar error TS18046
+    const result = data as { result?: any; error?: { message: string } };
+    if (result.error) {
+      throw new Error(`Error al obtener el número de peers: ${result.error.message}`);
     }
-    
-    return parseInt(data.result, 16);
+    return parseInt(result.result, 16);
   }
 
   /**
@@ -470,11 +470,14 @@ export class BesuNetworkManager {
     });
     
     const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(`Error al obtener la información del nodo: ${data.error.message}`);
+    // Type assertion para evitar error TS18046
+    const result = data as { result?: { enode: string }; error?: { message: string } };
+    if (result.error) {
+      throw new Error(`Error al obtener la información del nodo: ${result.error.message}`);
     }
-    
-    return data.result.enode;
+    if (!result.result || !result.result.enode) {
+      throw new Error('No se pudo obtener el enode del nodo');
+    }
+    return result.result.enode;
   }
 }

@@ -5,3 +5,4 @@ config
 */coverage
 dist
 */dist
+jest-results.json

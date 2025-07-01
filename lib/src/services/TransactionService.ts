@@ -1,4 +1,5 @@
 import { TransactionOptions, TransactionResult } from '../models/types';
+
 import { Logger } from '../utils/Logger';
 import { ethers } from 'ethers';
 
@@ -17,6 +18,13 @@ export class TransactionService {
   constructor(rpcUrl: string, logger: Logger) {
     this.logger = logger;
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
+  }
+
+  /**
+   * Método protegido para crear un monedero (Wallet)
+   */
+  protected createWallet(privateKey: string): ethers.Wallet {
+    return new ethers.Wallet(privateKey, this.provider);
   }
 
   /**
@@ -40,25 +48,10 @@ export class TransactionService {
   public async getBalance(address: string): Promise<string> {
     try {
       const balance = await this.provider.getBalance(address);
-      this.logger.debug(`Saldo de ${address}: ${ethers.formatEther(balance)} ETH`);
+      this.logger.debug(`Saldo de ${address}: ${balance}`);
       return balance.toString();
     } catch (error) {
-      this.logger.error(`Error al obtener el saldo de ${address}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Obtiene el número de peers conectados
-   */
-  public async getPeerCount(): Promise<number> {
-    try {
-      const peerCount = await this.provider.send('net_peerCount', []);
-      const count = parseInt(peerCount, 16);
-      this.logger.debug(`Número de peers conectados: ${count}`);
-      return count;
-    } catch (error) {
-      this.logger.error('Error al obtener el número de peers:', error);
+      this.logger.error('Error al obtener el saldo:', error);
       throw error;
     }
   }
@@ -72,8 +65,8 @@ export class TransactionService {
     try {
       this.logger.info(`Enviando transacción desde ${options.from} a ${options.to}`);
 
-      // Crear un monedero con la clave privada
-      const wallet = new ethers.Wallet(privateKey, this.provider);
+      // Crear un monedero con la clave privada usando el método protegido
+      const wallet = this.createWallet(privateKey);
 
       // Comprobar que la dirección del monedero coincide con la dirección de origen
       if (wallet.address.toLowerCase() !== options.from.toLowerCase()) {
@@ -141,96 +134,15 @@ export class TransactionService {
   }
 
   /**
-   * Realiza una llamada a un contrato (sin enviar una transacción)
-   * @param options Opciones de la llamada
+   * Obtiene el número de peers conectados
    */
-  public async call(options: TransactionOptions): Promise<string> {
+  public async getPeerCount(): Promise<number> {
     try {
-      const tx: ethers.TransactionRequest = {
-        from: options.from,
-        to: options.to,
-        value: options.value,
-        data: options.data,
-        gasLimit: options.gasLimit,
-        gasPrice: options.gasPrice
-      };
-
-      const result = await this.provider.call(tx);
-      this.logger.debug(`Resultado de la llamada: ${result}`);
-      return result;
+      const peerCount = await this.provider.send('net_peerCount', []);
+      this.logger.debug(`Número de peers: ${peerCount}`);
+      return Number(peerCount);
     } catch (error) {
-      this.logger.error('Error al realizar la llamada:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Despliega un contrato
-   * @param bytecode Bytecode del contrato
-   * @param abi ABI del contrato
-   * @param privateKey Clave privada para firmar la transacción
-   * @param constructorArgs Argumentos del constructor (opcional)
-   */
-  public async deployContract(
-    bytecode: string,
-    abi: any[],
-    privateKey: string,
-    constructorArgs: any[] = []
-  ): Promise<{ address: string; transactionHash: string }> {
-    try {
-      this.logger.info('Desplegando contrato...');
-
-      // Crear un monedero con la clave privada
-      const wallet = new ethers.Wallet(privateKey, this.provider);
-
-      // Crear la factory del contrato
-      const factory = new ethers.ContractFactory(abi, bytecode, wallet);
-
-      // Desplegar el contrato
-      const contract = await factory.deploy(...constructorArgs);
-      this.logger.info(`Contrato desplegado con hash de transacción: ${contract.deploymentTransaction()?.hash}`);
-
-      // Esperar a que el contrato se despliegue
-      await contract.waitForDeployment();
-      const address = await contract.getAddress();
-      this.logger.info(`Contrato desplegado en la dirección: ${address}`);
-
-      return {
-        address,
-        transactionHash: contract.deploymentTransaction()?.hash || ''
-      };
-    } catch (error) {
-      this.logger.error('Error al desplegar el contrato:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Espera a que se genere un nuevo bloque
-   * @param timeoutMs Tiempo máximo de espera en milisegundos
-   */
-  public async waitForNewBlock(timeoutMs: number = 30000): Promise<number> {
-    try {
-      const initialBlock = await this.getBlockNumber();
-      this.logger.debug(`Esperando un nuevo bloque (bloque actual: ${initialBlock})...`);
-
-      return new Promise<number>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          this.provider.removeAllListeners('block');
-          reject(new Error(`Tiempo de espera agotado esperando un nuevo bloque (${timeoutMs}ms)`));
-        }, timeoutMs);
-
-        this.provider.on('block', (blockNumber: number) => {
-          if (blockNumber > initialBlock) {
-            clearTimeout(timeout);
-            this.provider.removeAllListeners('block');
-            this.logger.debug(`Nuevo bloque detectado: ${blockNumber}`);
-            resolve(blockNumber);
-          }
-        });
-      });
-    } catch (error) {
-      this.logger.error('Error al esperar un nuevo bloque:', error);
+      this.logger.error('Error al obtener el número de peers:', error);
       throw error;
     }
   }

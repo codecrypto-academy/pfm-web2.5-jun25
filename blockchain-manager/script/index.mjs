@@ -1,6 +1,6 @@
 import pkg from 'elliptic';
 const { ec: EC } = pkg;
-import { ethers } from 'ethers';
+import { ethers, Mnemonic } from 'ethers';
 
 import { Buffer } from 'buffer';
 import keccak256 from 'keccak256';
@@ -87,10 +87,10 @@ async function getNextworkInfo(url) {
 }
 
 // Function to derive wallet from mnemonic
-function deriveWalletFromMnemonic(mnemonic, index = 0) {
+function deriveWalletFromMnemonic(mnemonicPhrase, index = 0) {
     const path = `m/44'/60'/0'/0/${index}`;
-    const wallet = ethers.Wallet.fromPhrase(mnemonic, path);
-    return wallet;
+    const mnemonic = Mnemonic.fromPhrase(mnemonicPhrase);
+    return ethers.HDNodeWallet.fromMnemonic(mnemonic, path);
 }
 
 // Function to transfer funds to multiple accounts

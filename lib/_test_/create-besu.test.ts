@@ -154,7 +154,7 @@ describe('BesuNode', () => {
             name: 'test-node',
             ip: '172.24.0.20',
             port: 30303,
-            rpcPort: 8545,
+            rpcPort: 21000,
             type: 'bootnode' as const
         };
 
@@ -168,16 +168,16 @@ describe('BesuNode', () => {
     test('should generate TOML configuration for bootnode', () => {
         const config = {
             name: 'bootnode',
-            ip: '172.24.0.20',
+            ip: '172.20.0.20', // Create tests use 172.20-172.79 subnet range
             port: 30303,
-            rpcPort: 8545,
+            rpcPort: 21010,
             type: 'bootnode' as const
         };
 
         const networkConfig = {
-            name: 'test-network',
-            chainId: 1337,
-            subnet: '172.24.0.0/16',
+            name: 'create-test-bootnode-network', // Create tests use unique names
+            chainId: 1001, // Create tests use chainId 1000-1999 range  
+            subnet: '172.21.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique' as const,
             gasLimit: '0x47E7C4'
         };
@@ -186,7 +186,7 @@ describe('BesuNode', () => {
         const tomlConfig = node.generateTomlConfig(networkConfig);
         
         expect(tomlConfig).toContain('genesis-file="/data/genesis.json"');
-        expect(tomlConfig).toContain('rpc-http-port=8545');
+        expect(tomlConfig).toContain(`rpc-http-port=21010`);
         expect(tomlConfig).not.toContain('miner-enabled=true');
         expect(tomlConfig).not.toContain('bootnodes=');
     });
@@ -194,22 +194,22 @@ describe('BesuNode', () => {
     test('should generate TOML configuration for miner', () => {
         const config = {
             name: 'miner',
-            ip: '172.24.0.22',
+            ip: '172.20.0.22', // Create tests use 172.20-172.79 subnet range
             port: 30303,
-            rpcPort: 8546,
+            rpcPort: 21021,
             type: 'miner' as const
         };
 
         const networkConfig = {
-            name: 'test-network',
-            chainId: 1337,
-            subnet: '172.24.0.0/16',
+            name: 'create-test-miner-network', // Create tests use unique names
+            chainId: 1002, // Create tests use chainId 1000-1999 range
+            subnet: '172.22.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique' as const,
             gasLimit: '0x47E7C4'
         };
 
         const node = new BesuNode(config, fileService);
-        const bootnodeEnode = 'enode://abc123@172.24.0.20:30303';
+        const bootnodeEnode = 'enode://abc123@172.20.0.20:30303'; // Match new subnet
         const tomlConfig = node.generateTomlConfig(networkConfig, bootnodeEnode);
         
         expect(tomlConfig).toContain('miner-enabled=true');
@@ -220,9 +220,9 @@ describe('BesuNode', () => {
     test('should save and load keys persistently', () => {
         const config = {
             name: 'persistent-node',
-            ip: '172.24.0.20',
+            ip: '172.20.0.20', // Create tests use 172.20-172.79 subnet range
             port: 30303,
-            rpcPort: 8545,
+            rpcPort: 21030,
             type: 'bootnode' as const
         };
 
@@ -259,9 +259,9 @@ describe('BesuNetwork', () => {
 
     test('should create network with valid configuration', () => {
         const networkConfig = {
-            name: 'test-network',
-            chainId: 1337,
-            subnet: '172.24.0.0/16',
+            name: 'create-test-network-1', // Create tests use unique names
+            chainId: 1002, // Create tests use chainId 1000-1999 range
+            subnet: '172.21.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique' as const,
             gasLimit: '0x47E7C4'
         };
@@ -274,9 +274,9 @@ describe('BesuNetwork', () => {
 
     test('should generate valid genesis configuration', () => {
         const networkConfig = {
-            name: 'test-network',
-            chainId: 1337,
-            subnet: '172.24.0.0/16',
+            name: 'create-test-network-2', // Create tests use unique names
+            chainId: 1003, // Create tests use chainId 1000-1999 range
+            subnet: '172.22.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique' as const,
             gasLimit: '0x47E7C4',
             blockTime: 5
@@ -289,7 +289,7 @@ describe('BesuNetwork', () => {
         // Use reflection to access private method for testing
         const genesis = (network as any).generateGenesis(minerAddress, '1000000000000000000000000');
         
-        expect(genesis.config.chainId).toBe(1337);
+        expect(genesis.config.chainId).toBe(1003); // Updated to match new chainId range
         expect(genesis.config.clique).toBeDefined();
         expect(genesis.config.clique?.period).toBe(5);
         expect(genesis.gasLimit).toBe('0x47E7C4');
@@ -308,9 +308,9 @@ describe('Subnet conflict resolution tests', () => {
 
         // Configuración con una subred que normalmente causaría conflictos
         const networkConfig: BesuNetworkConfig = {
-            name: 'test-conflict-resolution',
-            chainId: 1337,
-            subnet: '172.24.0.0/16', // Esta subred podría estar en uso
+            name: 'create-conflict-resolution-test', // Create tests use unique names
+            chainId: 1004, // Create tests use chainId 1000-1999 range
+            subnet: '172.23.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             blockTime: 5
@@ -327,8 +327,8 @@ describe('Subnet conflict resolution tests', () => {
             
             await besuNetwork.create({
                 nodes: [
-                    { name: 'bootnode1', ip: '172.24.0.20', rpcPort: 8545, type: 'bootnode' },
-                    { name: 'miner1', ip: '172.24.0.22', rpcPort: 8550, type: 'miner' }
+                    { name: 'bootnode1', ip: '172.23.0.20', rpcPort: 21100, type: 'bootnode' },
+                    { name: 'miner1', ip: '172.23.0.22', rpcPort: 21101, type: 'miner' }
                 ],
                 autoResolveSubnetConflicts: true // Habilitado por defecto
             });
@@ -369,9 +369,9 @@ describe('Subnet conflict resolution tests', () => {
         console.log('\n🔧 Probando diferentes subredes alternativas...\n');
 
         const conflictingSubnets = [
-            '172.24.0.0/16',
-            '172.25.0.0/16', 
-            '172.26.0.0/16',
+            '172.25.0.0/16', // Don't conflict with create test range (172.20-172.79)
+            '172.26.0.0/16', 
+            '172.27.0.0/16',
             '10.10.0.0/16'
         ];
 
@@ -400,9 +400,9 @@ describe('Quick test for network functionality', () => {
         console.log('🧪 Test rápido: Configuración de múltiples bootnodes\n');
 
         const testConfig: BesuNetworkConfig = {
-            name: 'quick-test-besu',
-            chainId: 8888,
-            subnet: '172.88.0.0/16',
+            name: 'create-quick-test-besu', // Create tests use unique names
+            chainId: 1005, // Create tests use chainId 1000-1999 range
+            subnet: '172.30.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             blockTime: 5
@@ -413,10 +413,10 @@ describe('Quick test for network functionality', () => {
         try {
             // Crear red con 2 bootnodes y 2 nodos regulares (más pequeña para test rápido)
             const nodes: BesuNodeDefinition[] = [
-                { name: 'bootnode1', ip: '172.88.0.10', rpcPort: 8545, type: 'bootnode' },
-                { name: 'bootnode2', ip: '172.88.0.11', rpcPort: 8546, type: 'bootnode' },
-                { name: 'miner1', ip: '172.88.0.20', rpcPort: 8550, type: 'miner' },
-                { name: 'rpc1', ip: '172.88.0.30', rpcPort: 8560, type: 'rpc' }
+                { name: 'bootnode1', ip: '172.30.0.10', rpcPort: 21110, type: 'bootnode' },
+                { name: 'bootnode2', ip: '172.30.0.11', rpcPort: 21111, type: 'bootnode' },
+                { name: 'miner1', ip: '172.30.0.20', rpcPort: 21112, type: 'miner' },
+                { name: 'rpc1', ip: '172.30.0.30', rpcPort: 21113, type: 'rpc' }
             ];
 
             await network.create({
@@ -502,9 +502,9 @@ describe('Connectivity tests', () => {
         console.log('🧪 Prueba de conectividad - Red Besu avanzada\n');
         
         const networkConfig: BesuNetworkConfig = {
-            name: 'test-connectivity',
-            chainId: 9999,
-            subnet: '172.50.0.0/16',
+            name: 'create-connectivity-test', // Create tests use unique names
+            chainId: 1006, // Create tests use chainId 1000-1999 range
+            subnet: '172.31.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             blockTime: 3
@@ -516,9 +516,9 @@ describe('Connectivity tests', () => {
             // Crear red más pequeña para prueba rápida
             await besuNetwork.create({
                 nodes: [
-                    { name: 'bootnode1', ip: '172.50.0.10', rpcPort: 8545, type: 'bootnode' },
-                    { name: 'miner1', ip: '172.50.0.20', rpcPort: 8550, type: 'miner' },
-                    { name: 'rpc1', ip: '172.50.0.30', rpcPort: 8560, type: 'rpc' },
+                    { name: 'bootnode1', ip: '172.31.0.10', rpcPort: 21120, type: 'bootnode' },
+                    { name: 'miner1', ip: '172.31.0.20', rpcPort: 21121, type: 'miner' },
+                    { name: 'rpc1', ip: '172.31.0.30', rpcPort: 21122, type: 'rpc' },
                 ],
                 initialBalance: '1000',
                 autoResolveSubnetConflicts: true
@@ -591,9 +591,9 @@ export async function testConnectivity() {
     console.log('🧪 Prueba de conectividad - Red Besu avanzada\n');
     
     const networkConfig: BesuNetworkConfig = {
-        name: 'test-connectivity',
-        chainId: 9999,
-        subnet: '172.50.0.0/16',
+        name: 'create-connectivity-test-2', // Create tests use unique names
+        chainId: 1007, // Create tests use chainId 1000-1999 range
+        subnet: '172.32.0.0/16', // Create tests use 172.20-172.79 subnet range
         consensus: 'clique',
         gasLimit: '0x47E7C4',
         blockTime: 3
@@ -605,9 +605,9 @@ export async function testConnectivity() {
         // Crear red más pequeña para prueba rápida
         await besuNetwork.create({
             nodes: [
-                { name: 'bootnode1', ip: '172.50.0.10', rpcPort: 8545, type: 'bootnode' },
-                { name: 'miner1', ip: '172.50.0.20', rpcPort: 8550, type: 'miner' },
-                { name: 'rpc1', ip: '172.50.0.30', rpcPort: 8560, type: 'rpc' },
+                { name: 'bootnode1', ip: '172.32.0.10', rpcPort: 21130, type: 'bootnode' },
+                { name: 'miner1', ip: '172.32.0.20', rpcPort: 21131, type: 'miner' },
+                { name: 'rpc1', ip: '172.32.0.30', rpcPort: 21132, type: 'rpc' },
             ],
             initialBalance: '1000',
             autoResolveSubnetConflicts: true
@@ -678,9 +678,9 @@ describe('Account Management Tests', () => {
         
         // Configuración de la red con cuentas personalizadas
         const networkConfig: BesuNetworkConfig = {
-            name: 'test-accounts-network',
-            chainId: 1337,
-            subnet: '172.35.0.0/16',
+            name: 'create-test-accounts-network', // Create tests use unique names
+            chainId: 1008, // Create tests use chainId 1000-1999 range
+            subnet: '172.35.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             blockTime: 5,
@@ -707,12 +707,12 @@ describe('Account Management Tests', () => {
         try {
             console.log('📦 Creando red con cuentas personalizadas...');
             
-            // Crear la red con nodos básicos
+            // Crear la red con nodos básicos usando puertos únicos
             await besuNetwork.create({
                 nodes: [
-                    { name: 'bootnode1', ip: '172.35.0.10', rpcPort: 8545, type: 'bootnode' },
-                    { name: 'miner1', ip: '172.35.0.20', rpcPort: 8546, type: 'miner' },
-                    { name: 'rpc1', ip: '172.35.0.30', rpcPort: 8547, type: 'rpc' }
+                    { name: 'bootnode1', ip: '172.35.0.10', rpcPort: 21140, type: 'bootnode' },
+                    { name: 'miner1', ip: '172.35.0.20', rpcPort: 21141, type: 'miner' },
+                    { name: 'rpc1', ip: '172.35.0.30', rpcPort: 21142, type: 'rpc' }
                 ],
                 initialBalance: '1000', // 1M ETH
                 autoResolveSubnetConflicts: true
@@ -750,9 +750,9 @@ describe('Account Management Tests', () => {
         console.log('🧪 Test: SignerAccount con prioridad sobre accounts array\n');
 
         const networkConfig: BesuNetworkConfig = {
-            name: 'test-signer-network',
-            chainId: 2025,
-            subnet: '172.36.0.0/16',
+            name: 'create-test-signer-network', // Create tests use unique names
+            chainId: 1009, // Create tests use chainId 1000-1999 range
+            subnet: '172.36.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             blockTime: 3,
@@ -858,9 +858,9 @@ describe('Account Management Tests', () => {
 
         // Test con direcciones válidas
         const validConfig: BesuNetworkConfig = {
-            name: 'test-valid-addresses',
-            chainId: 1337,
-            subnet: '172.37.0.0/16',
+            name: 'create-test-valid-addresses', // Create tests use unique names
+            chainId: 1010, // Create tests use chainId 1000-1999 range
+            subnet: '172.37.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             signerAccount: {
@@ -880,9 +880,9 @@ describe('Account Management Tests', () => {
 
         // Test con dirección inválida (muy corta)
         const invalidConfig1: BesuNetworkConfig = {
-            name: 'test-invalid-addresses',
-            chainId: 1337,
-            subnet: '172.37.0.0/16',
+            name: 'create-test-invalid-addresses-1', // Create tests use unique names
+            chainId: 1011, // Create tests use chainId 1000-1999 range
+            subnet: '172.38.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             signerAccount: {
@@ -895,9 +895,9 @@ describe('Account Management Tests', () => {
 
         // Test con dirección inválida (sin 0x)
         const invalidConfig2: BesuNetworkConfig = {
-            name: 'test-invalid-addresses',
-            chainId: 1337,
-            subnet: '172.37.0.0/16',
+            name: 'create-test-invalid-addresses-2', // Create tests use unique names
+            chainId: 1012, // Create tests use chainId 1000-1999 range
+            subnet: '172.39.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             accounts: [
@@ -935,7 +935,7 @@ describe('Node Validation Tests', () => {
         test('should reject empty node names', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-invalid-names',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -969,7 +969,7 @@ describe('Node Validation Tests', () => {
         test('should reject invalid node name characters', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-invalid-names',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1003,7 +1003,7 @@ describe('Node Validation Tests', () => {
         test('should reject duplicate node names', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-duplicate-names',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1045,7 +1045,7 @@ describe('Node Validation Tests', () => {
         test('should reject invalid IP format', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-invalid-ips',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1079,7 +1079,7 @@ describe('Node Validation Tests', () => {
         test('should reject duplicate IP addresses', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-duplicate-ips',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1119,7 +1119,7 @@ describe('Node Validation Tests', () => {
         test('should reject IPs outside configured subnet', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-out-of-subnet',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1153,7 +1153,7 @@ describe('Node Validation Tests', () => {
         test('should reject reserved IPs (network, broadcast, gateway)', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-reserved-ips',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/24', // Subnet más pequeña para test
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1199,7 +1199,7 @@ describe('Node Validation Tests', () => {
         test('should reject duplicate RPC ports on same IP', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-duplicate-ports',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1239,7 +1239,7 @@ describe('Node Validation Tests', () => {
         test('should reject invalid port ranges', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-invalid-ports',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1276,7 +1276,7 @@ describe('Node Validation Tests', () => {
         test('should reject system reserved ports', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-reserved-ports',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1320,7 +1320,7 @@ describe('Node Validation Tests', () => {
         test('should reject duplicate P2P ports on same IP', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-duplicate-p2p-ports',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1362,7 +1362,7 @@ describe('Node Validation Tests', () => {
         test('should reject P2P port same as RPC port', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-port-conflict',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1397,7 +1397,7 @@ describe('Node Validation Tests', () => {
         test('should allow duplicate RPC ports on different IPs', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-allow-duplicate-ports-different-ips',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1429,7 +1429,7 @@ describe('Node Validation Tests', () => {
         test('should allow duplicate P2P ports on different IPs', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-allow-duplicate-p2p-ports-different-ips',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1463,7 +1463,7 @@ describe('Node Validation Tests', () => {
         test('should allow same ports on different IPs but reject same endpoint combinations', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-mixed-port-scenarios',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1504,7 +1504,7 @@ describe('Node Validation Tests', () => {
         test('should reject same endpoint combinations (same IP + same port)', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-duplicate-endpoints',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1548,7 +1548,7 @@ describe('Node Validation Tests', () => {
         test('should reject invalid node types', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-invalid-node-types',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1582,7 +1582,7 @@ describe('Node Validation Tests', () => {
         test('should reject network without bootnode', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-no-bootnode',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1616,7 +1616,7 @@ describe('Node Validation Tests', () => {
         test('should reject Clique consensus without miners', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-clique-no-miners',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1656,7 +1656,7 @@ describe('Node Validation Tests', () => {
         test('should reject IBFT2 consensus with insufficient validators', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-ibft2-insufficient',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'ibft2',
                 gasLimit: '0x47E7C4'
@@ -1697,7 +1697,7 @@ describe('Node Validation Tests', () => {
         test('should reject single node network', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-single-node',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1733,7 +1733,7 @@ describe('Node Validation Tests', () => {
         test('should warn about unbalanced large networks', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-unbalanced-network',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1781,7 +1781,7 @@ describe('Node Validation Tests', () => {
         test('should recommend RPC nodes for large networks', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-large-network-no-rpc',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1827,7 +1827,7 @@ describe('Node Validation Tests', () => {
         test('should detect inconsistent naming conventions', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-inconsistent-naming',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1892,7 +1892,7 @@ describe('Node Validation Tests', () => {
         test('should reject miner nodes with consecutive ports', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-consecutive-ports',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'
@@ -1940,7 +1940,7 @@ describe('Node Validation Tests', () => {
         test('should handle multiple validation errors simultaneously', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-multiple-errors',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'ibft2',
                 gasLimit: '0x47E7C4'
@@ -1978,7 +1978,7 @@ describe('Node Validation Tests', () => {
         test('should pass validation for correctly configured network', () => {
             const config: BesuNetworkConfig = {
                 name: 'test-valid-network',
-                chainId: 1337,
+                chainId: 1100, // Create tests use chainId 1000-1999 range
                 subnet: '172.50.0.0/16',
                 consensus: 'clique',
                 gasLimit: '0x47E7C4'

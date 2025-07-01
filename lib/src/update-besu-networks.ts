@@ -16,6 +16,7 @@ import {
   BesuNode, 
   BesuNetworkConfig, 
   BesuNodeDefinition, 
+  CryptoLib,
   ValidationError,
   isSubnetAvailable 
 } from './create-besu-networks';
@@ -137,6 +138,24 @@ export async function updateNetworkConfig(
     // Regenerar archivos de configuración TOML con los nuevos parámetros
     console.log('📝 Updating node configuration files...');
     await updateNodeConfigurations(network);
+
+    // Guardar la configuración actualizada en el archivo network-config.json
+    // Usar el fileService del objeto network para acceder al directorio de la red
+    const networkPath = path.join((network as any).fileService?.basePath || './networks', config.name);
+    const configPath = path.join(networkPath, 'network-config.json');
+    
+    try {
+      // Asegurar que el directorio existe
+      if (!fs.existsSync(path.dirname(configPath))) {
+        fs.mkdirSync(path.dirname(configPath), { recursive: true });
+      }
+      
+      // Escribir el archivo de configuración
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      console.log(`💾 Configuration saved to: ${configPath}`);
+    } catch (error) {
+      console.error(`⚠️ Error saving network configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
 
     console.log('✅ Network configuration updated successfully');
     console.log('💡 Use start() to restart the network with new configuration');
@@ -1150,11 +1169,75 @@ export async function addNodesToNetwork(
   newNodes: BesuNodeDefinition[],
   baseDir?: string
 ): Promise<void> {
-  await BesuNetworkUpdater.updateNetworkNodesByName(
-    networkName,
-    { addNodes: newNodes },
-    { baseDir }
-  );
+  // We need to directly update the config file to add nodes
+  const baseDirPath = baseDir || "./networks";
+  console.log(`🔍 Loading network configuration for adding nodes to: ${networkName}`);
+
+  // Construct path to network config file
+  const networkPath = path.join(baseDirPath, networkName);
+  const configPath = path.join(networkPath, 'network-config.json');
+
+  // Verify network directory exists
+  if (!fs.existsSync(networkPath)) {
+    throw new Error(`Network '${networkName}' not found. Directory does not exist: ${networkPath}`);
+  }
+
+  // Load existing config and raw file data to preserve any extra properties
+  let configJson: any;
+  let config: BesuNetworkConfig;
+  
+  if (fs.existsSync(configPath)) {
+    const configData = fs.readFileSync(configPath, 'utf-8');
+    configJson = JSON.parse(configData);
+    // Extract standard config properties
+    config = {
+      name: configJson.name,
+      chainId: configJson.chainId,
+      subnet: configJson.subnet,
+      consensus: configJson.consensus,
+      gasLimit: configJson.gasLimit,
+      blockTime: configJson.blockTime,
+      mainIp: configJson.mainIp,
+      signerAccount: configJson.signerAccount,
+      signerAccounts: configJson.signerAccounts,
+      accounts: configJson.accounts
+    };
+  } else {
+    // If no config file, create basic config
+    console.log('⚠️  No network-config.json found, creating basic configuration...');
+    config = {
+      name: networkName,
+      chainId: 1337, // Default chainId
+      subnet: '172.24.0.0/16', // Default subnet
+      consensus: 'clique',
+      gasLimit: '0x47E7C4'
+    };
+    configJson = { ...config };
+  }
+
+  // Create or update nodes array in raw config JSON
+  if (!configJson.nodes) {
+    configJson.nodes = [];
+  }
+
+  // Add new nodes
+  for (const newNode of newNodes) {
+    // Check if node already exists
+    const existingIndex = configJson.nodes.findIndex((n: any) => n.name === newNode.name);
+    if (existingIndex >= 0) {
+      // Update existing node
+      configJson.nodes[existingIndex] = { ...configJson.nodes[existingIndex], ...newNode };
+      console.log(`🔄 Updated existing node: ${newNode.name}`);
+    } else {
+      // Add new node
+      configJson.nodes.push(newNode);
+      console.log(`➕ Added new node: ${newNode.name}`);
+    }
+  }
+
+  // Save updated config with all properties
+  fs.writeFileSync(configPath, JSON.stringify(configJson, null, 2));
+  console.log(`💾 Updated configuration saved to: ${configPath}`);
 }
 
 /**
@@ -1328,4 +1411,337 @@ export function isIpInSubnet(ip: string, subnet: string): boolean {
  */
 export function ipToNumber(ip: string): number {
   return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
+
+/**
+ * Actualiza los nodos de una red Besu por nombre
+ * Permite agregar, eliminar o actualizar nodos de una red existente
+ */
+export async function updateNetworkNodesByName(
+  networkName: string,
+  nodeUpdates: {
+    add?: Array<BesuNodeDefinition>,
+    update?: Array<{
+      name: string,
+      updates: Partial<BesuNodeDefinition>
+    }>,
+    remove?: Array<string>
+  },
+  options: {
+    baseDir?: string;
+    startAfterUpdate?: boolean;
+  } = {}
+): Promise<{
+  success: boolean;
+  nodesAdded?: string[];
+  nodesUpdated?: string[];
+  nodesRemoved?: string[];
+  errors?: string[];
+}> {
+  const baseDir = options.baseDir || "./networks";
+  console.log(`🔍 Loading network configuration for: ${networkName}`);
+
+  // Construir la ruta del archivo de configuración
+  const networkPath = path.join(baseDir, networkName);
+  const configPath = path.join(networkPath, 'network-config.json');
+
+  // Verificar que existe el directorio de la red
+  if (!fs.existsSync(networkPath)) {
+    throw new Error(`Network '${networkName}' not found. Directory does not exist: ${networkPath}`);
+  }
+
+  // Cargar la configuración existente
+  let config: BesuNetworkConfig;
+  let rawConfig: any = {};
+  
+  if (fs.existsSync(configPath)) {
+    const configData = fs.readFileSync(configPath, 'utf-8');
+    rawConfig = JSON.parse(configData);
+    config = {
+      name: rawConfig.name,
+      chainId: rawConfig.chainId,
+      subnet: rawConfig.subnet,
+      consensus: rawConfig.consensus,
+      gasLimit: rawConfig.gasLimit,
+      blockTime: rawConfig.blockTime,
+      mainIp: rawConfig.mainIp,
+      signerAccount: rawConfig.signerAccount,
+      signerAccounts: rawConfig.signerAccounts,
+      accounts: rawConfig.accounts
+    };
+  } else {
+    // Si no existe archivo de configuración, crear una configuración básica
+    console.log(`⚠️  Network configuration file not found: ${configPath}`);
+    console.log('Creating basic configuration from network structure...');
+    
+    // Intentar inferir configuración de la estructura de directorios
+    const nodesDir = fs.readdirSync(networkPath)
+      .filter(item => {
+        const itemPath = path.join(networkPath, item);
+        return fs.statSync(itemPath).isDirectory() && 
+               !['data', 'logs', 'tmp'].includes(item);
+      });
+    
+    // Crear nodos a partir de los directorios
+    const nodeDirs = nodesDir.map(nodeName => {
+      const nodePath = path.join(networkPath, nodeName);
+      // Determinar tipo de nodo por nombre
+      let nodeType = 'node';
+      if (nodeName.includes('bootnode')) nodeType = 'bootnode';
+      else if (nodeName.includes('miner')) nodeType = 'miner';
+      else if (nodeName.includes('rpc')) nodeType = 'rpc';
+      
+      // Determinar puerto RPC basado en tipo
+      let rpcPort = 8545;
+      if (nodeType === 'miner') rpcPort = 8546;
+      else if (nodeType === 'rpc') rpcPort = 8547;
+      
+      return {
+        name: nodeName,
+        type: nodeType,
+        ip: `172.24.0.${10 + nodesDir.indexOf(nodeName)}`,
+        rpcPort,
+        p2pPort: 30303
+      };
+    });
+    
+    // Configuración por defecto
+    config = {
+      name: networkName,
+      chainId: 1337,
+      subnet: '172.24.0.0/16',
+      consensus: 'clique',
+      gasLimit: '0x47E7C4'
+    };
+    
+    // Guardar todos los nodos en el archivo de configuración
+    rawConfig = { 
+      ...config, 
+      nodes: nodeDirs 
+    };
+    
+    // Escribir configuración básica para uso futuro
+    fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2));
+    console.log(`💾 Created basic configuration in ${configPath}`);
+  }
+
+  // Crear instancia de la red con la configuración cargada
+  const network = new BesuNetwork(config, baseDir);
+  
+  // Resultados para devolver
+  const result = {
+    success: true,
+    nodesAdded: [] as string[],
+    nodesUpdated: [] as string[],
+    nodesRemoved: [] as string[],
+    errors: [] as string[]
+  };
+
+  try {
+    // Detener la red primero para realizar cambios
+    console.log('⏸️  Stopping network for node updates...');
+    await network.stop();
+
+    // 1. Agregar nuevos nodos
+    if (nodeUpdates.add && nodeUpdates.add.length > 0) {
+      console.log(`➕ Adding ${nodeUpdates.add.length} new nodes...`);
+      await addNodesToNetwork(networkName, nodeUpdates.add, baseDir);
+      result.nodesAdded = nodeUpdates.add.map(node => node.name);
+      
+      // Reload the network to include the new nodes
+      // Instead of updating the internal network object directly, we'll create nodes through the file
+      for (const nodeDefinition of nodeUpdates.add) {
+        const nodeDirectory = path.join(networkPath, nodeDefinition.name);
+        if (!fs.existsSync(nodeDirectory)) {
+          fs.mkdirSync(nodeDirectory, { recursive: true });
+        }
+        
+        // Create the node key files
+        const cryptoLib = new CryptoLib();
+        const { privateKey, publicKey, address } = cryptoLib.generateKeyPair(nodeDefinition.ip || '127.0.0.1');
+        
+        fs.writeFileSync(path.join(nodeDirectory, 'key.priv'), privateKey);
+        fs.writeFileSync(path.join(nodeDirectory, 'key.pub'), publicKey);
+        fs.writeFileSync(path.join(nodeDirectory, 'address'), address.substring(2)); // Remove 0x prefix
+        
+        // Create enode file
+        const enodeUrl = `enode://${publicKey.substring(2)}@${nodeDefinition.ip}:30303`;
+        fs.writeFileSync(path.join(nodeDirectory, 'enode'), enodeUrl);
+        
+        console.log(`  ✅ Created node files for: ${nodeDefinition.name}`);
+      }
+    }
+
+    // 2. Actualizar nodos existentes
+    if (nodeUpdates.update && nodeUpdates.update.length > 0) {
+      console.log(`🔄 Updating ${nodeUpdates.update.length} existing nodes...`);
+      
+      for (const update of nodeUpdates.update) {
+        const node = network.getNodeByName(update.name);
+        if (!node) {
+          result.errors.push(`Node ${update.name} not found for update`);
+          continue;
+        }
+        
+        // Aplicar actualizaciones al nodo
+        try {
+          // Actualizar IP si es necesario
+          if (update.updates.ip && update.updates.ip !== node.getConfig().ip) {
+            node.updateIp(update.updates.ip);
+            
+            // También actualizar el archivo enode para reflejar la nueva IP
+            const nodeDirPath = path.join(networkPath, update.name);
+            if (fs.existsSync(nodeDirPath)) {
+              const enodeFile = path.join(nodeDirPath, 'enode');
+              if (fs.existsSync(enodeFile)) {
+                const enodeContent = fs.readFileSync(enodeFile, 'utf-8');
+                // Actualizar la IP en la URL del enode
+                const updatedEnode = enodeContent.replace(
+                  /enode:\/\/([a-f0-9]+)@([0-9.]+):([0-9]+)/,
+                  `enode://$1@${update.updates.ip}:$3`
+                );
+                fs.writeFileSync(enodeFile, updatedEnode);
+                console.log(`  ✅ Updated enode file for ${update.name} with new IP: ${update.updates.ip}`);
+              }
+            }
+          }
+          
+          // Actualizar puertos si es necesario
+          if (update.updates.rpcPort && update.updates.rpcPort !== node.getConfig().rpcPort) {
+            // No hay método setter directo, actualizar a través del objeto de configuración
+            node.getConfig().rpcPort = update.updates.rpcPort;
+          }
+          
+          if (update.updates.p2pPort && update.updates.p2pPort !== 30303) {
+            // El p2pPort es fijo en 30303 según la implementación actual
+            console.log(`⚠️ Warning: Cannot update p2pPort from 30303 - hardcoded value in the implementation`);
+          }
+          
+          // Otros posibles updates (dependerá de la implementación de BesuNode)
+          
+          result.nodesUpdated.push(update.name);
+        } catch (error) {
+          result.errors.push(`Failed to update node ${update.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      // Actualizar archivos de configuración para los nodos
+      await updateNodeConfigurations(network);
+    }
+
+    // 3. Eliminar nodos
+    if (nodeUpdates.remove && nodeUpdates.remove.length > 0) {
+      console.log(`➖ Removing ${nodeUpdates.remove.length} nodes...`);
+      await removeNodesFromNetwork(networkName, nodeUpdates.remove, baseDir);
+      result.nodesRemoved = nodeUpdates.remove;
+    }
+
+    // Cargar la configuración actual para asegurarnos de preservar los nodos
+    const currentConfigPath = path.join(networkPath, 'network-config.json');
+    let updatedConfig = network.getConfig();
+    
+    // Cargar la configuración existente para mantener la información de nodos
+    if (fs.existsSync(currentConfigPath)) {
+      try {
+        const existingConfigStr = fs.readFileSync(currentConfigPath, 'utf-8');
+        const existingConfig = JSON.parse(existingConfigStr);
+        
+        // Si hay un array de nodos en la configuración existente, preservarlo
+        if (existingConfig && existingConfig.nodes) {
+          // Crear un objeto para guardar toda la configuración
+          const fullConfig: any = { ...updatedConfig };
+          
+          // Añadir o actualizar los nodos según lo necesitemos
+          if (!fullConfig.nodes) {
+            fullConfig.nodes = [];
+          }
+          
+          // Mantener nodos existentes y actualizar/añadir los nuevos
+          const existingNodes = [...existingConfig.nodes];
+          
+          // Añadir nuevos nodos si se especificaron
+          if (nodeUpdates.add && nodeUpdates.add.length > 0) {
+            for (const newNode of nodeUpdates.add) {
+              const existingIndex = existingNodes.findIndex(n => n.name === newNode.name);
+              if (existingIndex >= 0) {
+                // Actualizar nodo existente
+                existingNodes[existingIndex] = { ...existingNodes[existingIndex], ...newNode };
+              } else {
+                // Añadir nuevo nodo
+                existingNodes.push(newNode);
+              }
+            }
+          }
+          
+          // Actualizar nodos existentes si se especificaron
+          if (nodeUpdates.update && nodeUpdates.update.length > 0) {
+            for (const updateInfo of nodeUpdates.update) {
+              const existingIndex = existingNodes.findIndex(n => n.name === updateInfo.name);
+              if (existingIndex >= 0) {
+                // Actualizar nodo existente
+                existingNodes[existingIndex] = { 
+                  ...existingNodes[existingIndex], 
+                  ...updateInfo.updates,
+                  // Asegurarse de que se aplican correctamente las actualizaciones
+                  ip: updateInfo.updates.ip || existingNodes[existingIndex].ip
+                };
+              }
+            }
+          }
+          
+          // Eliminar nodos si se especificaron
+          if (nodeUpdates.remove && nodeUpdates.remove.length > 0) {
+            for (const nodeName of nodeUpdates.remove) {
+              const index = existingNodes.findIndex(n => n.name === nodeName);
+              if (index >= 0) {
+                existingNodes.splice(index, 1);
+              }
+            }
+          }
+          
+          fullConfig.nodes = existingNodes;
+          
+          // Guardar la configuración actualizada con los nodos
+          fs.writeFileSync(configPath, JSON.stringify(fullConfig, null, 2));
+          console.log(`💾 Configuration saved to: ${configPath}`);
+        } else {
+          // No hay nodos en la configuración existente
+          const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
+          fs.writeFileSync(configPath, updatedConfigData);
+          console.log(`💾 Configuration saved to: ${configPath}`);
+        }
+      } catch (error) {
+        console.error('Error reading/parsing existing config:', error);
+        const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
+        fs.writeFileSync(configPath, updatedConfigData);
+        console.log(`💾 Configuration saved to: ${configPath}`);
+      }
+    } else {
+      // No existe configuración previa
+      const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
+      fs.writeFileSync(configPath, updatedConfigData);
+      console.log(`💾 Configuration saved to: ${configPath}`);
+    }
+
+    // Iniciar la red si se solicita
+    if (options.startAfterUpdate) {
+      console.log('▶️  Starting network with updated configuration...');
+      await network.start();
+    }
+
+    // Retornar el resultado final de la operación
+    return {
+      success: true,
+      nodesAdded: result.nodesAdded,
+      nodesUpdated: result.nodesUpdated,
+      nodesRemoved: result.nodesRemoved,
+      errors: result.errors.length > 0 ? result.errors : []
+    };
+  } catch (error) {
+    console.error('❌ Error updating network nodes:', error);
+    return {
+      success: false,
+      errors: [(error instanceof Error) ? error.message : 'Unknown error']
+    };
+  }
 }

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { BesuNetworkConfig, BesuNetworkStatus, BesuNodeConfig, BesuNodeStatus, GenesisOptions } from '../models/types';
+import { BesuNetworkConfig, BesuNetworkStatus, BesuNodeConfig, BesuNodeStatus, BesuNodeType, GenesisOptions } from '../models/types';
 
 import { ConfigGenerator } from './ConfigGenerator';
 import { DockerService } from './DockerService';
@@ -9,6 +9,7 @@ import { FileSystem } from '../utils/FileSystem';
 import { GenesisGenerator } from './GenesisGenerator';
 import { KeyGenerator } from './KeyGenerator';
 import { Logger } from '../utils/Logger';
+import { NodeConfigFactory } from '../utils/NodeConfigFactory';
 
 /**
  * Clase principal para gestionar una red Besu
@@ -91,7 +92,7 @@ export class BesuNetworkManager {
     // Generar archivo génesis
     const genesisPath = path.join(this.dataDir, 'genesis.json');
     const validatorAddresses = this.config.nodes
-      .filter(node => node.isValidator)
+      .filter(node => node.nodeType === BesuNodeType.SIGNER)
       .map(node => node.validatorAddress as string);
     
     const genesisOptions: GenesisOptions = {
@@ -183,11 +184,14 @@ export class BesuNetworkManager {
         const nodeStatus: BesuNodeStatus = {
           containerId: containerInfo?.id || '',
           name: nodeConfig.name,
+          nodeType: nodeConfig.nodeType,
           containerStatus: containerInfo?.state || 'unknown',
           ports: {
             rpc: nodeConfig.rpcPort,
             p2p: nodeConfig.p2pPort
-          }
+          },
+          isMining: nodeConfig.nodeType === BesuNodeType.SIGNER || nodeConfig.nodeType === BesuNodeType.MINER,
+          isValidating: nodeConfig.nodeType === BesuNodeType.SIGNER
         };
         
         // Si el contenedor está en ejecución, obtener información adicional
@@ -239,29 +243,36 @@ export class BesuNetworkManager {
       await this.fs.ensureDir(nodeDir);
       const { privateKey, publicKey, address } = await this.keyGenerator.generateNodeKeys(nodeDir);
       
-      // Por defecto, todos los nodos son validadores en redes pequeñas
-      const isValidator = true;
+      // Determinar el tipo de nodo según la configuración
+      let nodeType: BesuNodeType;
+      if (this.config.nodeTypes && this.config.nodeTypes[i]) {
+        nodeType = this.config.nodeTypes[i];
+      } else {
+        // Por defecto, el primer nodo es SIGNER, los demás son NORMAL
+        nodeType = i === 0 ? BesuNodeType.SIGNER : BesuNodeType.NORMAL;
+      }
+      
       this.logger.info(`Nodo ${nodeName} configurado:`);
+      this.logger.info(`  Tipo: ${nodeType}`);
       this.logger.info(`  Dirección: ${address}`);
-      this.logger.info(`  Es validador: ${isValidator ? 'SÍ' : 'NO'}`);
       this.logger.info(`  Directorio: ${nodeDir}`);
       this.logger.info(`  Puerto RPC: ${this.config.baseRpcPort + i}`);
       this.logger.info(`  Puerto P2P: ${this.config.baseP2pPort + i}`);
       
-      // Crear configuración del nodo
-      const nodeConfig: BesuNodeConfig = {
-        name: nodeName,
-        rpcPort: this.config.baseRpcPort + i,
-        p2pPort: this.config.baseP2pPort + i,
-        dataDir: nodeDir,
-        isValidator: isValidator,
-        validatorAddress: address,
+      // Crear configuración del nodo usando NodeConfigFactory
+      const nodeConfig = NodeConfigFactory.createNodeConfig(
+        nodeType,
+        nodeName,
+        this.config.baseRpcPort + i,
+        this.config.baseP2pPort + i,
+        nodeDir,
+        address, // validatorAddress
         privateKey,
-        enabledApis: ['ETH', 'NET', 'WEB3', 'ADMIN', 'DEBUG', 'MINER', 'TXPOOL']
-      };
+        {} // additionalOptions
+      );
       
       // Si es un protocolo que requiere Clique, añadir API Clique
-      if (this.config.consensusProtocol === 'clique') {
+      if (this.config.consensusProtocol === 'clique' && !nodeConfig.enabledApis.includes('CLIQUE')) {
         nodeConfig.enabledApis.push('CLIQUE');
       }
       
@@ -375,6 +386,11 @@ export class BesuNetworkManager {
       '--genesis-file=/genesis.json',
       '--data-path=/data',
     ];
+    
+    // Añadir opciones específicas del tipo de nodo
+    const nodeTypeOptions = NodeConfigFactory.getBesuCommandOptions(nodeConfig);
+    command.push(...nodeTypeOptions);
+    
     // Añadir opciones adicionales si existen
     if (nodeConfig.additionalOptions) {
       for (const [key, value] of Object.entries(nodeConfig.additionalOptions)) {
@@ -438,6 +454,10 @@ export class BesuNetworkManager {
       '--config-file=/data/config.toml',
       '--data-path=/data',
     ];
+    
+    // Añadir opciones específicas del tipo de nodo
+    const nodeTypeOptions = NodeConfigFactory.getBesuCommandOptions(nodeConfig);
+    command.push(...nodeTypeOptions);
     
     // Añadir opciones adicionales si existen
     if (nodeConfig.additionalOptions) {

@@ -1,6 +1,6 @@
 import { LogLevel, Logger } from '../../src/utils/Logger';
 
-import { BesuNetworkConfig } from '../../src/models/types';
+import { BesuNetworkConfig, BesuNodeType } from '../../src/models/types';
 import { BesuNetworkManager } from '../../src/services/BesuNetworkManager';
 import { ConfigGenerator } from '../../src/services/ConfigGenerator';
 import { DockerService } from '../../src/services/DockerService';
@@ -48,8 +48,8 @@ describe('BesuNetworkManager', () => {
 
   it('should call start and log info', async () => {
     config.nodes = [
-      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", isValidator: true, enabledApis: [] },
-      { name: "node2", rpcPort: 8546, p2pPort: 30304, dataDir: "./data/node2", isValidator: false, enabledApis: [] }
+      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", nodeType: BesuNodeType.SIGNER, enabledApis: [] },
+      { name: "node2", rpcPort: 8546, p2pPort: 30304, dataDir: "./data/node2", nodeType: BesuNodeType.NORMAL, enabledApis: [] }
     ];
     const manager = new BesuNetworkManager(config, docker, logger, fs, genesisGenerator, keyGenerator, configGenerator);
     manager["generateNodeConfigs"] = jest.fn().mockResolvedValue([]);
@@ -66,8 +66,8 @@ describe('BesuNetworkManager', () => {
     const manager = new BesuNetworkManager(config, docker, logger, fs, genesisGenerator, keyGenerator, configGenerator);
     (manager as any)["networkName"] = "testnet";
     config.nodes = [
-      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", isValidator: true, enabledApis: [] },
-      { name: "node2", rpcPort: 8546, p2pPort: 30304, dataDir: "./data/node2", isValidator: false, enabledApis: [] }
+      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", nodeType: BesuNodeType.SIGNER, enabledApis: [] },
+      { name: "node2", rpcPort: 8546, p2pPort: 30304, dataDir: "./data/node2", nodeType: BesuNodeType.NORMAL, enabledApis: [] }
     ];
     await manager.stop();
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Deteniendo red Besu'));
@@ -80,8 +80,8 @@ describe('BesuNetworkManager', () => {
 
   it('should return status with nodes running and stopped', async () => {
     config.nodes = [
-      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", isValidator: true, enabledApis: [] },
-      { name: "node2", rpcPort: 8546, p2pPort: 30304, dataDir: "./data/node2", isValidator: false, enabledApis: [] }
+      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", nodeType: BesuNodeType.SIGNER, enabledApis: [] },
+      { name: "node2", rpcPort: 8546, p2pPort: 30304, dataDir: "./data/node2", nodeType: BesuNodeType.NORMAL, enabledApis: [] }
     ];
     docker.getContainerInfo = jest.fn()
       .mockResolvedValueOnce({ id: "id1", state: "running", ipAddress: "1.2.3.4" })
@@ -103,7 +103,7 @@ describe('BesuNetworkManager', () => {
 
   it('should handle error in getStatus for running node', async () => {
     config.nodes = [
-      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", isValidator: true, enabledApis: [] }
+      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", nodeType: BesuNodeType.SIGNER, enabledApis: [] }
     ];
     docker.getContainerInfo = jest.fn().mockResolvedValue({ id: "id1", state: "running", ipAddress: "1.2.3.4" });
     docker.getNetworkId = jest.fn().mockResolvedValue("netid");
@@ -135,7 +135,7 @@ describe('BesuNetworkManager', () => {
     const manager = new BesuNetworkManager(config, docker, logger, fs, genesisGenerator, keyGenerator, configGenerator);
     (manager as any).dataDir = './data';
     (manager as any).networkName = 'testnet';
-    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', isValidator: true, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'], additionalOptions: { foo: 'bar' } };
+    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', nodeType: BesuNodeType.SIGNER, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'], additionalOptions: { foo: 'bar' } };
     docker.runContainer = jest.fn().mockResolvedValue({});
     (manager as any).waitForNodeReady = jest.fn().mockResolvedValue(undefined);
     (manager as any).getEnodeUrl = jest.fn().mockResolvedValue('enode://abc');
@@ -148,7 +148,7 @@ describe('BesuNetworkManager', () => {
   it('should throw error if bootnode is not set in startNode', async () => {
     const manager = new BesuNetworkManager(config, docker, logger, fs, genesisGenerator, keyGenerator, configGenerator);
     (manager as any).bootnode = undefined;
-    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', isValidator: true, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'] };
+    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', nodeType: BesuNodeType.SIGNER, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'] };
     await expect((manager as any).startNode(nodeConfig)).rejects.toThrow('No se ha iniciado el bootnode');
   });
 
@@ -157,7 +157,7 @@ describe('BesuNetworkManager', () => {
     (manager as any).bootnode = 'enode://abc';
     (manager as any).dataDir = './data';
     (manager as any).networkName = 'testnet';
-    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', isValidator: true, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'], additionalOptions: { foo: 'bar' } };
+    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', nodeType: BesuNodeType.SIGNER, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'], additionalOptions: { foo: 'bar' } };
     docker.runContainer = jest.fn().mockResolvedValue({});
     (manager as any).waitForNodeReady = jest.fn().mockResolvedValue(undefined);
     await (manager as any).startNode(nodeConfig);
@@ -168,7 +168,7 @@ describe('BesuNetworkManager', () => {
   it('should resolve when node becomes ready in waitForNodeReady', async () => {
     const manager = new BesuNetworkManager(config, docker, logger, fs, genesisGenerator, keyGenerator, configGenerator);
     (manager as any).getBlockNumber = jest.fn().mockResolvedValue(123);
-    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', isValidator: true, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'] };
+    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', nodeType: BesuNodeType.SIGNER, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'] };
     await (manager as any).waitForNodeReady(nodeConfig);
     expect((manager as any).getBlockNumber).toHaveBeenCalledWith(8545);
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('listo, bloque actual: 123'));
@@ -178,7 +178,7 @@ describe('BesuNetworkManager', () => {
     const setTimeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((fn: any, ...args: any[]) => { fn(); return 0 as any; });
     const manager = new BesuNetworkManager(config, docker, logger, fs, genesisGenerator, keyGenerator, configGenerator);
     (manager as any).getBlockNumber = jest.fn().mockRejectedValue(new Error('not ready'));
-    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', isValidator: true, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'] };
+    const nodeConfig = { name: 'node1', rpcPort: 8545, p2pPort: 30303, dataDir: './data/node1', nodeType: BesuNodeType.SIGNER, validatorAddress: 'addr', privateKey: 'priv', enabledApis: ['ETH','NET'] };
     await expect((manager as any).waitForNodeReady(nodeConfig)).rejects.toThrow('Tiempo de espera agotado para el nodo node1');
     setTimeoutSpy.mockRestore();
   });
@@ -211,7 +211,7 @@ describe('BesuNetworkManager', () => {
 
   it('should handle error in getBlockNumber, getPeerCount, getEnodeUrl in getStatus', async () => {
     config.nodes = [
-      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", isValidator: true, enabledApis: [] }
+      { name: "node1", rpcPort: 8545, p2pPort: 30303, dataDir: "./data/node1", nodeType: BesuNodeType.SIGNER, enabledApis: [] }
     ];
     docker.getContainerInfo = jest.fn().mockResolvedValue({ id: "id1", state: "running", ipAddress: "1.2.3.4" });
     docker.getNetworkId = jest.fn().mockResolvedValue("netid");

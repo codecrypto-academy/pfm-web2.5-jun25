@@ -15,6 +15,7 @@ export { TransactionService } from './services/TransactionService';
 // Exportar utilidades
 export { FileSystem } from './utils/FileSystem';
 export { Logger, LogLevel } from './utils/Logger';
+export { NodeConfigFactory } from './utils/NodeConfigFactory';
 
 import { LogLevel, Logger } from './utils/Logger';
 
@@ -26,6 +27,7 @@ import { DockerService } from './services/DockerService';
 import { FileSystem } from './utils/FileSystem';
 import { GenesisGenerator } from './services/GenesisGenerator';
 import { KeyGenerator } from './services/KeyGenerator';
+import { NodeConfigFactory } from './utils/NodeConfigFactory';
 
 /**
  * Crea una instancia de BesuNetworkManager con todas las dependencias necesarias

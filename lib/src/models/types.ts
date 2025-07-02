@@ -3,22 +3,34 @@
  */
 
 /**
+ * Tipos de nodos Besu según el Nivel 2
+ */
+export enum BesuNodeType {
+  /** Nodo Firmador (Signer): Validador en red Clique PoA */
+  SIGNER = 'signer',
+  /** Nodo Minero (Miner): Procesa transacciones sin validar */
+  MINER = 'miner',
+  /** Nodo Normal: Solo sincronización y consultas */
+  NORMAL = 'normal'
+}
+
+/**
  * Configuración para un nodo Besu
  */
 export interface BesuNodeConfig {
   /** Nombre del nodo */
   name: string;
+  /** Tipo de nodo */
+  nodeType: BesuNodeType;
   /** Puerto RPC HTTP */
   rpcPort: number;
   /** Puerto P2P */
   p2pPort: number;
   /** Directorio de datos */
   dataDir: string;
-  /** Si el nodo es validador */
-  isValidator: boolean;
-  /** Dirección del validador (si aplica) */
+  /** Dirección del validador (requerida para SIGNER) */
   validatorAddress?: string;
-  /** Clave privada (si aplica) */
+  /** Clave privada (requerida para SIGNER y MINER) */
   privateKey?: string;
   /** APIs habilitadas */
   enabledApis: string[];
@@ -48,6 +60,8 @@ export interface BesuNetworkConfig {
   dataDir: string;
   /** Configuración de nodos */
   nodes?: BesuNodeConfig[];
+  /** Tipos específicos para cada nodo (opcional) */
+  nodeTypes?: BesuNodeType[];
   /** Opciones adicionales para la red */
   additionalOptions?: Record<string, string>;
 }
@@ -60,6 +74,8 @@ export interface BesuNodeStatus {
   containerId: string;
   /** Nombre del nodo */
   name: string;
+  /** Tipo de nodo */
+  nodeType?: BesuNodeType;
   /** Estado del contenedor */
   containerStatus: 'running' | 'stopped' | 'exited' | 'unknown';
   /** Número de bloque actual */
@@ -75,6 +91,10 @@ export interface BesuNodeStatus {
     rpc: number;
     p2p: number;
   };
+  /** Indica si está minando (para SIGNER y MINER) */
+  isMining?: boolean;
+  /** Indica si está validando (solo para SIGNER) */
+  isValidating?: boolean;
 }
 
 /**

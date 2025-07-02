@@ -1,7 +1,7 @@
 import * as path from 'path';
 
-import { BesuNetworkConfig, BesuNodeConfig } from '../models/types';
-
+import { BesuNetworkConfig, BesuNodeConfig, BesuNodeType } from '../models/types';
+import { NodeConfigFactory } from '../utils/NodeConfigFactory';
 import { FileSystem } from '../utils/FileSystem';
 import { Logger } from '../utils/Logger';
 
@@ -50,8 +50,7 @@ rpc-http-cors-origins=["*"]
 rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(', ')}]
 
 # Configuración de minería
-miner-enabled=${nodeConfig.isValidator}
-miner-coinbase="${nodeConfig.validatorAddress}"
+${this.getMiningConfig(nodeConfig)}
 
 # Configuración de sincronización
 sync-mode="FULL"
@@ -117,8 +116,7 @@ rpc-http-cors-origins=["*"]
 rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(', ')}]
 
 # Configuración de minería
-miner-enabled=${nodeConfig.isValidator}
-miner-coinbase="${nodeConfig.validatorAddress}"
+${this.getMiningConfig(nodeConfig)}
 miner-stratum-enabled=false
 
 # Configuración de sincronización
@@ -135,7 +133,41 @@ logging="INFO"
     this.logger.info(`Archivo config.toml generado para nodo ${nodeConfig.name} en: ${configPath}`);
   }
 
+  /**
+   * Genera la configuración de minería según el tipo de nodo
+   * @param nodeConfig Configuración del nodo
+   */
+  private getMiningConfig(nodeConfig: BesuNodeConfig): string {
+    switch (nodeConfig.nodeType) {
+      case BesuNodeType.SIGNER:
+        return `miner-enabled=true
+miner-coinbase="${nodeConfig.validatorAddress || ''}"`;
+      
+      case BesuNodeType.MINER:
+        return `miner-enabled=true
+miner-coinbase="${nodeConfig.validatorAddress || ''}"`;
+      
+      case BesuNodeType.NORMAL:
+      default:
+        return `miner-enabled=false`;
+    }
+  }
 
+  /**
+   * Genera configuración adicional específica por tipo de nodo
+   * @param nodeConfig Configuración del nodo
+   */
+  private getNodeTypeSpecificConfig(nodeConfig: BesuNodeConfig): string {
+    const additionalOptions = NodeConfigFactory.getBesuCommandOptions(nodeConfig);
+    
+    if (additionalOptions.length === 0) {
+      return '';
+    }
 
-
+    return `\n# Configuración específica del tipo de nodo (${nodeConfig.nodeType})\n` +
+           additionalOptions.map(option => {
+             const [key, value] = option.replace('--', '').split('=');
+             return value ? `${key}=${value}` : `${key}=true`;
+           }).join('\n');
+  }
 }

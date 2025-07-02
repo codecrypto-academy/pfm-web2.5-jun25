@@ -1198,7 +1198,6 @@ export async function addNodesToNetwork(
       gasLimit: configJson.gasLimit,
       blockTime: configJson.blockTime,
       mainIp: configJson.mainIp,
-      signerAccount: configJson.signerAccount,
       signerAccounts: configJson.signerAccounts,
       accounts: configJson.accounts
     };
@@ -1465,7 +1464,6 @@ export async function updateNetworkNodesByName(
       gasLimit: rawConfig.gasLimit,
       blockTime: rawConfig.blockTime,
       mainIp: rawConfig.mainIp,
-      signerAccount: rawConfig.signerAccount,
       signerAccounts: rawConfig.signerAccounts,
       accounts: rawConfig.accounts
     };

@@ -32,7 +32,6 @@ export interface BesuNetworkConfig {
   gasLimit: string;
   blockTime?: number;
   mainIp?: string; // IP principal de la red
-  signerAccount?: { address: string; weiAmount: string }; // Cuenta principal del firmante (con balance inicial en wei) - DEPRECATED: Use signerAccounts instead
   signerAccounts?: Array<{ address: string; weiAmount: string }>; // Lista de cuentas firmantes/validadores (para consenso PoA/IBFT2)
   accounts?: Array<{ address: string; weiAmount: string }>;// Lista de cuentas con balance inicial (en wei)
 }
@@ -81,7 +80,6 @@ export interface BesuNetworkCreateOptions {
   nodes: BesuNodeDefinition[];
   initialBalance?: string;
   autoResolveSubnetConflicts?: boolean;
-  minerAddress?: string; // Dirección específica del miner, si no se especifica usa el primer miner
 }
 
 export interface DockerContainerConfig {
@@ -635,9 +633,11 @@ export class BesuNetwork {
    * Valida que las direcciones de cuentas tengan el formato correcto
    */
   private validateAccountAddresses(): void {
-    if (this.config.signerAccount) {
-      if (!this.isValidEthereumAddress(this.config.signerAccount.address)) {
-        throw new Error(`Invalid signer account address: ${this.config.signerAccount.address}`);
+    if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
+      for (const signerAccount of this.config.signerAccounts) {
+        if (!this.isValidEthereumAddress(signerAccount.address)) {
+          throw new Error(`Invalid signer account address: ${signerAccount.address}`);
+        }
       }
     }
 
@@ -1065,33 +1065,6 @@ export class BesuNetwork {
   private validateNetworkAccounts(errors: ValidationError[]): void {
     const usedAddresses = new Set<string>();
 
-    // Validar signerAccount (legacy - mantener compatibilidad hacia atrás)
-    if (this.config.signerAccount) {
-      if (!this.isValidEthereumAddress(this.config.signerAccount.address)) {
-        errors.push({
-          field: 'signerAccount.address',
-          type: 'format',
-          message: 'Signer account address must be a valid Ethereum address (0x...)'
-        });
-      } else {
-        usedAddresses.add(this.config.signerAccount.address.toLowerCase());
-      }
-
-      if (!this.isValidWeiAmount(this.config.signerAccount.weiAmount)) {
-        errors.push({
-          field: 'signerAccount.weiAmount',
-          type: 'format',
-          message: 'Signer account wei amount must be a valid positive number'
-        });
-      } else if (!this.isReasonableWeiAmount(this.config.signerAccount.weiAmount)) {
-        errors.push({
-          field: 'signerAccount.weiAmount',
-          type: 'range',
-          message: 'Signer account wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)'
-        });
-      }
-    }
-
     // Validar signerAccounts array (nuevo soporte múltiple)
     if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
       // Validación específica según el tipo de consenso
@@ -1142,15 +1115,6 @@ export class BesuNetwork {
             message: `Signer account ${index} wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)`
           });
         }
-      });
-    }
-
-    // Advertencia si se usan ambos formatos
-    if (this.config.signerAccount && this.config.signerAccounts && this.config.signerAccounts.length > 0) {
-      errors.push({
-        field: 'signerAccount',
-        type: 'invalid',
-        message: 'Cannot use both signerAccount (legacy) and signerAccounts (new). Please use only signerAccounts for multiple signers.'
       });
     }
 
@@ -1383,17 +1347,6 @@ export class BesuNetwork {
           field: 'initialBalance',
           type: 'format',
           message: 'Initial balance must be a valid ETH amount (e.g., "100", "1000.5")'
-        });
-      }
-    }
-
-    // Validar minerAddress si está definido
-    if (options.minerAddress !== undefined) {
-      if (!this.isValidEthereumAddress(options.minerAddress)) {
-        errors.push({
-          field: 'minerAddress',
-          type: 'format',
-          message: 'Miner address must be a valid Ethereum address (0x...)'
         });
       }
     }
@@ -1694,7 +1647,7 @@ export class BesuNetwork {
     }
 
     // Step 5: Generate genesis file
-    const minerNode = this.findMinerNode(options.minerAddress);
+    const minerNode = this.findMinerNode();
     if (!minerNode) {
       throw new Error('No miner node found. At least one miner node is required.');
     }
@@ -2263,14 +2216,6 @@ export class BesuNetwork {
     // Track addresses that have been allocated to avoid duplicates
     const allocatedAddresses = new Set<string>();
 
-    // First, add the signer account if specified (legacy - mantener compatibilidad)
-    if (this.config.signerAccount) {
-      genesis.alloc[this.config.signerAccount.address] = { 
-        balance: this.config.signerAccount.weiAmount 
-      };
-      allocatedAddresses.add(this.config.signerAccount.address);
-    }
-
     // Add signer accounts (new multiple support)
     if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
       for (const signer of this.config.signerAccounts) {
@@ -2302,15 +2247,10 @@ export class BesuNetwork {
   }
 
   /**
-   * Obtiene todas las direcciones de firmantes configuradas (combinando legacy y nuevo formato)
+   * Obtiene todas las direcciones de firmantes configuradas
    */
   private getAllSignerAddresses(): string[] {
     const addresses: string[] = [];
-    
-    // Agregar signerAccount legacy si existe
-    if (this.config.signerAccount) {
-      addresses.push(this.config.signerAccount.address);
-    }
     
     // Agregar signerAccounts si existen
     if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
@@ -2480,12 +2420,10 @@ export class BesuNetwork {
     }));
   }
 
-  private findMinerNode(preferredAddress?: string): BesuNode | null {
+  private findMinerNode(): BesuNode | null {
     for (const [name, node] of this.nodes) {
       if (node.getConfig().type === 'miner') {
-        if (!preferredAddress || node.getKeys().address === preferredAddress) {
-          return node;
-        }
+        return node;
       }
     }
     return null;
@@ -2512,12 +2450,6 @@ export class BesuNetwork {
       console.log(`   Main IP: ${this.config.mainIp}`);
     }
     
-    // Show signer account if configured (legacy - backward compatibility)
-    if (this.config.signerAccount) {
-      const ethAmount = ethers.formatEther(this.config.signerAccount.weiAmount);
-      console.log(`   Signer Account (legacy): ${this.config.signerAccount.address} (${ethAmount} ETH)`);
-    }
-    
     // Show multiple signer accounts if configured (new format)
     if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
       console.log(`   Signer Accounts: ${this.config.signerAccounts.length} accounts`);
@@ -2532,8 +2464,7 @@ export class BesuNetwork {
       console.log(`   Additional Accounts: ${this.config.accounts.length} accounts`);
       for (const account of this.config.accounts) {
         const ethAmount = ethers.formatEther(account.weiAmount);
-        const isDuplicate = this.config.signerAccount?.address === account.address ||
-          this.config.signerAccounts?.some(signer => signer.address === account.address);
+        const isDuplicate = this.config.signerAccounts?.some(signer => signer.address === account.address);
         console.log(`     - ${account.address}: ${ethAmount} ETH${isDuplicate ? ' (duplicate - signer account balance takes priority)' : ''}`);
       }
     }

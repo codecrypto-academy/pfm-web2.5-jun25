@@ -747,7 +747,7 @@ describe('Account Management Tests', () => {
     }, 180000);
 
     test('Should handle signerAccount with priority over accounts array', async () => {
-        console.log('🧪 Test: SignerAccount con prioridad sobre accounts array\n');
+        console.log('🧪 Test: SignerAccounts con múltiples firmantes\n');
 
         const networkConfig: BesuNetworkConfig = {
             name: 'create-test-signer-network', // Create tests use unique names
@@ -756,12 +756,14 @@ describe('Account Management Tests', () => {
             consensus: 'clique',
             gasLimit: '0x47E7C4',
             blockTime: 3,
-            // Signer account - this is the main account with special privileges
-            signerAccount: {
-                address: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1',
-                weiAmount: '1000000000000000000000000' // 1M ETH for the signer
-            },
-            // Additional accounts for testing (no duplicates with signerAccount)
+            // Signer accounts - main accounts with special privileges
+            signerAccounts: [
+                {
+                    address: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1',
+                    weiAmount: '1000000000000000000000000' // 1M ETH for the signer
+                }
+            ],
+            // Additional accounts for testing (no duplicates with signerAccounts)
             accounts: [
                 {
                     address: '0x627306090abaB3A6e1400e9345bC60c78a8BEf57',
@@ -809,20 +811,20 @@ describe('Account Management Tests', () => {
                 autoResolveSubnetConflicts: true
             });
 
-            console.log('✅ Red creada exitosamente con signer account');
+            console.log('✅ Red creada exitosamente con signer accounts');
 
-            // Verificar que la configuración incluye tanto signerAccount como accounts
+            // Verificar que la configuración incluye signerAccounts y accounts
             const config = besuNetwork.getConfig();
-            expect(config.signerAccount).toBeDefined();
-            expect(config.signerAccount!.address).toBe('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1');
-            expect(config.signerAccount!.weiAmount).toBe('1000000000000000000000000');
+            expect(config.signerAccounts).toBeDefined();
+            expect(config.signerAccounts![0].address).toBe('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1');
+            expect(config.signerAccounts![0].weiAmount).toBe('1000000000000000000000000');
             
             expect(config.accounts).toBeDefined();
             expect(config.accounts!.length).toBe(3);
 
             // Verificar que las cuentas están correctamente configuradas
             const networkConfig = besuNetwork.getConfig();
-            expect(networkConfig.signerAccount?.address).toBe('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1');
+            expect(networkConfig.signerAccounts?.[0].address).toBe('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1');
             expect(networkConfig.accounts).toBeDefined();
             expect(networkConfig.accounts!.length).toBe(3);
             expect(networkConfig.accounts![0].address).toBe('0x627306090abaB3A6e1400e9345bC60c78a8BEf57');
@@ -863,10 +865,12 @@ describe('Account Management Tests', () => {
             subnet: '172.37.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
-            signerAccount: {
-                address: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1',
-                weiAmount: '1000000000000000000000000'
-            },
+            signerAccounts: [
+                {
+                    address: '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1',
+                    weiAmount: '1000000000000000000000000'
+                }
+            ],
             accounts: [
                 {
                     address: '0x627306090abaB3A6e1400e9345bC60c78a8BEf57',
@@ -885,10 +889,12 @@ describe('Account Management Tests', () => {
             subnet: '172.38.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
-            signerAccount: {
-                address: '0x90F8bf6A479f320ead074411',  // Muy corta
-                weiAmount: '1000000000000000000000000'
-            }
+            signerAccounts: [
+                {
+                    address: '0x90F8bf6A479f320ead074411',  // Muy corta
+                    weiAmount: '1000000000000000000000000'
+                }
+            ]
         };
 
         expect(() => new BesuNetwork(invalidConfig1)).toThrow('Invalid signer account address');

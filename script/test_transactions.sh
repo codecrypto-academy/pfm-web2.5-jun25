@@ -352,8 +352,6 @@ main() {
     echo ""
     echo "📚 Next steps:"
     echo "   • For real transactions: node real_transaction.js"
-    echo "   • For production use: Implement proper transaction signing"
-    echo "   • For development: Network is ready for dApp integration"
     echo ""
 }
 

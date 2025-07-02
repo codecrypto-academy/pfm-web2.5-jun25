@@ -16,14 +16,16 @@ export { TransactionService } from './services/TransactionService';
 export { FileSystem } from './utils/FileSystem';
 export { Logger, LogLevel } from './utils/Logger';
 
+import { LogLevel, Logger } from './utils/Logger';
+
 // Función de ayuda para crear una instancia de BesuNetworkManager con todas las dependencias
 import { BesuNetworkConfig } from './models/types';
 import { BesuNetworkManager } from './services/BesuNetworkManager';
+import { ConfigGenerator } from './services/ConfigGenerator';
 import { DockerService } from './services/DockerService';
+import { FileSystem } from './utils/FileSystem';
 import { GenesisGenerator } from './services/GenesisGenerator';
 import { KeyGenerator } from './services/KeyGenerator';
-import { FileSystem } from './utils/FileSystem';
-import { Logger, LogLevel } from './utils/Logger';
 
 /**
  * Crea una instancia de BesuNetworkManager con todas las dependencias necesarias
@@ -37,6 +39,7 @@ export function createBesuNetwork(config: BesuNetworkConfig, logLevel: LogLevel 
   const docker = new DockerService({}, logger);
   const genesisGenerator = new GenesisGenerator(logger, fs);
   const keyGenerator = new KeyGenerator(logger, fs);
+  const configGenerator = new ConfigGenerator(logger, fs);
   
-  return new BesuNetworkManager(config, docker, logger, fs, genesisGenerator, keyGenerator);
+  return new BesuNetworkManager(config, docker, logger, fs, genesisGenerator, keyGenerator, configGenerator);
 }

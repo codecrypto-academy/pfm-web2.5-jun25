@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import { BesuNetworkConfig, BesuNetworkStatus, BesuNodeConfig, BesuNodeStatus, GenesisOptions } from '../models/types';
 
+import { ConfigGenerator } from './ConfigGenerator';
 import { DockerService } from './DockerService';
 import { FileSystem } from '../utils/FileSystem';
 import { GenesisGenerator } from './GenesisGenerator';
@@ -19,6 +20,7 @@ export class BesuNetworkManager {
   private fs: FileSystem;
   private genesisGenerator: GenesisGenerator;
   private keyGenerator: KeyGenerator;
+  private configGenerator: ConfigGenerator;
   private networkName: string;
   private dataDir: string;
   private bootnode: string | null = null;
@@ -36,7 +38,8 @@ export class BesuNetworkManager {
     logger: Logger,
     fs: FileSystem,
     genesisGenerator: GenesisGenerator,
-    keyGenerator: KeyGenerator
+    keyGenerator: KeyGenerator,
+    configGenerator: ConfigGenerator
   ) {
     this.config = config;
     this.docker = docker;
@@ -44,16 +47,38 @@ export class BesuNetworkManager {
     this.fs = fs;
     this.genesisGenerator = genesisGenerator;
     this.keyGenerator = keyGenerator;
+    this.configGenerator = configGenerator;
     this.networkName = `${config.name}`;
     this.dataDir = config.dataDir || path.join(process.cwd(), 'data');
   }
 
   /**
    * Inicializa la red Besu
+   * @param nuevo Si es true, borra todo rastro del nodo anterior; si es false, reutiliza el nodo anterior
    */
-  public async initialize(): Promise<void> {
+  public async initialize(nuevo: boolean = false): Promise<void> {
     this.logger.info(`Inicializando red Besu: ${this.config.name}`);
     
+    if (nuevo) {
+      this.logger.info('El parámetro `nuevo` es true, se procederá a limpiar la red.');
+      // Detener todos los nodos y redes antes de borrar datos
+      await this.stop();
+      this.logger.info('Contenedores y red detenidos.');
+
+      if (fs.existsSync(this.dataDir)) {
+        this.logger.info(`Directorio de datos encontrado en: ${this.dataDir}. Intentando borrar...`);
+        try {
+          // Borrado recursivo para evitar ENOTEMPTY
+          fs.rmSync(this.dataDir, { recursive: true, force: true });
+          this.logger.info('Directorio de datos borrado con éxito.');
+        } catch (error) {
+          this.logger.error('Error al borrar el directorio de datos:', error);
+          throw new Error('No se pudo borrar el directorio de datos anterior. Verifique los permisos.');
+        }
+      } else {
+        this.logger.info('No se encontró un directorio de datos anterior. No se requiere limpieza.');
+      }
+    }
     // Crear directorio de datos si no existe
     await this.fs.ensureDir(this.dataDir);
     
@@ -76,8 +101,14 @@ export class BesuNetworkManager {
       validatorAddresses
     };
     
+    this.logger.info(`Configurando red con ${validatorAddresses.length} validadores:`);
+    validatorAddresses.forEach((addr, index) => {
+      this.logger.info(`  Validador ${index + 1}: ${addr}`);
+    });
+    
     await this.genesisGenerator.generateGenesisFile(genesisPath, genesisOptions);
     this.logger.info(`Archivo génesis generado en: ${genesisPath}`);
+    this.logger.info(`Protocolo de consenso: ${this.config.consensusProtocol}, Período de bloque: ${this.config.blockPeriod}s`);
   }
 
   /**
@@ -92,7 +123,14 @@ export class BesuNetworkManager {
     // Iniciar el bootnode (primer nodo)
     if (this.config.nodes && this.config.nodes.length > 0) {
       const bootNode = this.config.nodes[0];
+      
+      // Generar archivo de configuración solo para el bootnode
+      await this.generateBootnodeConfigFile();
+      
       await this.startBootNode(bootNode);
+      
+      // Generar archivos config.toml para los demás nodos con el enode real
+      await this.generateNodesConfigFiles();
       
       // Iniciar el resto de nodos
       for (let i = 1; i < this.config.nodes.length; i++) {
@@ -201,16 +239,25 @@ export class BesuNetworkManager {
       await this.fs.ensureDir(nodeDir);
       const { privateKey, publicKey, address } = await this.keyGenerator.generateNodeKeys(nodeDir);
       
+      // Por defecto, todos los nodos son validadores en redes pequeñas
+      const isValidator = true;
+      this.logger.info(`Nodo ${nodeName} configurado:`);
+      this.logger.info(`  Dirección: ${address}`);
+      this.logger.info(`  Es validador: ${isValidator ? 'SÍ' : 'NO'}`);
+      this.logger.info(`  Directorio: ${nodeDir}`);
+      this.logger.info(`  Puerto RPC: ${this.config.baseRpcPort + i}`);
+      this.logger.info(`  Puerto P2P: ${this.config.baseP2pPort + i}`);
+      
       // Crear configuración del nodo
       const nodeConfig: BesuNodeConfig = {
         name: nodeName,
         rpcPort: this.config.baseRpcPort + i,
         p2pPort: this.config.baseP2pPort + i,
         dataDir: nodeDir,
-        isValidator: true, // Por defecto, todos los nodos son validadores
+        isValidator: isValidator,
         validatorAddress: address,
         privateKey,
-        enabledApis: ['ETH', 'NET', 'WEB3', 'ADMIN']
+        enabledApis: ['ETH', 'NET', 'WEB3', 'ADMIN', 'DEBUG', 'MINER', 'TXPOOL']
       };
       
       // Si es un protocolo que requiere Clique, añadir API Clique
@@ -225,6 +272,81 @@ export class BesuNetworkManager {
   }
 
   /**
+   * Genera archivo config.toml solo para el bootnode
+   */
+  async generateBootnodeConfigFile(): Promise<void> {
+    this.logger.info('Generando archivo config.toml para el bootnode...');
+    
+    if (!this.config.nodes || this.config.nodes.length === 0) {
+      this.logger.warn('No hay nodos configurados para generar archivo config.toml del bootnode');
+      return;
+    }
+
+    const bootnodeConfig = this.config.nodes[0];
+    await this.configGenerator.generateBootnodeConfig(bootnodeConfig, this.config);
+    
+    this.logger.info('Archivo config.toml del bootnode generado exitosamente');
+  }
+
+  /**
+   * Genera archivos config.toml para los nodos no-bootnode con el enode real
+   */
+  async generateNodesConfigFiles(): Promise<void> {
+    this.logger.info('Generando archivos config.toml para los nodos con enode real...');
+    
+    if (!this.bootnode) {
+      throw new Error('No hay bootnode disponible. Debe iniciarse el bootnode primero.');
+    }
+
+    if (!this.config.nodes || this.config.nodes.length <= 1) {
+      this.logger.warn('No hay nodos adicionales para generar archivos config.toml');
+      return;
+    }
+
+    // Generar config.toml para todos los nodos excepto el bootnode (índice 0)
+    for (let i = 1; i < this.config.nodes.length; i++) {
+      const nodeConfig = this.config.nodes[i];
+      await this.configGenerator.generateNodeConfig(nodeConfig, this.config, this.bootnode);
+      this.logger.info(`Archivo config.toml generado para ${nodeConfig.name} con enode: ${this.bootnode}`);
+    }
+    
+    this.logger.info('Archivos config.toml de los nodos generados exitosamente con el enode real');
+  }
+
+  /**
+   * Genera archivos config.toml para todos los nodos (método legacy)
+   * @deprecated Usar generateBootnodeConfigFile() y generateNodesConfigFiles() en su lugar
+   */
+  async generateConfigFiles(bootnodeEnode?: string): Promise<void> {
+    this.logger.info('Generando archivos config.toml para todos los nodos...');
+    
+    if (!this.config.nodes || this.config.nodes.length === 0) {
+      this.logger.warn('No hay nodos configurados para generar archivos config.toml');
+      return;
+    }
+
+    for (let i = 0; i < this.config.nodes.length; i++) {
+      const nodeConfig = this.config.nodes[i];
+      
+      if (i === 0) {
+        // El primer nodo es el bootnode
+        await this.configGenerator.generateBootnodeConfig(nodeConfig, this.config);
+      } else {
+        // Los demás nodos se conectan al bootnode
+        // Si no se proporciona enode, usar uno temporal para la configuración
+        const defaultBootnodeEnode = bootnodeEnode || `enode://placeholder@${this.config.nodes[0].name}:30303`;
+        await this.configGenerator.generateNodeConfig(nodeConfig, this.config, defaultBootnodeEnode);
+      }
+    }
+    
+    this.logger.info('Archivos config.toml generados exitosamente');
+  }
+
+
+
+
+
+  /**
    * Inicia el nodo bootnode
    */
   private async startBootNode(nodeConfig: BesuNodeConfig): Promise<void> {
@@ -232,6 +354,7 @@ export class BesuNetworkManager {
     
     const containerName = `besu-${nodeConfig.name}`;
     const genesisPath = path.join(this.dataDir, 'genesis.json');
+    const configPath = path.join(nodeConfig.dataDir, 'config.toml');
     
     // Configurar volúmenes
     const volumes = [
@@ -245,29 +368,13 @@ export class BesuNetworkManager {
       [`${nodeConfig.p2pPort}`]: '30303'
     };
     
-    // Configurar comando
-        // Configurar comando
+    // Configurar comando usando config.toml (solo parámetros no incluidos en config.toml)
     const command = [
-      '--data-path=/data',
+      '--config-file=/data/config.toml',
+      '--node-private-key-file=/data/key',
       '--genesis-file=/genesis.json',
-      '--rpc-http-enabled=true',
-      '--rpc-http-host=0.0.0.0',
-      '--rpc-http-port=8545',
-      '--rpc-http-cors-origins=*',
-      '--rpc-http-api=ETH,NET,CLIQUE,WEB3,ADMIN',
-      '--p2p-port=30303',
-      '--p2p-host=0.0.0.0',
-      '--p2p-enabled=true',
-      `--network-id=${this.config.chainId}`,
-      `--rpc-http-api=${nodeConfig.enabledApis.join(',')}`,
-      '--max-peers=25',
-      '--discovery-enabled=true',
-      '--sync-mode=FULL',
-      '--host-allowlist=*',
-      `--miner-enabled=${nodeConfig.isValidator}`,
-      `--miner-coinbase=${nodeConfig.validatorAddress}`,
-      '--logging=INFO'
-    ]
+      '--data-path=/data',
+    ];
     // Añadir opciones adicionales si existen
     if (nodeConfig.additionalOptions) {
       for (const [key, value] of Object.entries(nodeConfig.additionalOptions)) {
@@ -276,6 +383,8 @@ export class BesuNetworkManager {
     }
     
     // Iniciar contenedor
+    this.logger.info(JSON.stringify({command}, null, 2));
+    
     const res = await this.docker.runContainer({
       name: containerName,
       image: 'hyperledger/besu:latest',
@@ -289,8 +398,14 @@ export class BesuNetworkManager {
     await this.waitForNodeReady(nodeConfig);
     
     // Obtener enode URL del bootnode
-    this.bootnode = await this.getEnodeUrl(nodeConfig.rpcPort);
-    this.logger.info(`Bootnode iniciado con enode: ${this.bootnode}`);
+    const bootnodeContainer = await this.docker.getContainerInfo(`besu-${nodeConfig.name}`);
+    if (bootnodeContainer && bootnodeContainer.ipAddress) {
+      const enodeUrl = await this.getEnodeUrl(nodeConfig.rpcPort);
+      this.bootnode = enodeUrl.replace('127.0.0.1', bootnodeContainer.ipAddress).replace('0.0.0.0', bootnodeContainer.ipAddress);
+      this.logger.info(`Bootnode iniciado con enode: ${this.bootnode}`);
+    } else {
+      throw new Error('No se pudo obtener la IP del bootnode');
+    }
   }
 
   /**
@@ -318,22 +433,10 @@ export class BesuNetworkManager {
       [`${nodeConfig.p2pPort}`]: '30303'
     };
     
-    // Configurar comando
+    // Configurar comando usando config.toml (solo parámetros no incluidos en config.toml)
     const command = [
+      '--config-file=/data/config.toml',
       '--data-path=/data',
-      '--genesis-file=/genesis.json',
-      `--rpc-http-enabled=true`,
-      `--rpc-http-host=0.0.0.0`,
-      `--rpc-http-port=8545`,
-      `--rpc-http-cors-origins=*`,
-      `--p2p-port=30303`,
-      `--network-id=${this.config.chainId}`,
-      `--rpc-http-api=${nodeConfig.enabledApis.join(',')}`,
-      `--sync-mode=FULL`,
-      `--miner-enabled=${nodeConfig.isValidator}`,
-      `--miner-coinbase=${nodeConfig.validatorAddress}`,
-      `--bootnodes=${this.bootnode}`,
-      `--logging=INFO`
     ];
     
     // Añadir opciones adicionales si existen
@@ -365,20 +468,47 @@ export class BesuNetworkManager {
   private async waitForNodeReady(nodeConfig: BesuNodeConfig): Promise<void> {
     this.logger.info(`Esperando a que el nodo ${nodeConfig.name} esté listo...`);
     
-    const maxRetries = 30;
-    const retryInterval = 2000;
+    const containerName = `besu-${nodeConfig.name}`;
     
-    for (let i = 0; i < maxRetries; i++) {
+    // Primero verificar que el contenedor esté corriendo
+    const maxContainerRetries = 20;
+    const containerRetryInterval = 1000;
+    
+    for (let i = 0; i < maxContainerRetries; i++) {
+      const containerInfo = await this.docker.getContainerInfo(containerName);
+      if (containerInfo && containerInfo.state === 'running') {
+        this.logger.info(`Contenedor ${containerName} está corriendo`);
+        break;
+      }
+      
+      if (i === maxContainerRetries - 1) {
+        throw new Error(`El contenedor ${containerName} no se inició correctamente`);
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, containerRetryInterval));
+    }
+    
+    // Esperar un poco más para que el servicio RPC esté listo
+    this.logger.info(`Esperando a que el servicio RPC del nodo ${nodeConfig.name} esté disponible...`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // Ahora verificar que el RPC responda
+    const maxRpcRetries = 15;
+    const rpcRetryInterval = 3000;
+    
+    for (let i = 0; i < maxRpcRetries; i++) {
       try {
         const blockNumber = await this.getBlockNumber(nodeConfig.rpcPort);
         this.logger.info(`Nodo ${nodeConfig.name} listo, bloque actual: ${blockNumber}`);
         return;
       } catch (error) {
-        if (i === maxRetries - 1) {
-          throw new Error(`Tiempo de espera agotado para el nodo ${nodeConfig.name}`);
+        this.logger.info(`Intento ${i + 1}/${maxRpcRetries} - RPC aún no disponible para ${nodeConfig.name}`);
+        
+        if (i === maxRpcRetries - 1) {
+          throw new Error(`Tiempo de espera agotado para el nodo ${nodeConfig.name}. RPC no responde después de ${maxRpcRetries} intentos.`);
         }
         
-        await new Promise(resolve => setTimeout(resolve, retryInterval));
+        await new Promise(resolve => setTimeout(resolve, rpcRetryInterval));
       }
     }
   }

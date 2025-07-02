@@ -2,7 +2,11 @@
  * Ejemplo de uso de la biblioteca para crear una red Besu simple
  */
 import * as path from 'path';
-import { createBesuNetwork, BesuNetworkConfig, LogLevel } from '../src';
+
+import { BesuNetworkConfig, LogLevel, createBesuNetwork } from '../src';
+
+// Importar ejemplo de config.toml
+import { generateConfigTomlExample } from './config-toml-example';
 
 /**
  * Función principal
@@ -24,23 +28,22 @@ async function main() {
     // Crear la red Besu
     const besuNetwork = createBesuNetwork(config, LogLevel.DEBUG);
 
-    // Inicializar la red (generar claves y archivo génesis)
-    await besuNetwork.initialize();
+    // Inicializar la red (forzar creación nueva)
+    await besuNetwork.initialize(true);
 
-    // Iniciar la red
+    // Iniciar la red (ahora genera los config.toml automáticamente en la secuencia correcta)
     await besuNetwork.start();
 
     // Mostrar el estado de la red
     const status = await besuNetwork.getStatus();
-    console.log('Estado de la red:');
-    console.log(JSON.stringify(status, null, 2));
+    console.log("Network status:", status);
 
-    // Mantener la red en ejecución hasta que se pulse Ctrl+C
-    console.log('\nRed Besu iniciada. Presiona Ctrl+C para detener...');
-    process.on('SIGINT', async () => {
-      console.log('\nDeteniendo la red Besu...');
+    console.log("La red está en ejecución. Pulsa Ctrl+C para detenerla.");
+    // Mantener el proceso en ejecución hasta Ctrl+C
+    process.stdin.resume();
+    process.on("SIGINT", async () => {
+      console.log("\nDeteniendo la red...");
       await besuNetwork.stop();
-      console.log('Red Besu detenida.');
       process.exit(0);
     });
   } catch (error) {
@@ -49,5 +52,21 @@ async function main() {
   }
 }
 
-// Ejecutar la función principal
-main();
+/**
+ * Ejemplo adicional: Generar archivos config.toml para Clique
+ */
+async function runConfigTomlExample() {
+  console.log('\n=== Ejecutando ejemplo de config.toml para Clique ===');
+  console.log('Para ver un ejemplo completo de generación de archivos config.toml,');
+  console.log('ejecuta: npm run example:config-toml');
+  console.log('O revisa el archivo: examples/config-toml-example.ts');
+  console.log('Documentación: docs/CONFIG-TOML.md');
+  console.log('Nota: Solo se soporta consenso Clique');
+}
+
+// Ejecutar el ejemplo
+if (require.main === module) {
+  main()
+    .then(() => runConfigTomlExample())
+    .catch(console.error);
+}

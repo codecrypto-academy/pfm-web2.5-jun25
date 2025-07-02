@@ -1,8 +1,9 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Logger } from '../utils/Logger';
+
 import { FileSystem } from '../utils/FileSystem';
+import { Logger } from '../utils/Logger';
 import { ethers } from 'ethers';
 
 /**
@@ -47,9 +48,13 @@ export class KeyGenerator {
     const publicKey = wallet.publicKey;
     const address = wallet.address;
 
-    // Guardar la clave privada
+    // Guardar la clave privada en formato hexadecimal sin prefijo 0x (formato requerido por Besu)
     const privateKeyPath = path.join(nodeDir, 'key');
     await this.fs.writeFile(privateKeyPath, privateKey.substring(2)); // Eliminar el prefijo 0x
+
+    // Guardar la clave pública
+    const publicKeyPath = path.join(nodeDir, 'key.pub');
+    await this.fs.writeFile(publicKeyPath, publicKey.substring(2)); // Eliminar el prefijo 0x
 
     // Guardar la dirección
     const addressPath = path.join(nodeDir, 'address');

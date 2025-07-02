@@ -204,6 +204,40 @@ export class DockerService {
         binds.push(volume);
       }
 
+      // Construir y loguear el comando Docker equivalente
+      let dockerCommand = `docker run --name ${options.name}`;
+      
+      // Agregar puertos
+      for (const [hostPort, containerPort] of Object.entries(options.ports)) {
+        const cleanContainerPort = containerPort.replace('/tcp', '');
+        dockerCommand += ` -p ${hostPort}:${cleanContainerPort}`;
+      }
+      
+      // Agregar volúmenes
+      for (const volume of options.volumes) {
+        dockerCommand += ` -v ${volume}`;
+      }
+      
+      // Agregar red
+      if (options.network) {
+        dockerCommand += ` --network ${options.network}`;
+      }
+      
+      // Agregar variables de entorno
+      if (options.environment) {
+        for (const [key, value] of Object.entries(options.environment)) {
+          dockerCommand += ` -e ${key}=${value}`;
+        }
+      }
+      
+      // Agregar imagen y comando
+      dockerCommand += ` ${options.image}`;
+      if (options.command && options.command.length > 0) {
+        dockerCommand += ` ${options.command.join(' ')}`;
+      }
+      
+      this.logger.info(`Ejecutando comando Docker: ${dockerCommand}`);
+
       // Crear el contenedor
       const container = await this.docker.createContainer({
         name: options.name,

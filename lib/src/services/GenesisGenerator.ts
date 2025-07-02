@@ -79,7 +79,9 @@ export class GenesisGenerator {
       // Financiar las cuentas de los validadores
       const alloc: Record<string, { balance: string }> = {};
       for (const address of options.validatorAddresses) {
-        alloc[address] = { balance: '0x200000000000000000000000000000000' };
+        // Las direcciones en alloc deben mantener el prefijo 0x y estar en minúsculas
+        const cleanAddress = address.toLowerCase();
+        alloc[cleanAddress] = { balance: '0x200000000000000000000000000000000' };
       }
 
       // Añadir algunas cuentas adicionales para pruebas
@@ -111,8 +113,14 @@ export class GenesisGenerator {
     // Format: 0x + 32 bytes (zeros) + validators addresses + 65 bytes (zeros)
     const prefix = '0x' + '0'.repeat(64);
     const suffix = '0'.repeat(130);
-    const validators = options.validatorAddresses.map(addr => addr.substring(2)).join('');
+    // Asegurar que las direcciones estén en minúsculas y sin prefijo 0x
+    const validators = options.validatorAddresses
+      .map(addr => addr.toLowerCase().substring(2))
+      .join('');
     genesis.extraData = prefix + validators + suffix;
+    
+    this.logger.info(`Configurando Clique con ${options.validatorAddresses.length} validadores`);
+    this.logger.debug(`ExtraData generado: ${genesis.extraData}`);
   }
 
   /**

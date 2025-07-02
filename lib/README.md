@@ -95,7 +95,7 @@ npx ts-node examples/simple-network.ts
 
 Gestiona el ciclo de vida completo de una red Besu:
 
-- `initialize()`: Inicializa la red (genera claves y archivo génesis)
+- `initialize(nuevo?: boolean)`: Inicializa la red (genera claves y archivo génesis). Si `nuevo` es true, borra todo rastro del nodo anterior; si es false o no se indica, reutiliza el nodo anterior.
 - `start()`: Inicia la red
 - `stop()`: Detiene la red
 - `getStatus()`: Obtiene el estado actual de la red

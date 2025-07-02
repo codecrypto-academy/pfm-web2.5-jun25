@@ -5,24 +5,22 @@ import { MongoClient, ObjectId } from "mongodb";
 import 'dotenv/config';
 
 // MongoDB connection
-const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
-const dbName = process.env.MONGODB_DB || 'redesBesu';
+const uri = process.env.MONGODB_URI || 'mongodb://admin:password123@localhost:27017/besuNetworks?authSource=admin';
+const dbName = process.env.MONGODB_DB || 'besuNetworks';
 
-// MongoDB client
-let client: MongoClient | null = null;
+// MongoDB client (singleton pattern for dev/hot-reload)
+let globalWithMongo = global as typeof globalThis & { _mongoClientPromise?: Promise<MongoClient> };
+let clientPromise: Promise<MongoClient>;
 
-// Get MongoDB client
-async function getClient() {
-  if (!client) {
-    client = new MongoClient(uri);
-    await client.connect();
-  }
-  return client;
+if (!globalWithMongo._mongoClientPromise) {
+  const client = new MongoClient(uri);
+  globalWithMongo._mongoClientPromise = client.connect();
 }
+clientPromise = globalWithMongo._mongoClientPromise;
 
 // Get database
 async function getDb() {
-  const client = await getClient();
+  const client = await clientPromise;
   return client.db(dbName);
 }
 
@@ -55,7 +53,7 @@ export const getNetworks = async (): Promise<Network[]> => {
         accounts: mappedNetwork.accounts || [],
         createdAt: new Date(mappedNetwork.createdAt),
         updatedAt: new Date(mappedNetwork.updatedAt),
-        nodes: [], // Will be populated when needed
+        nodes: mappedNetwork.nodes || [],
       } as Network;
     });
   } catch (error) {
@@ -83,23 +81,6 @@ export const getNetworkById = async (id: string): Promise<Network | null> => {
     // Map MongoDB _id to id for frontend
     const mappedNetwork = mapIdToDocument(network);
     
-    // Get nodes for this network
-    const nodesCollection = db.collection('nodes');
-    const nodes = await nodesCollection.find({ networkId: id }).toArray();
-    const mappedNodes = nodes.map(node => {
-      const mappedNode = mapIdToDocument(node);
-      return {
-        ...mappedNode,
-        networkId: mappedNode.networkId || '',
-        name: mappedNode.name || '',
-        type: mappedNode.type || 'rpc',
-        ip: mappedNode.ip || '',
-        port: mappedNode.port || 0,
-        createdAt: new Date(mappedNode.createdAt),
-        updatedAt: new Date(mappedNode.updatedAt),
-      } as Node;
-    });
-    
     return {
       ...mappedNetwork,
       name: mappedNetwork.name || '',
@@ -108,7 +89,7 @@ export const getNetworkById = async (id: string): Promise<Network | null> => {
       accounts: mappedNetwork.accounts || [],
       createdAt: new Date(mappedNetwork.createdAt),
       updatedAt: new Date(mappedNetwork.updatedAt),
-      nodes: mappedNodes,
+      nodes: mappedNetwork.nodes || [],
     } as Network;
   } catch (error) {
     console.error('Error fetching network by ID:', error);
@@ -116,7 +97,7 @@ export const getNetworkById = async (id: string): Promise<Network | null> => {
   }
 };
 
-export const createNetwork = async (data: Omit<Network, "id" | "createdAt" | "updatedAt" | "nodes">): Promise<Network> => {
+export const createNetwork = async (data: Omit<Network, "id" | "createdAt" | "updatedAt">): Promise<Network> => {
   try {
     const db = await getDb();
     const networksCollection = db.collection('networks');
@@ -135,7 +116,6 @@ export const createNetwork = async (data: Omit<Network, "id" | "createdAt" | "up
       id: result.insertedId.toString(),
       createdAt: now,
       updatedAt: now,
-      nodes: [],
     };
   } catch (error) {
     console.error('Error creating network:', error);
@@ -143,7 +123,7 @@ export const createNetwork = async (data: Omit<Network, "id" | "createdAt" | "up
   }
 };
 
-export const updateNetwork = async (id: string, data: Partial<Omit<Network, "id" | "createdAt" | "updatedAt" | "nodes">>): Promise<Network | null> => {
+export const updateNetwork = async (id: string, data: Partial<Omit<Network, "id" | "createdAt" | "updatedAt">>): Promise<Network | null> => {
   try {
     const db = await getDb();
     const networksCollection = db.collection('networks');
@@ -177,7 +157,6 @@ export const deleteNetwork = async (id: string): Promise<boolean> => {
   try {
     const db = await getDb();
     const networksCollection = db.collection('networks');
-    const nodesCollection = db.collection('nodes');
     
     let objectId;
     try {
@@ -189,9 +168,6 @@ export const deleteNetwork = async (id: string): Promise<boolean> => {
     // Delete the network
     const result = await networksCollection.deleteOne({ _id: objectId });
     
-    // Delete all nodes associated with this network
-    await nodesCollection.deleteMany({ networkId: id });
-    
     return result.deletedCount > 0;
   } catch (error) {
     console.error('Error deleting network:', error);
@@ -199,143 +175,39 @@ export const deleteNetwork = async (id: string): Promise<boolean> => {
   }
 };
 
-// Node CRUD operations
-export const getNodes = async (networkId?: string): Promise<Node[]> => {
-  try {
-    const db = await getDb();
-    const nodesCollection = db.collection('nodes');
-    
-    const query = networkId ? { networkId } : {};
-    const nodes = await nodesCollection.find(query).toArray();
-    
-    // Map MongoDB _id to id for frontend
-    return nodes.map(node => {
-      const mappedNode = mapIdToDocument(node);
-      return {
-        ...mappedNode,
-        networkId: mappedNode.networkId || '',
-        name: mappedNode.name || '',
-        type: mappedNode.type || 'rpc',
-        ip: mappedNode.ip || '',
-        port: mappedNode.port || 0,
-        createdAt: new Date(mappedNode.createdAt),
-        updatedAt: new Date(mappedNode.updatedAt),
-      } as Node;
-    });
-  } catch (error) {
-    console.error('Error fetching nodes:', error);
-    return [];
-  }
+// Node CRUD operations (in-place in networks collection)
+export const getNodes = async (networkId: string): Promise<Node[]> => {
+  const network = await getNetworkById(networkId);
+  return network?.nodes || [];
 };
 
-export const getNodeById = async (id: string): Promise<Node | null> => {
-  try {
-    const db = await getDb();
-    const nodesCollection = db.collection('nodes');
-    
-    let objectId;
-    try {
-      objectId = new ObjectId(id);
-    } catch {
-      return null; // Invalid ObjectId format
-    }
-    
-    const node = await nodesCollection.findOne({ _id: objectId });
-    
-    if (!node) return null;
-    
-    // Map MongoDB _id to id for frontend
-    const mappedNode = mapIdToDocument(node);
-    return {
-      ...mappedNode,
-      networkId: mappedNode.networkId || '',
-      name: mappedNode.name || '',
-      type: mappedNode.type || 'rpc',
-      ip: mappedNode.ip || '',
-      port: mappedNode.port || 0,
-      createdAt: new Date(mappedNode.createdAt),
-      updatedAt: new Date(mappedNode.updatedAt),
-    } as Node;
-  } catch (error) {
-    console.error('Error fetching node by ID:', error);
-    return null;
-  }
+export const getNodeById = async (networkId: string, nodeName: string): Promise<Node | null> => {
+  const nodes = await getNodes(networkId);
+  return nodes.find(n => n.name === nodeName) || null;
 };
 
-export const createNode = async (data: Omit<Node, "id" | "createdAt" | "updatedAt">): Promise<Node> => {
-  try {
-    const db = await getDb();
-    const nodesCollection = db.collection('nodes');
-    
-    const now = new Date();
-    const nodeToInsert = {
-      ...data,
-      createdAt: now,
-      updatedAt: now,
-    };
-    
-    const result = await nodesCollection.insertOne(nodeToInsert);
-    
-    return {
-      ...data,
-      id: result.insertedId.toString(),
-      createdAt: now,
-      updatedAt: now,
-    } as Node;
-  } catch (error) {
-    console.error('Error creating node:', error);
-    throw error;
-  }
+export const createNode = async (networkId: string, node: Node): Promise<Node[]> => {
+  const network = await getNetworkById(networkId);
+  if (!network) throw new Error('Network not found');
+  const nodes = [...(network.nodes || []), node];
+  await updateNetwork(networkId, { nodes });
+  return nodes;
 };
 
-export const updateNode = async (id: string, data: Partial<Omit<Node, "id" | "createdAt" | "updatedAt">>): Promise<Node | null> => {
-  try {
-    const db = await getDb();
-    const nodesCollection = db.collection('nodes');
-    
-    let objectId;
-    try {
-      objectId = new ObjectId(id);
-    } catch {
-      return null; // Invalid ObjectId format
-    }
-    
-    const now = new Date();
-    const updateData = {
-      $set: {
-        ...data,
-        updatedAt: now,
-      },
-    };
-    
-    await nodesCollection.updateOne({ _id: objectId }, updateData);
-    
-    // Get the updated node
-    return getNodeById(id);
-  } catch (error) {
-    console.error('Error updating node:', error);
-    return null;
-  }
+export const updateNode = async (networkId: string, nodeName: string, data: Partial<Node>): Promise<Node | null> => {
+  const network = await getNetworkById(networkId);
+  if (!network) return null;
+  const nodes = (network.nodes || []).map(n => n.name === nodeName ? { ...n, ...data } : n);
+  await updateNetwork(networkId, { nodes });
+  return nodes.find(n => n.name === nodeName) || null;
 };
 
-export const deleteNode = async (id: string): Promise<boolean> => {
-  try {
-    const db = await getDb();
-    const nodesCollection = db.collection('nodes');
-    
-    let objectId;
-    try {
-      objectId = new ObjectId(id);
-    } catch {
-      return false; // Invalid ObjectId format
-    }
-    
-    const result = await nodesCollection.deleteOne({ _id: objectId });
-    return result.deletedCount > 0;
-  } catch (error) {
-    console.error('Error deleting node:', error);
-    return false;
-  }
+export const deleteNode = async (networkId: string, nodeName: string): Promise<boolean> => {
+  const network = await getNetworkById(networkId);
+  if (!network) return false;
+  const nodes = (network.nodes || []).filter(n => n.name !== nodeName);
+  await updateNetwork(networkId, { nodes });
+  return true;
 };
 
 // Initialize the database with sample data if empty
@@ -343,71 +215,86 @@ export const initializeDatabase = async (): Promise<void> => {
   try {
     const db = await getDb();
     const networksCollection = db.collection('networks');
-    const nodesCollection = db.collection('nodes');
     
     // Check if we already have networks
     const networkCount = await networksCollection.countDocuments();
     
+    /* Sample Besu Network initialization
     if (networkCount === 0) {
       // Create a sample network
       const now = new Date();
       const networkData = {
-        name: "Sample Besu Network",
+        name: "Prueba Red Besu",
         chainId: 1337,
-        signerAddress: "0x8967BCF84170c91B0d24D4302C2376283b0B1E21",
+        signerAddress: "0x4F9d6Eafa67ae9F317AC6A67138727E13D80Fe98",
         accounts: [
           {
-            address: "0x8967BCF84170c91B0d24D4302C2376283b0B1E21",
-            balance: "1000000000000000000000",
+            address: "0x6243A64dd2E56F164E1f08e99433A7DEC132AB4E",
+            balance: "100",
           },
           {
-            address: "0x999B93C31101e9B8312eBC32f91B2B04052c5Fab",
-            balance: "500000000000000000000",
+            address: "0xd69A7b47f4038BC831B8F22991Cf3A69DdC21574",
+            balance: "250",
+          },
+        ],
+        nodes: [
+          {
+            type: "rpc",
+            ip: "10.0.0.11",
+            name: "rpc18962",
+            port: 18962,
+          },
+          {
+            type: "miner",
+            ip: "10.0.0.12",
+            name: "miner18963",
+            port: 18963,
+          },
+          {
+            type: "node",
+            ip: "10.0.0.13",
+            name: "node18964",
+            port: 18964,
           },
         ],
         createdAt: now,
         updatedAt: now,
       };
       
-      const networkResult = await networksCollection.insertOne(networkData);
-      const networkId = networkResult.insertedId.toString();
-      
-      // Create sample nodes
-      const nodesData = [
-        {
-          networkId,
-          name: "Miner Node 1",
-          type: "miner",
-          ip: "192.168.1.10",
-          port: 8545,
-          createdAt: now,
-          updatedAt: now,
-        },
-        {
-          networkId,
-          name: "RPC Node 1",
-          type: "rpc",
-          ip: "192.168.1.11",
-          port: 8546,
-          createdAt: now,
-          updatedAt: now,
-        },
-        {
-          networkId,
-          name: "Bootnode 1",
-          type: "bootnode",
-          ip: "192.168.1.12",
-          port: 30303,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ];
-      
-      await nodesCollection.insertMany(nodesData);
+      await networksCollection.insertOne(networkData);
       
       console.log('Database initialized with sample data');
-    }
+    }*/
   } catch (error) {
     console.error('Error initializing database:', error);
   }
-}; 
+};
+
+// Network CRUD operations
+export const getNetworkByName = async (name: string): Promise<Network | null> => {
+  try {
+    const db = await getDb();
+    const networksCollection = db.collection('networks');
+    
+    const network = await networksCollection.findOne({ name });
+    
+    if (!network) return null;
+    
+    // Map MongoDB _id to id for frontend
+    const mappedNetwork = mapIdToDocument(network);
+    
+    return {
+      ...mappedNetwork,
+      name: mappedNetwork.name || '',
+      chainId: mappedNetwork.chainId || 0,
+      signerAddress: mappedNetwork.signerAddress || '',
+      accounts: mappedNetwork.accounts || [],
+      createdAt: new Date(mappedNetwork.createdAt),
+      updatedAt: new Date(mappedNetwork.updatedAt),
+      nodes: mappedNetwork.nodes || [],
+    } as Network;
+  } catch (error) {
+    console.error('Error fetching network by name:', error);
+    return null;
+  }
+};

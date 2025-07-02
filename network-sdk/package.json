@@ -1,44 +1,51 @@
 {
-  "name": "network-sdk",
+  "name": "besu-network-manager",
   "version": "1.0.0",
-  "description": "TypeScript SDK for Besu network operations",
+  "description": "TypeScript library for managing Hyperledger Besu networks with Clique consensus using Docker",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "files": [
+    "dist/"
+  ],
   "scripts": {
-    "build": "./build.sh",
-    "build:tsc": "tsc",
+    "build": "tsc",
     "dev": "tsx src/index.ts",
     "clean": "rm -rf dist",
     "prepare": "yarn build",
-    "network:setup": "node network-cli.mjs setup",
-    "network:start": "node network-cli.mjs start",
-    "network:stop": "node network-cli.mjs stop",
-    "network:restart": "node network-cli.mjs restart",
-    "network:status": "node network-cli.mjs status",
-    "network:test": "node network-cli.mjs test",
-    "network:logs": "node network-cli.mjs logs",
-    "network:reset": "node network-cli.mjs reset",
-    "network:help": "node scripts/network-cli.mjs help"
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
   },
   "keywords": [
     "besu",
     "blockchain",
+    "ethereum",
+    "clique",
+    "consensus",
+    "docker",
     "network",
-    "sdk",
+    "hyperledger",
     "typescript"
   ],
-  "author": "",
+  "author": "Your Name",
   "license": "MIT",
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "tsx": "^4.0.0",
-    "typescript": "^5.0.0"
-  },
   "dependencies": {
-    "@types/elliptic": "^6.4.18",
+    "dockerode": "^4.0.7",
     "elliptic": "^6.5.4",
-    "keccak256": "^1.0.6"
+    "js-sha3": "^0.9.3",
+    "keccak": "^3.0.4"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.23",
+    "@types/keccak": "^3.0.5",
+    "@types/node": "^20.14.2",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.3.2",
+    "tsx": "^4.15.7",
+    "typescript": "^5.4.5"
   },
   "engines": {
     "node": ">=18.0.0"

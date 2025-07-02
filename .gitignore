@@ -157,3 +157,26 @@ public/uploads/
 # Local configuration files that shouldn't be shared
 local.config.*
 *.local.*
+
+# ==============================================================================
+# NEXT.JS SPECIFIC
+# ==============================================================================
+
+# Next.js build output
+.next/
+out/
+
+# Next.js cache
+.next/cache/
+.next/standalone/
+.next/static/
+.next/server/
+
+# Next.js environment variables
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel deployment outputs
+.vercel/

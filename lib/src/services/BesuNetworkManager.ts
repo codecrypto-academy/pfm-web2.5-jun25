@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { BesuNetworkConfig, BesuNetworkStatus, BesuNodeConfig, BesuNodeStatus, BesuNodeType, GenesisOptions } from '../models/types';
+import { BesuNetworkConfig, BesuNetworkStatus, BesuNodeConfig, BesuNodeStatus, BesuNodeType, GenesisOptions, NodeCreationConfig } from '../models/types';
 
 import { ConfigGenerator } from './ConfigGenerator';
 import { DockerService } from './DockerService';
@@ -235,6 +235,12 @@ export class BesuNetworkManager {
   private async generateNodeConfigs(): Promise<BesuNodeConfig[]> {
     const nodes: BesuNodeConfig[] = [];
     
+    // Si hay configuraciones específicas de creación de nodos, usarlas
+    if (this.config.nodeCreationConfigs && this.config.nodeCreationConfigs.length > 0) {
+      return await this.generateNodesFromCreationConfigs(this.config.nodeCreationConfigs);
+    }
+    
+    // Generar nodos usando la configuración tradicional
     for (let i = 0; i < this.config.nodeCount; i++) {
       const nodeName = `node${i}`;
       const nodeDir = path.join(this.dataDir, nodeName);
@@ -252,8 +258,14 @@ export class BesuNetworkManager {
         nodeType = i === 0 ? BesuNodeType.SIGNER : BesuNodeType.NORMAL;
       }
       
+      // Determinar si es validador y bootnode
+      const isValidator = nodeType === BesuNodeType.SIGNER;
+      const isBootnode = i === 0; // El primer nodo es bootnode por defecto
+      
       this.logger.info(`Nodo ${nodeName} configurado:`);
       this.logger.info(`  Tipo: ${nodeType}`);
+      this.logger.info(`  Es Validador: ${isValidator}`);
+      this.logger.info(`  Es Bootnode: ${isBootnode}`);
       this.logger.info(`  Dirección: ${address}`);
       this.logger.info(`  Directorio: ${nodeDir}`);
       this.logger.info(`  Puerto RPC: ${this.config.baseRpcPort + i}`);
@@ -270,6 +282,72 @@ export class BesuNetworkManager {
         privateKey,
         {} // additionalOptions
       );
+      
+      // Añadir las nuevas propiedades
+      nodeConfig.isValidator = isValidator;
+      nodeConfig.isBootnode = isBootnode;
+      
+      // Si es un protocolo que requiere Clique, añadir API Clique
+      if (this.config.consensusProtocol === 'clique' && !nodeConfig.enabledApis.includes('CLIQUE')) {
+        nodeConfig.enabledApis.push('CLIQUE');
+      }
+      
+      nodes.push(nodeConfig);
+    }
+    
+    return nodes;
+  }
+
+  /**
+   * Genera nodos desde configuraciones de creación específicas
+   */
+  private async generateNodesFromCreationConfigs(creationConfigs: NodeCreationConfig[]): Promise<BesuNodeConfig[]> {
+    const nodes: BesuNodeConfig[] = [];
+    
+    for (let i = 0; i < creationConfigs.length; i++) {
+      const config = creationConfigs[i];
+      const nodeDir = path.join(this.dataDir, config.name);
+      
+      // Generar clave para el nodo
+      await this.fs.ensureDir(nodeDir);
+      const { privateKey, publicKey, address } = await this.keyGenerator.generateNodeKeys(nodeDir);
+      
+      // Usar puertos personalizados o calcular automáticamente
+      const rpcPort = config.rpcPort || (this.config.baseRpcPort + i);
+      const p2pPort = config.p2pPort || (this.config.baseP2pPort + i);
+      
+      // Determinar si es validador basado en la configuración o tipo de nodo
+      const isValidator = config.isValidator !== undefined ? config.isValidator : (config.nodeType === BesuNodeType.SIGNER);
+      const isBootnode = config.isBootnode || false;
+      
+      this.logger.info(`Nodo ${config.name} configurado:`);
+      this.logger.info(`  Tipo: ${config.nodeType}`);
+      this.logger.info(`  Es Validador: ${isValidator}`);
+      this.logger.info(`  Es Bootnode: ${isBootnode}`);
+      if (config.linkedTo) {
+        this.logger.info(`  Vinculado a: ${config.linkedTo}`);
+      }
+      this.logger.info(`  Dirección: ${address}`);
+      this.logger.info(`  Directorio: ${nodeDir}`);
+      this.logger.info(`  Puerto RPC: ${rpcPort}`);
+      this.logger.info(`  Puerto P2P: ${p2pPort}`);
+      
+      // Crear configuración del nodo usando NodeConfigFactory
+      const nodeConfig = NodeConfigFactory.createNodeConfig(
+        config.nodeType,
+        config.name,
+        rpcPort,
+        p2pPort,
+        nodeDir,
+        address, // validatorAddress
+        privateKey,
+        config.additionalOptions || {}
+      );
+      
+      // Añadir las nuevas propiedades
+      nodeConfig.isValidator = isValidator;
+      nodeConfig.isBootnode = isBootnode;
+      nodeConfig.linkedTo = config.linkedTo;
       
       // Si es un protocolo que requiere Clique, añadir API Clique
       if (this.config.consensusProtocol === 'clique' && !nodeConfig.enabledApis.includes('CLIQUE')) {

@@ -36,6 +36,34 @@ export interface BesuNodeConfig {
   enabledApis: string[];
   /** Opciones adicionales para el nodo */
   additionalOptions?: Record<string, string>;
+  /** Indica si el nodo es un validador */
+  isValidator?: boolean;
+  /** Indica si el nodo es un bootnode */
+  isBootnode?: boolean;
+  /** Nodo al que está vinculado (para conexiones específicas) */
+  linkedTo?: string;
+}
+
+/**
+ * Configuración para la creación de un nodo
+ */
+export interface NodeCreationConfig {
+  /** Nombre del nodo */
+  name: string;
+  /** Tipo de nodo */
+  nodeType: BesuNodeType;
+  /** Indica si el nodo es un validador */
+  isValidator?: boolean;
+  /** Indica si el nodo es un bootnode */
+  isBootnode?: boolean;
+  /** Nodo al que está vinculado (para conexiones específicas) */
+  linkedTo?: string;
+  /** Puerto RPC personalizado (opcional) */
+  rpcPort?: number;
+  /** Puerto P2P personalizado (opcional) */
+  p2pPort?: number;
+  /** Opciones adicionales para el nodo */
+  additionalOptions?: Record<string, string>;
 }
 
 /**
@@ -62,6 +90,8 @@ export interface BesuNetworkConfig {
   nodes?: BesuNodeConfig[];
   /** Tipos específicos para cada nodo (opcional) */
   nodeTypes?: BesuNodeType[];
+  /** Configuración de creación de nodos */
+  nodeCreationConfigs?: NodeCreationConfig[];
   /** Opciones adicionales para la red */
   additionalOptions?: Record<string, string>;
 }

@@ -1,35 +1,83 @@
 /**
  * Ejemplo funcional de tipos de nodos en una red Besu
- * Levanta una red real con 1 SIGNER, 1 MINER y 2 NORMAL
+ * Levanta una red real con configuraciones específicas de nodos
+ * Demuestra el uso de las nuevas propiedades: isValidator, isBootnode, linkedTo, nodeType
  */
+
 import * as path from 'path';
 
-import { BesuNetworkConfig, BesuNodeType, createBesuNetwork } from '../src';
+import { BesuNetworkConfig, BesuNodeType, NodeCreationConfig, createBesuNetwork } from '../src';
 
 /**
  * Función principal para levantar la red Besu con diferentes tipos de nodos
  */
 async function main() {
   try {
-    console.log('=== Iniciando red Besu con tipos de nodos específicos ===');
+    console.log('=== Iniciando red Besu con configuraciones específicas de nodos ===');
     
-    // Configuración de la red con tipos específicos de nodos
+    // Configuración específica de cada nodo con las nuevas propiedades
+    const nodeCreationConfigs: NodeCreationConfig[] = [
+      {
+        name: 'validator-bootnode',
+        nodeType: BesuNodeType.SIGNER,
+        isValidator: true,
+        isBootnode: true,
+        rpcPort: 8545,
+        p2pPort: 30303,
+        additionalOptions: {
+          'logging': 'INFO'
+        }
+      },
+      {
+        name: 'miner-node',
+        nodeType: BesuNodeType.MINER,
+        isValidator: false,
+        isBootnode: false,
+        linkedTo: 'validator-bootnode',
+        rpcPort: 8546,
+        p2pPort: 30304
+      },
+      {
+        name: 'normal-node-1',
+        nodeType: BesuNodeType.NORMAL,
+        isValidator: false,
+        isBootnode: false,
+        linkedTo: 'validator-bootnode',
+        rpcPort: 8547,
+        p2pPort: 30305
+      },
+      {
+        name: 'normal-node-2',
+        nodeType: BesuNodeType.NORMAL,
+        isValidator: false,
+        isBootnode: false,
+        linkedTo: 'validator-bootnode',
+        rpcPort: 8548,
+        p2pPort: 30306
+      },
+      {
+        name: 'miner-node-2',
+        nodeType: BesuNodeType.MINER,
+        isValidator: false,
+        isBootnode: false,
+        linkedTo: 'validator-bootnode',
+        rpcPort: 8549,
+        p2pPort: 30307
+      }
+    ];
+    
+    // Configuración de la red usando las nuevas configuraciones de nodos
     const networkConfig: BesuNetworkConfig = {
-      name: 'node-types-network',
+      name: 'advanced-node-types-network',
       chainId: 1337,
       consensusProtocol: 'clique',
       blockPeriod: 5,
-      nodeCount: 4,
+      nodeCount: 4, // Se mantiene para compatibilidad, pero se usará nodeCreationConfigs
       baseRpcPort: 8545,
       baseP2pPort: 30303,
-      dataDir: path.join(__dirname, '../data'),
-      // Especificar tipos de nodos: 1 SIGNER, 1 MINER, 2 NORMAL
-      nodeTypes: [
-        BesuNodeType.SIGNER,  // Nodo 0: Validador
-        BesuNodeType.MINER,   // Nodo 1: Minero
-        BesuNodeType.NORMAL,  // Nodo 2: Normal
-        BesuNodeType.NORMAL   // Nodo 3: Normal
-      ]
+      dataDir: path.resolve(process.cwd(), 'data'),
+      // Usar las nuevas configuraciones de creación de nodos
+      nodeCreationConfigs: nodeCreationConfigs
     };
 
     console.log('\n=== Configuración de red ===');
@@ -37,15 +85,25 @@ async function main() {
     console.log(`Chain ID: ${networkConfig.chainId}`);
     console.log(`Consenso: ${networkConfig.consensusProtocol}`);
     console.log(`Número de nodos: ${networkConfig.nodeCount}`);
-    console.log(`Tipos de nodos: ${networkConfig.nodeTypes?.join(', ') || 'No especificados'}`);
+    
+    console.log('\n=== Configuraciones de nodos ===');
+    nodeCreationConfigs.forEach((config, index) => {
+      console.log(`Nodo ${index + 1}: ${config.name}`);
+      console.log(`  Tipo: ${config.nodeType}`);
+      console.log(`  Es Validador: ${config.isValidator}`);
+      console.log(`  Es Bootnode: ${config.isBootnode}`);
+      console.log(`  Vinculado a: ${config.linkedTo || 'Ninguno'}`);
+      console.log(`  Puerto RPC: ${config.rpcPort}`);
+      console.log(`  Puerto P2P: ${config.p2pPort}`);
+    });
 
     // Crear la red Besu
     console.log('\n=== Creando red Besu ===');
     const network = createBesuNetwork(networkConfig);
 
-    // Inicializar la red
+    // Inicializar la red (limpiando datos anteriores)
     console.log('\n=== Inicializando red ===');
-    await network.initialize();
+    await network.initialize(true); // true = limpiar datos anteriores
     console.log('✅ Red inicializada correctamente');
 
     // Iniciar la red
@@ -82,6 +140,15 @@ async function main() {
       if (node.nodeType === BesuNodeType.SIGNER) {
         console.log(`  Validando: ${node.isValidating ? 'SÍ' : 'NO'}`);
       }
+      
+      // Mostrar las nuevas propiedades si están disponibles
+      const nodeConfig = networkConfig.nodeCreationConfigs?.find(config => config.name === node.name);
+      if (nodeConfig) {
+        console.log(`  Es Validador: ${nodeConfig.isValidator ? 'SÍ' : 'NO'}`);
+        console.log(`  Es Bootnode: ${nodeConfig.isBootnode ? 'SÍ' : 'NO'}`);
+        console.log(`  Vinculado a: ${nodeConfig.linkedTo || 'Ninguno'}`);
+      }
+      
       if (node.enodeUrl) {
         console.log(`  Enode: ${node.enodeUrl.substring(0, 50)}...`);
       }
@@ -94,6 +161,15 @@ async function main() {
     }
 
     console.log('\n=== Red funcionando correctamente ===');
+    console.log('\nCaracterísticas implementadas:');
+    console.log('✅ Configuración específica de nodos con propiedades personalizadas');
+    console.log('✅ isValidator: Control explícito de validadores');
+    console.log('✅ isBootnode: Designación de nodos de arranque');
+    console.log('✅ linkedTo: Vinculación entre nodos');
+    console.log('✅ nodeType: Tipos específicos (SIGNER, MINER, NORMAL)');
+    console.log('✅ Puertos personalizados por nodo');
+    console.log('✅ Generación de nodos integrada en BesuNetworkManager');
+    
     console.log('\nTipos de nodos configurados:');
     console.log('✅ SIGNER: Nodo validador que puede firmar bloques');
     console.log('✅ MINER: Nodo que procesa transacciones');

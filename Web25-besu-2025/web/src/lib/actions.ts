@@ -90,7 +90,7 @@ export async function createBesuNetwork(
   nbrNetwork: number = 0
 ) {
   try {
-    // Préparer tous les nœuds avec les bons types et IDs
+    // Prepare all nodes with correct types and IDs
     const nodes = listOfNodes.map(node => ({
       id: `${name}-${node.name}`,
       networkId: name, // On utilisera le nom comme networkId

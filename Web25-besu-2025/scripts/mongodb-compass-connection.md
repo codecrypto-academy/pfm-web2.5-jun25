@@ -1,44 +1,44 @@
-# Connexion MongoDB Compass
+# Conexión MongoDB Compass
 
-## Méthode 1 : URI de connexion
+## Método 1: URI de conexión
 ```
 mongodb://admin:password123@localhost:27017/besuNetworks?authSource=admin
 ```
 
-## Méthode 2 : Connexion manuelle
+## Método 2: Conexión manual
 - **Hostname** : `localhost`
-- **Port** : `27017`
-- **Authentication** : `Username / Password`
-- **Username** : `admin`
-- **Password** : `password123`
-- **Authentication Database** : `admin`
-- **Database** : `besuNetworks`
+- **Puerto** : `27017`
+- **Autenticación** : `Usuario / Contraseña`
+- **Usuario** : `admin`
+- **Contraseña** : `password123`
+- **Base de datos de autenticación** : `admin`
+- **Base de datos** : `besuNetworks`
 
-## Commandes utiles
+## Comandos útiles
 
-### Arrêter le conteneur
+### Detener el contenedor
 ```bash
 docker stop mongodb-besu
 ```
 
-### Redémarrer le conteneur
+### Reiniciar el contenedor
 ```bash
 docker start mongodb-besu
 ```
 
-### Supprimer le conteneur (attention : supprime les données)
+### Eliminar el contenedor (advertencia: elimina los datos)
 ```bash
 docker stop mongodb-besu
 docker rm mongodb-besu
 docker volume rm mongodb_data
 ```
 
-### Voir les logs du conteneur
+### Ver los logs del contenedor
 ```bash
 docker logs mongodb-besu
 ```
 
-### Accéder au shell MongoDB
+### Acceder al shell de MongoDB
 ```bash
 docker exec -it mongodb-besu mongosh --username admin --password password123 --authenticationDatabase admin
 ```

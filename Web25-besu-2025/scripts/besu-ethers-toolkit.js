@@ -1,11 +1,11 @@
 // besu-ethers-toolkit.js
-// =========================================
-// Outil simple pour interagir avec un réseau Hyperledger Besu en mode Clique PoA
-// Utilise le CLI RPC (via curl) et un petit script Node.js avec ethers.js
+// =======================
+// Simple tool to interact with a Hyperledger Besu network in Clique PoA mode
+// Uses RPC CLI (via curl) and a small Node.js script with ethers.js
 
 /*
-PRÉREQUIS :
-  • Un nœud Besu en cours d'exécution avec RPC HTTP activé et minage automatique (Clique PoA génère des blocs vides par défaut) :
+PREREQUISITES:
+  • A running Besu node with HTTP RPC enabled and automatic mining (Clique PoA generates empty blocks by default):
     besu \
       --data-path=./data \
       --network=dev \
@@ -16,60 +16,60 @@ PRÉREQUIS :
       --host-whitelist="*" \
       --mining-enabled
 
-  • Node.js v14+ et npm install ethers dotenv
+  • Node.js v14+ and npm install ethers dotenv
       npm install ethers dotenv
 */
 
 require('dotenv').config();
 const { JsonRpcProvider, Wallet } = require('ethers');
 
-// Configuration du provider JSON-RPC vers Besu (Celui du signataire existant)
+// JSON-RPC provider configuration for Besu (existing signer's provider)
 const RPC_URL = process.env.BESU_RPC || 'http://localhost:8545';
 const provider = new JsonRpcProvider(RPC_URL);
 
-// Clé privée du validateur existant
+// Existing validator's private key
 const PRIVATE_KEY = process.env.PRIVATE_KEY || '0xYOUR_VALIDATOR_PRIVATE_KEY';
 const wallet = new Wallet(PRIVATE_KEY, provider);
 
-// =========================================
-// Fonctions utilitaires
-// =========================================
+// ===============================================
+// List of functions to manage Clique PoA signers
+// ===============================================
 
-// 1) Lister les signataires
+// 1) List signers
 async function listSigners() {
   const signers = await provider.send('clique_getSigners', ['latest']);
-  console.log('Signers actifs :');
+  console.log('Active signers:');
   signers.forEach((addr, i) => console.log(`  ${i + 1}. ${addr}`));
 }
 
-// 2) Lister les propositions en attente
+// 2) List pending proposals
 async function listProposals() {
   const proposals = await provider.send('clique_proposals', []);
-  console.log('Propositions en attente (addr:true=ajout, false=retire) :');
+  console.log('Pending proposals (addr:true=add, false=remove):');
   Object.entries(proposals).forEach(([addr, propose], i) => console.log(`  ${i + 1}. ${addr} => ${propose}`));
 }
 
-// 3) Proposer un nouveau signataire
+// 3) Propose a new signer
 async function proposeSigner(newAddress, add = true) {
-  console.log(`Proposition ${add ? 'd’Ajout' : 'de Retrait'} pour ${newAddress}`);
+  console.log(`Proposing ${add ? 'Addition' : 'Removal'} for ${newAddress}`);
   const result = await provider.send('clique_propose', [newAddress, add]);
-  console.log('Réponse RPC :', result);
+  console.log('RPC Response:', result);
 
-  console.log('Envoi d\'une tx vide pour forcer un bloc');
+  console.log('Sending empty tx to force a block');
   const tx = await wallet.sendTransaction({ to: wallet.address, value: 0 });
-  console.log(`Transaction déclencheur créée: ${tx.hash}`);
+  console.log(`Trigger transaction created: ${tx.hash}`);
 
-  // Surveille le prochain bloc pour vérifier l'ajout
+  // Watch next block to verify the addition
   provider.once('block', async (blockNumber) => {
-    console.log(`Bloc #${blockNumber} scellé. Vérification des signataires:`);
+    console.log(`Block #${blockNumber} sealed. Verifying signers:`);
     await listSigners();
   });
 }
 
-// 4) Surveiller les nouveaux blocs (optionnel)
+// 4) Monitor new blocks (optional)
 function monitorBlocks() {
-  console.log('Monitoring des nouveaux blocks...');
-  provider.on('block', blockNumber => console.log(`Bloc #${blockNumber}`));
+  console.log('Monitoring new blocks...');
+  provider.on('block', blockNumber => console.log(`Block #${blockNumber}`));
 }
 
 // =========================================

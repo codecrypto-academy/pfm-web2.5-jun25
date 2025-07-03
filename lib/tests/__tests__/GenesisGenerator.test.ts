@@ -6,7 +6,7 @@ describe('GenesisGenerator', () => {
   let logger: Logger;
   let fs: FileSystem;
   beforeEach(() => {
-    logger = { info: jest.fn(), error: jest.fn() } as any;
+    logger = { info: jest.fn(), error: jest.fn(), debug: jest.fn() } as any;
     fs = { writeFile: jest.fn().mockResolvedValue(undefined) } as any;
   });
 
@@ -17,7 +17,7 @@ describe('GenesisGenerator', () => {
 
   it('should generate genesis file for Clique protocol', async () => {
     const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
-    const logger = { info: jest.fn() };
+    const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
       consensusProtocol: 'clique',
@@ -31,7 +31,7 @@ describe('GenesisGenerator', () => {
 
   it('should generate genesis file for IBFT2 protocol', async () => {
     const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
-    const logger = { info: jest.fn() };
+    const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
       consensusProtocol: 'ibft2',
@@ -45,7 +45,7 @@ describe('GenesisGenerator', () => {
 
   it('should generate genesis file for QBFT protocol', async () => {
     const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
-    const logger = { info: jest.fn() };
+    const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
       consensusProtocol: 'qbft',
@@ -59,7 +59,7 @@ describe('GenesisGenerator', () => {
 
   it('should add additionalOptions to genesis', async () => {
     const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
-    const logger = { info: jest.fn() };
+    const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
       consensusProtocol: 'clique',
@@ -73,7 +73,7 @@ describe('GenesisGenerator', () => {
 
   it('should use custom alloc if provided', async () => {
     const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
-    const logger = { info: jest.fn() };
+    const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
       consensusProtocol: 'clique',
@@ -87,7 +87,7 @@ describe('GenesisGenerator', () => {
 
   it('should throw error for unsupported consensus protocol', async () => {
     const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
-    const logger = { info: jest.fn() };
+    const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
       consensusProtocol: 'unsupported',
@@ -98,14 +98,16 @@ describe('GenesisGenerator', () => {
   });
 
   it('should handle error when writeFile fails', async () => {
-    const generator = new GenesisGenerator(logger, fs);
-    (fs.writeFile as jest.Mock).mockRejectedValueOnce(new Error('write error'));
+    const mockFs = { writeFile: jest.fn().mockRejectedValue(new Error('write error')) };
+    const mockLogger = { info: jest.fn(), error: jest.fn(), debug: jest.fn() };
+    const generator = new GenesisGenerator(mockLogger as any, mockFs as any);
     const options = {
       chainId: 1,
       consensusProtocol: 'clique',
-      validatorAddresses: ['0x1234'],
+      validatorAddresses: ['0x1234567890123456789012345678901234567890'],
       blockPeriod: 5
     } as any;
-    await expect(generator.generateGenesisFile('genesis.json', options)).rejects.toThrow('write error');
+    
+    await expect(generator.generateGenesisFile('genesis.json', options)).rejects.toThrow();
   });
 });

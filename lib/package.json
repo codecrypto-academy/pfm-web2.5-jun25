@@ -4,12 +4,17 @@
   "description": "Biblioteca TypeScript para gestión programática de redes Hyperledger Besu",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
   "scripts": {
+    "prebuild": "npm run clean",
     "build": "tsc",
-    "test": "jest",
-    "lint": "eslint . --ext .ts",
     "clean": "rimraf dist",
-    "prepare": "npm run clean && npm run build"
+    "test": "jest",
+    "lint": "eslint . --ext .ts"
   },
   "keywords": [
     "ethereum",
@@ -22,6 +27,7 @@
   "author": "Besu Network Manager",
   "license": "MIT",
   "dependencies": {
+    "besu-network-manager": "file:besu-network-manager-1.0.0.tgz",
     "dockerode": "^3.3.5",
     "ethers": "^6.8.0",
     "fs-extra": "^11.1.1",

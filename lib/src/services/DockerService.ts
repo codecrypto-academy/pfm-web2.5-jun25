@@ -138,6 +138,23 @@ export class DockerService {
    * Obtiene el ID de una red Docker
    * @param name Nombre de la red
    */
+  /**
+   * Lista todas las redes Docker
+   */
+  public async listNetworks(): Promise<any> {
+    // @ts-ignore
+    try {
+      return await this.docker.listNetworks();
+    } catch (error) {
+      this.logger.error('Error al listar las redes Docker:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene el ID de una red Docker
+   * @param name Nombre de la red
+   */
   public async getNetworkId(name: string): Promise<string | null> {
     try {
       const networks = await this.docker.listNetworks({

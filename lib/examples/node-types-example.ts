@@ -3,7 +3,6 @@
  * Levanta una red real con configuraciones específicas de nodos
  * Demuestra el uso de las nuevas propiedades: isValidator, isBootnode, linkedTo, nodeType
  */
-
 import * as path from 'path';
 
 import { BesuNetworkConfig, BesuNodeType, NodeCreationConfig, createBesuNetwork } from '../src';
@@ -51,18 +50,9 @@ async function main() {
         nodeType: BesuNodeType.NORMAL,
         isValidator: false,
         isBootnode: false,
-        linkedTo: 'validator-bootnode',
+        linkedTo: 'miner-node',
         rpcPort: 8548,
         p2pPort: 30306
-      },
-      {
-        name: 'miner-node-2',
-        nodeType: BesuNodeType.MINER,
-        isValidator: false,
-        isBootnode: false,
-        linkedTo: 'validator-bootnode',
-        rpcPort: 8549,
-        p2pPort: 30307
       }
     ];
     

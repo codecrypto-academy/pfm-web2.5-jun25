@@ -26,28 +26,29 @@ export class ConfigGenerator {
     nodeConfig: BesuNodeConfig,
     networkConfig: BesuNetworkConfig
   ): Promise<void> {
-    const configPath = path.join(nodeConfig.dataDir, './config.toml');
+    // Normalizar el path para usar forward slashes en todos los sistemas operativos
+    const configPath = path.join(nodeConfig.dataDir, './config.toml').replace(/\\/g, '/');
     
     const config = `# Configuración del Bootnode Besu
 # Generado automáticamente
 
 # Configuración de datos
-genesis-file="/genesis.json"
+genesis-file="/opt/besu/genesis.json"
 
 # Configuración de red
 network-id=${networkConfig.chainId}
 p2p-enabled=true
 p2p-host="0.0.0.0"
-p2p-port=30303
+p2p-port=${nodeConfig.p2pPort}
 max-peers=25
 discovery-enabled=true
 
 # Configuración RPC
 rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
-rpc-http-port=8545
+rpc-http-port=${nodeConfig.rpcPort}
 rpc-http-cors-origins=["*"]
-rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(', ')}]
+rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(',')}]
 
 # Configuración de minería
 ${this.getMiningConfig(nodeConfig)}
@@ -60,10 +61,11 @@ host-allowlist=["*"]
 
 # Configuración de logging
 logging="INFO"
+${this.getAdditionalOptionsConfig(nodeConfig)}
 `;
 
     await this.fs.writeFile(configPath, config);
-    this.logger.info(`Archivo config.toml generado para bootnode en: ${configPath}`);
+    this.logger.info(`Generando archivo config.toml para bootnode`);
   }
 
   /**
@@ -77,7 +79,8 @@ logging="INFO"
     networkConfig: BesuNetworkConfig,
     bootnodeEnode: string
   ): Promise<void> {
-    const configPath = path.join(nodeConfig.dataDir, './config.toml');
+    // Normalizar el path para usar forward slashes en todos los sistemas operativos
+    const configPath = path.join(nodeConfig.dataDir, './config.toml').replace(/\\/g, '/');
     
     // Extraer la IP real del enode del bootnode
     // El formato del enode es: enode://publickey@ip:port
@@ -95,13 +98,13 @@ logging="INFO"
 # Generado automáticamente
 
 # Configuración de datos
-genesis-file="/genesis.json"
+genesis-file="/opt/besu/genesis.json"
 
 # Configuración de red
 network-id=${networkConfig.chainId}
 p2p-enabled=true
 p2p-host="0.0.0.0"
-p2p-port=30303
+p2p-port=${nodeConfig.p2pPort}
 max-peers=25
 discovery-enabled=true
 
@@ -111,9 +114,9 @@ bootnodes=["${bootnodeEnodeWithRealIP}"]
 # Configuración RPC
 rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
-rpc-http-port=8545
+rpc-http-port=${nodeConfig.rpcPort}
 rpc-http-cors-origins=["*"]
-rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(', ')}]
+rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(',')}]
 
 # Configuración de minería
 ${this.getMiningConfig(nodeConfig)}
@@ -127,10 +130,11 @@ host-allowlist=["*"]
 
 # Configuración de logging
 logging="INFO"
+${this.getAdditionalOptionsConfig(nodeConfig)}
 `;
 
     await this.fs.writeFile(configPath, config);
-    this.logger.info(`Archivo config.toml generado para nodo ${nodeConfig.name} en: ${configPath}`);
+    this.logger.info(`Generando archivo config.toml para ${nodeConfig.name}`);
   }
 
   /**
@@ -169,5 +173,28 @@ miner-coinbase="${nodeConfig.validatorAddress || ''}"`;
              const [key, value] = option.replace('--', '').split('=');
              return value ? `${key}=${value}` : `${key}=true`;
            }).join('\n');
+  }
+
+  /**
+   * Genera configuración adicional del nodo
+   * @param nodeConfig Configuración del nodo
+   */
+  private getAdditionalOptionsConfig(nodeConfig: BesuNodeConfig): string {
+    if (!nodeConfig.additionalOptions || Object.keys(nodeConfig.additionalOptions).length === 0) {
+      return '';
+    }
+
+    const options = Object.entries(nodeConfig.additionalOptions)
+      .map(([key, value]) => {
+        // Si el valor es 'true' o 'false', no usar comillas
+        if (value === 'true' || value === 'false') {
+          return `${key}=${value}`;
+        }
+        // Para otros valores, usar comillas
+        return `${key}="${value}"`;
+      })
+      .join('\n');
+
+    return `\n# Opciones adicionales\n${options}`;
   }
 }

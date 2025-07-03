@@ -8,6 +8,7 @@ export * from './models/types';
 // Exportar servicios
 export { BesuNetworkManager } from './services/BesuNetworkManager';
 export { DockerService } from './services/DockerService';
+export { DockerNetworkManager } from './services/DockerNetworkManager';
 export { GenesisGenerator } from './services/GenesisGenerator';
 export { KeyGenerator } from './services/KeyGenerator';
 export { TransactionService } from './services/TransactionService';

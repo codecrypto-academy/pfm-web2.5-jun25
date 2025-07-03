@@ -5,3 +5,4 @@ coverage
 *.map
 jest.config.js
 examples/
+data

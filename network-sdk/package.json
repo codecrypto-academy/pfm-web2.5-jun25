@@ -5,6 +5,16 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./simple-index": {
+      "import": "./dist/simple-index.js",
+      "types": "./dist/simple-index.d.ts"
+    }
+  },
   "files": [
     "dist/"
   ],
@@ -12,7 +22,6 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "clean": "rm -rf dist",
-    "prepare": "yarn build",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts"
   },
@@ -33,7 +42,8 @@
     "dockerode": "^4.0.7",
     "elliptic": "^6.5.4",
     "js-sha3": "^0.9.3",
-    "keccak": "^3.0.4"
+    "keccak": "^3.0.4",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.23",
@@ -42,7 +52,6 @@
     "@typescript-eslint/eslint-plugin": "^7.13.0",
     "@typescript-eslint/parser": "^7.13.0",
     "eslint": "^8.57.0",
-    "jest": "^29.7.0",
     "prettier": "^3.3.2",
     "tsx": "^4.15.7",
     "typescript": "^5.4.5"

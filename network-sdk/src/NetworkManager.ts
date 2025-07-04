@@ -1,700 +1,329 @@
-import Docker from 'dockerode';
-import { EventEmitter } from 'events';
-import { 
-  BesuNetworkConfig, 
-  BesuNodeConfig, 
-  NetworkInfo,
-  NodeInfo,
-  NetworkStatus,
-  BesuNetworkManagerConfig,
-  ValidationOptions
-} from './types.js';
-import { KeyGenerator } from './KeyGenerator.js';
+import { DockerManager } from './DockerManager.js';
 import { GenesisGenerator } from './GenesisGenerator.js';
-import { ConfigGenerator } from './ConfigGenerator.js';
-import { NetworkManagerHelper } from './NetworkManagerHelper.js';
-import { ValidationHelper } from './ValidationHelper.js';
-import { DockerCleanupHelper } from './DockerCleanupHelper.js';
-import { 
-  DEFAULT_VALIDATION_OPTIONS,
-  DOCKER_LABELS,
-  NAMING_PATTERNS,
-  DISCOVERY_CONFIG,
-  NODE_STATUS
-} from './constants.js';
+import { KeyGenerator } from './KeyGenerator.js';
+import { BesuNodeConfig, NetworkConfig, NetworkInfo, NodeCredentials, ContainerInfo } from './types.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
-/**
- * Main class for managing Hyperledger Besu networks with Clique consensus
- */
-export class NetworkManager extends EventEmitter {
-  private docker: Docker;
+export class NetworkManager {
+  private dockerManager: DockerManager;
   private keyGenerator: KeyGenerator;
-  private genesisGenerator: GenesisGenerator;
-  private configGenerator: ConfigGenerator;
   private networks: Map<string, NetworkInfo> = new Map();
-  private ipPools: Map<string, Set<string>> = new Map();
-  private dockerAvailable: boolean = false;
-  private validationOptions: ValidationOptions;
+  private workspaceRoot: string;
 
-  constructor(config?: BesuNetworkManagerConfig) {
-    super();
-    this.docker = config?.dockerSocket ? new Docker({ socketPath: config.dockerSocket }) : new Docker();
+  constructor(workspaceRoot: string = '.tmp') {
+    this.dockerManager = new DockerManager();
     this.keyGenerator = new KeyGenerator();
-    this.genesisGenerator = new GenesisGenerator();
-    this.configGenerator = new ConfigGenerator();
-    
-    // Set up validation options with defaults
-    this.validationOptions = {
-      ...DEFAULT_VALIDATION_OPTIONS,
-      ...config?.validation
-    };
-    
-    // Test Docker availability on initialization
-    this.checkDockerAvailability();
+    this.workspaceRoot = path.resolve(workspaceRoot);
   }
 
-  /**
-   * Create a new Besu network
-   */
-  async createNetwork(config: BesuNetworkConfig): Promise<NetworkInfo> {
-    // Apply defaults before validation
-    const configWithDefaults = NetworkManagerHelper.applyConfigDefaults(config);
-    await ValidationHelper.validateConfig(configWithDefaults, this.validationOptions, this.networks, this.docker);
-    
-    // Check Docker availability first
-    if (!this.dockerAvailable) {
-      await this.refreshDockerStatus();
-      if (!this.dockerAvailable) {
-        throw new Error(
-          'Docker is not available. Please ensure Docker is installed and running. ' +
-          'Use NetworkManager.isDockerAvailable() to check status.'
-        );
+  private getNetworkPath(networkId: string): string {
+    return path.join(this.workspaceRoot, 'networks', networkId);
+  }
+
+  private async createNetworkDir(networkId: string): Promise<string> {
+    const networkPath = this.getNetworkPath(networkId);
+    if (!fs.existsSync(networkPath)) {
+      await fs.promises.mkdir(networkPath, { recursive: true });
+    }
+    return networkPath;
+  }
+
+  async createNetwork(networkConfig: NetworkConfig): Promise<NetworkInfo> {
+    const networkPath = await this.createNetworkDir(networkConfig.networkId);
+
+    // 1. Generate keys and enodes for all nodes
+    const nodeCredentials = new Map<string, NodeCredentials>();
+    const bootnodes: string[] = [];
+
+    for (const node of networkConfig.nodes) {
+      const credentials = this.keyGenerator.generateKeyPair(node.ip, node.p2pPort);
+      nodeCredentials.set(node.id, credentials);
+      node.address = credentials.address;
+      node.enode = credentials.enode;
+      if (node.type === 'bootnode') {
+        bootnodes.push(credentials.enode);
       }
     }
 
-    // Ensure Besu Docker image exists
-    const besuImage = `hyperledger/besu:${configWithDefaults.besuVersion}`;
-    await NetworkManagerHelper.ensureImageExists(this.docker, besuImage);
-    
-    // Perform comprehensive cleanup of any existing resources
-    await DockerCleanupHelper.performNetworkCleanup(this.docker, configWithDefaults.networkId);
-    
-    // Clean up any existing network info in our internal storage
-    if (this.networks.has(configWithDefaults.networkId)) {
-      console.info(`Removing existing network info for: ${configWithDefaults.networkId}`);
-      this.networks.delete(configWithDefaults.networkId);
-      this.ipPools.delete(configWithDefaults.networkId);
-    }
-    
-    try {
-      // Create Docker network
-      const dockerNetwork = await this.createDockerNetwork(configWithDefaults);
-      
-      // Generate subnet IP pool
-      const ipPool = NetworkManagerHelper.generateIpPool(configWithDefaults.subnet);
-      this.ipPools.set(configWithDefaults.networkId, ipPool);
-      
-      // Generate genesis block
-      const genesis = this.genesisGenerator.generateGenesis(configWithDefaults);
-      
-      // Create network info
-      const networkInfo: NetworkInfo = {
-        networkId: configWithDefaults.networkId,
-        config: configWithDefaults,
-        dockerNetworkId: dockerNetwork.id,
-        nodes: new Map(),
-        genesis,
-        status: 'creating',
-        createdAt: new Date(),
-        subnet: configWithDefaults.subnet
-      };
-      
-      this.networks.set(configWithDefaults.networkId, networkInfo);
-      
-      // Create bootnode first
-      const bootnodeConfig = NetworkManagerHelper.createBootnodeConfig(configWithDefaults);
-      await this.addNode(configWithDefaults.networkId, bootnodeConfig);
-      
-      // Create initial nodes
-      for (const nodeConfig of configWithDefaults.nodes || []) {
-        await this.addNode(configWithDefaults.networkId, nodeConfig);
+    // Assign bootnodes to all other nodes
+    for (const node of networkConfig.nodes) {
+      if (node.type !== 'bootnode') {
+        node.bootnodes = bootnodes;
       }
-      
-      networkInfo.status = 'running';
-      this.emit('networkCreated', networkInfo);
-      
-      return networkInfo;
-    } catch (error) {
-      this.emit('error', error);
-      throw new Error(`Failed to create network: ${error}`);
-    }
-  }
-
-  /**
-   * Delete a network and all its nodes
-   */
-  async deleteNetwork(networkId: string): Promise<void> {
-    const networkInfo = this.networks.get(networkId);
-    if (!networkInfo) {
-      throw new Error(`Network ${networkId} not found`);
     }
 
-    try {
-      networkInfo.status = 'deleting';
-      
-      // Stop and remove all containers
-      for (const [nodeId] of networkInfo.nodes) {
-        await this.removeNode(networkId, nodeId);
-      }
-      
-      // Remove Docker network
-      const dockerNetwork = this.docker.getNetwork(networkInfo.dockerNetworkId);
-      await dockerNetwork.remove();
-      
-      // Clean up
-      this.networks.delete(networkId);
-      this.ipPools.delete(networkId);
-      
-      this.emit('networkDeleted', networkId);
-    } catch (error) {
-      this.emit('error', error);
-      throw new Error(`Failed to delete network: ${error}`);
-    }
-  }
-
-  /**
-   * Add a new node to an existing network
-   */
-  async addNode(networkId: string, nodeConfig: BesuNodeConfig): Promise<NodeInfo> {
-    const networkInfo = this.networks.get(networkId);
-    if (!networkInfo) {
-      throw new Error(`Network ${networkId} not found`);
+    // 2. Generate and save keys and config for each node
+    for (const node of networkConfig.nodes) {
+      const nodePath = path.join(networkPath, node.id);
+      await fs.promises.mkdir(nodePath, { recursive: true });
+      const creds = nodeCredentials.get(node.id)!;
+      await fs.promises.writeFile(path.join(nodePath, 'key'), creds.privateKey.slice(2));
+      await fs.promises.writeFile(path.join(nodePath, 'key.pub'), creds.publicKey.slice(2));
+      await fs.promises.writeFile(path.join(nodePath, 'address'), creds.address);
+      await fs.promises.writeFile(path.join(nodePath, 'enode'), creds.enode);
     }
 
-    // Ensure Besu Docker image exists
-    const besuImage = `hyperledger/besu:${networkInfo.config.besuVersion || 'latest'}`;
-    await NetworkManagerHelper.ensureImageExists(this.docker, besuImage);
+    // 3. Generate genesis file
+    const validatorAddresses = networkConfig.nodes
+      .filter(n => n.type === 'miner')
+      .map(n => n.address!);
+    
+    const genesis = networkConfig.genesis || GenesisGenerator.generateGenesis({
+      chainId: networkConfig.chainId,
+      validators: validatorAddresses,
+    });
+    const genesisPath = path.join(networkPath, 'genesis.json');
+    await fs.promises.writeFile(genesisPath, JSON.stringify(genesis, null, 2));
 
-    try {
-      // Generate node credentials if not provided
-      const credentials = nodeConfig.credentials || this.keyGenerator.generateKeyPair();
-      
-      // Assign IP address
-      const ip = nodeConfig.ip || this.allocateIp(networkId);
-      
-      // Generate node configuration
-      const containerConfig = this.configGenerator.generateNodeConfig(
-        nodeConfig, 
-        credentials, 
-        networkInfo,
-        ip
+    // 4. Create Docker network
+    const dockerNetworkId = await this.dockerManager.createDockerNetwork(networkConfig);
+
+    // 5. Create containers
+    const containers = new Map<string, ContainerInfo>();
+    for (const nodeConfig of networkConfig.nodes) {
+      const nodePath = path.join(networkPath, nodeConfig.id);
+      const container = await this.dockerManager.createBesuContainer(
+        networkConfig,
+        nodeConfig,
+        nodePath
       );
-      
-      console.info(`Creating container with name: ${containerConfig.name}`);
-      console.info(`Network config:`, containerConfig.NetworkingConfig);
-      
-      // Create and start container
-      const container = await this.docker.createContainer(containerConfig);
-      console.info(`Container created with ID: ${container.id}`);
-      
-      await container.start();
-      console.info(`Container started successfully: ${containerConfig.name}`);
-      
-      // Container is already connected to network via NetworkingConfig
-      
-      const nodeInfo: NodeInfo = {
-        id: nodeConfig.id,
-        type: nodeConfig.type,
-        containerId: container.id,
-        containerName: containerConfig.name,
-        ip,
-        credentials,
-        config: nodeConfig,
-        status: 'running',
-        createdAt: new Date()
-      };
-      
-      networkInfo.nodes.set(nodeConfig.id, nodeInfo);
-      this.emit('nodeAdded', networkId, nodeInfo);
-      
-      return nodeInfo;
-    } catch (error) {
-      this.emit('error', error);
-      throw new Error(`Failed to add node: ${error}`);
+      containers.set(nodeConfig.id, container);
     }
+
+    const networkInfo: NetworkInfo = {
+      networkId: networkConfig.networkId,
+      dockerNetworkId: dockerNetworkId,
+      containers: containers,
+      networkPath: networkPath,
+      chainId: networkConfig.chainId,
+      subnet: networkConfig.subnet,
+      gateway: networkConfig.gateway,
+    };
+
+    this.networks.set(networkConfig.networkId, networkInfo);
+    return networkInfo;
+  }
+
+  async stopNetwork(networkId: string): Promise<void> {
+    const networkInfo = this.networks.get(networkId);
+    if (!networkInfo) {
+      console.warn(`Network ${networkId} not found or not running.`);
+      // still try to cleanup
+      await this.dockerManager.removeDockerNetwork(networkId);
+      const networkPath = this.getNetworkPath(networkId);
+      if (fs.existsSync(networkPath)) {
+        await fs.promises.rm(networkPath, { recursive: true, force: true });
+      }
+      return;
+    }
+
+    for (const container of networkInfo.containers.values()) {
+      await this.dockerManager.removeContainer(container.containerId);
+    }
+
+    await this.dockerManager.removeDockerNetwork(networkId);
+
+    const networkPath = this.getNetworkPath(networkId);
+    if (fs.existsSync(networkPath)) {
+      await fs.promises.rm(networkPath, { recursive: true, force: true });
+    }
+    this.networks.delete(networkId);
   }
 
   /**
-   * Remove a node from the network
+   * Add a single node to an existing network
+   */
+  async addNode(networkId: string, nodeConfig: BesuNodeConfig): Promise<ContainerInfo> {
+    const networkInfo = this.networks.get(networkId);
+    if (!networkInfo) {
+      throw new Error(`Network ${networkId} not found or not running`);
+    }
+
+    // Check if node ID already exists
+    if (networkInfo.containers.has(nodeConfig.id)) {
+      throw new Error(`Node ${nodeConfig.id} already exists in network ${networkId}`);
+    }
+
+    const networkPath = networkInfo.networkPath;
+
+    // 1. Generate keys and enode for the new node
+    const credentials = this.keyGenerator.generateKeyPair(nodeConfig.ip, nodeConfig.p2pPort);
+    nodeConfig.address = credentials.address;
+    nodeConfig.enode = credentials.enode;
+
+    // 2. Find existing bootnode-type nodes to use as bootnodes
+    const existingBootnodes: string[] = [];
+    for (const [nodeId, container] of networkInfo.containers) {
+      // Only use actual bootnode-type containers as bootnodes
+      if (container.containerName.includes('bootnode')) {
+        const existingNodePath = path.join(networkPath, nodeId);
+        const enodeFile = path.join(existingNodePath, 'enode');
+        if (fs.existsSync(enodeFile)) {
+          const enodeContent = await fs.promises.readFile(enodeFile, 'utf8');
+          existingBootnodes.push(enodeContent.trim());
+        }
+      }
+    }
+    
+    // Assign bootnodes to new node (only if it's not a bootnode itself)
+    if (nodeConfig.type !== 'bootnode') {
+      nodeConfig.bootnodes = existingBootnodes;
+    }
+    
+    console.info(`Setting ${existingBootnodes.length} bootnodes for new node ${nodeConfig.id}:`, existingBootnodes);
+
+    // 3. Create node directory and save credentials
+    const nodePath = path.join(networkPath, nodeConfig.id);
+    await fs.promises.mkdir(nodePath, { recursive: true });
+    await fs.promises.writeFile(path.join(nodePath, 'key'), credentials.privateKey.slice(2));
+    await fs.promises.writeFile(path.join(nodePath, 'key.pub'), credentials.publicKey.slice(2));
+    await fs.promises.writeFile(path.join(nodePath, 'address'), credentials.address);
+    await fs.promises.writeFile(path.join(nodePath, 'enode'), credentials.enode);
+
+    // 4. Create network config using stored network information
+    const networkConfig: NetworkConfig = {
+      networkId: networkId,
+      chainId: networkInfo.chainId,
+      subnet: networkInfo.subnet,
+      gateway: networkInfo.gateway,
+      nodes: [nodeConfig]
+    };
+
+    // 5. Create the container and connect to existing Docker network
+    const container = await this.dockerManager.createBesuContainer(
+      networkConfig,
+      nodeConfig,
+      nodePath
+    );
+
+    // 6. Update network info
+    networkInfo.containers.set(nodeConfig.id, container);
+
+    console.info(`✅ Node ${nodeConfig.id} added to network ${networkId}`);
+    return container;
+  }
+
+  /**
+   * Remove a single node from an existing network
    */
   async removeNode(networkId: string, nodeId: string): Promise<void> {
     const networkInfo = this.networks.get(networkId);
     if (!networkInfo) {
-      throw new Error(`Network ${networkId} not found`);
+      throw new Error(`Network ${networkId} not found or not running`);
     }
 
-    const nodeInfo = networkInfo.nodes.get(nodeId);
-    if (!nodeInfo) {
+    const container = networkInfo.containers.get(nodeId);
+    if (!container) {
       throw new Error(`Node ${nodeId} not found in network ${networkId}`);
     }
 
-    try {
-      // Stop and remove container
-      const container = this.docker.getContainer(nodeInfo.containerId);
-      await container.stop();
-      await container.remove();
-      
-      // Free IP address
-      this.freeIp(networkId, nodeInfo.ip);
-      
-      // Remove from network
-      networkInfo.nodes.delete(nodeId);
-      
-      this.emit('nodeRemoved', networkId, nodeId);
-    } catch (error) {
-      this.emit('error', error);
-      throw new Error(`Failed to remove node: ${error}`);
-    }
-  }
+    // 1. Stop and remove the container
+    await this.dockerManager.removeContainer(container.containerId);
 
-  /**
-   * Get network information
-   */
-  getNetworkInfo(networkId: string): NetworkInfo | undefined {
-    return this.networks.get(networkId);
-  }
-
-  /**
-   * List all networks
-   */
-  listNetworks(): NetworkInfo[] {
-    return Array.from(this.networks.values());
-  }
-
-  /**
-   * Get node information
-   */
-  getNodeInfo(networkId: string, nodeId: string): NodeInfo | undefined {
-    const networkInfo = this.networks.get(networkId);
-    return networkInfo?.nodes.get(nodeId);
-  }
-
-  /**
-   * Update node configuration
-   */
-  async updateNode(networkId: string, nodeId: string, updates: Partial<BesuNodeConfig>): Promise<NodeInfo> {
-    const nodeInfo = this.getNodeInfo(networkId, nodeId);
-    if (!nodeInfo) {
-      throw new Error(`Node ${nodeId} not found in network ${networkId}`);
+    // 2. Remove node directory
+    const nodePath = path.join(networkInfo.networkPath, nodeId);
+    if (fs.existsSync(nodePath)) {
+      await fs.promises.rm(nodePath, { recursive: true, force: true });
     }
 
-    // For now, we'll remove and recreate the node with new config
-    // In a production environment, you might want to implement hot-reloading
-    await this.removeNode(networkId, nodeId);
-    
-    const updatedConfig = { ...nodeInfo.config, ...updates };
-    return await this.addNode(networkId, updatedConfig);
+    // 3. Update network info
+    networkInfo.containers.delete(nodeId);
+
+    console.info(`✅ Node ${nodeId} removed from network ${networkId}`);
   }
 
   /**
-   * Get network status
+   * Get the status of a specific node in a network
    */
-  async getNetworkStatus(networkId: string): Promise<NetworkStatus> {
+  async getNodeStatus(networkId: string, nodeId: string): Promise<{
+    nodeId: string;
+    networkId: string;
+    container: ContainerInfo;
+    dockerStatus: string;
+    isHealthy: boolean;
+    rpcPort: number;
+    p2pPort: number;
+    nodeType: string;
+    enode?: string | undefined;
+    address?: string | undefined;
+  }> {
     const networkInfo = this.networks.get(networkId);
     if (!networkInfo) {
-      throw new Error(`Network ${networkId} not found`);
+      throw new Error(`Network ${networkId} not found or not running`);
     }
 
-    const nodeStatuses = new Map<string, string>();
-    
-    for (const [nodeId, nodeInfo] of networkInfo.nodes) {
-      try {
-        const container = this.docker.getContainer(nodeInfo.containerId);
-        const inspectData = await container.inspect();
-        nodeStatuses.set(nodeId, inspectData.State.Status);
-      } catch (error) {
-        nodeStatuses.set(nodeId, 'error');
-      }
+    const container = networkInfo.containers.get(nodeId);
+    if (!container) {
+      throw new Error(`Node ${nodeId} not found in network ${networkId}`);
     }
 
-    return {
-      networkId,
-      status: networkInfo.status,
-      nodeCount: networkInfo.nodes.size,
-      nodeStatuses,
-      uptime: Date.now() - networkInfo.createdAt.getTime()
-    };
-  }
+    // Get detailed container information from Docker
+    const dockerContainer = this.dockerManager.docker.getContainer(container.containerId);
+    const containerInspect = await dockerContainer.inspect();
 
-  /**
-   * Check if Docker daemon is available
-   */
-  private async checkDockerAvailability(): Promise<void> {
+    // Read node files
+    const nodePath = path.join(networkInfo.networkPath, nodeId);
+    let enode: string | undefined;
+    let address: string | undefined;
+    let nodeType: string = 'unknown';
+
     try {
-      await this.docker.ping();
-      this.dockerAvailable = true;
-      this.emit('dockerConnected');
-    } catch (error: any) {
-      this.dockerAvailable = false;
-      this.emit('dockerUnavailable', {
-        code: error.code,
-        message: error.message,
-        suggestions: NetworkManagerHelper.getDockerErrorSuggestions(error.code)
-      });
-    }
-  }
-
-  /**
-   * Check if Docker is available
-   */
-  isDockerAvailable(): boolean {
-    return this.dockerAvailable;
-  }
-
-  /**
-   * Force Docker availability check
-   */
-  async refreshDockerStatus(): Promise<boolean> {
-    await this.checkDockerAvailability();
-    return this.dockerAvailable;
-  }
-
-  /**
-   * Discover and restore networks from existing Docker resources
-   */
-  async discoverExistingNetworks(): Promise<void> {
-    try {
-      console.info('Discovering existing Besu networks...');
-      
-      // Find all Docker networks with our naming pattern
-      const networks = await this.docker.listNetworks({
-        filters: { name: [DISCOVERY_CONFIG.NETWORK_FILTER_PREFIX] }
-      });
-
-      for (const networkInfo of networks) {
-        if (!networkInfo.Name || !networkInfo.Name.startsWith(DISCOVERY_CONFIG.NETWORK_FILTER_PREFIX)) continue;
-        
-        const networkId = networkInfo.Name.replace(DISCOVERY_CONFIG.NETWORK_FILTER_PREFIX, '');
-        
-        // Skip if we already have this network in memory
-        if (this.networks.has(networkId)) continue;
-        
-        console.info(`Discovering network: ${networkId}`);
-        
-        // Get detailed network information
-        const network = this.docker.getNetwork(networkInfo.Id);
-        const details = await network.inspect();
-        
-        // Find containers in this network
-        const containers = await this.docker.listContainers({
-          all: true,
-          filters: {
-            network: [networkInfo.Name]
-          }
-        });
-        
-        // Reconstruct network info
-        const nodes = new Map<string, NodeInfo>();
-        
-        for (const containerInfo of containers) {
-          if (!containerInfo.Names?.[0]?.includes(`${DISCOVERY_CONFIG.NETWORK_FILTER_PREFIX}${networkId}-`)) continue;
-          
-          try {
-            const container = this.docker.getContainer(containerInfo.Id);
-            const containerDetails = await container.inspect();
-            
-            // Extract node information from container labels or names
-            const nodeId = containerDetails.Config.Labels?.[DOCKER_LABELS.NODE_ID] || 
-                          containerInfo.Names?.[0]?.split('-').slice(-2)[0] || 'unknown'; // fallback parsing
-            const nodeType = containerDetails.Config.Labels?.[DOCKER_LABELS.NODE_TYPE] || 'rpc';
-            
-            // Get IP address from network settings
-            const networkSettings = containerDetails.NetworkSettings.Networks[networkInfo.Name];
-            const ip = networkSettings?.IPAddress || DISCOVERY_CONFIG.DEFAULT_IP;
-            
-            const nodeInfo: NodeInfo = {
-              id: nodeId,
-              type: nodeType as any,
-              containerId: containerInfo.Id,
-              containerName: containerInfo.Names?.[0]?.replace('/', '') || `container-${containerInfo.Id.slice(0, 12)}`,
-              ip,
-              credentials: {
-                address: DISCOVERY_CONFIG.PLACEHOLDER_ADDRESS,
-                privateKey: DISCOVERY_CONFIG.PLACEHOLDER_PRIVATE_KEY,
-                publicKey: DISCOVERY_CONFIG.PLACEHOLDER_PUBLIC_KEY
-              },
-              config: {
-                id: nodeId,
-                type: nodeType as any,
-                rpcPort: 8545,
-                p2pPort: 30303
-              },
-              status: (containerInfo.State === 'running' ? NODE_STATUS.RUNNING : NODE_STATUS.STOPPED) as any,
-              createdAt: new Date(containerInfo.Created * 1000)
-            };
-            
-            nodes.set(nodeId, nodeInfo);
-          } catch (error) {
-            console.warn(`Failed to inspect container ${containerInfo.Names[0]}:`, error);
-          }
-        }
-        
-        // Try to extract configuration from existing resources
-        const extractedConfig = await this.extractNetworkConfig(networkInfo, details, containers);
-        
-        // Create network info with extracted or default values
-        const restoredNetworkInfo: NetworkInfo = {
-          networkId,
-          config: {
-            networkId,
-            chainId: extractedConfig.chainId,
-            subnet: extractedConfig.subnet,
-            name: extractedConfig.name,
-            besuVersion: extractedConfig.besuVersion,
-            nodes: [],
-            genesis: extractedConfig.genesis || {},
-            env: extractedConfig.env || {}
-          },
-          dockerNetworkId: networkInfo.Id,
-          nodes,
-          genesis: extractedConfig.genesis || {},
-          status: 'running',
-          createdAt: new Date(details.Created),
-          subnet: extractedConfig.subnet
-        };
-        
-        this.networks.set(networkId, restoredNetworkInfo);
-        
-        // Restore IP pool and mark used IPs
-        const ipPool = NetworkManagerHelper.generateIpPool(restoredNetworkInfo.subnet);
-        
-        // Mark discovered IPs as used
-        for (const [nodeId, nodeInfo] of nodes) {
-          if (nodeInfo.ip && ipPool.has(nodeInfo.ip)) {
-            ipPool.delete(nodeInfo.ip);
-            console.info(`Marked IP ${nodeInfo.ip} as used by node ${nodeId}`);
-          }
-        }
-        
-        this.ipPools.set(networkId, ipPool);
-        
-        console.info(`Restored network ${networkId} with ${nodes.size} nodes`);
+      if (fs.existsSync(path.join(nodePath, 'enode'))) {
+        enode = await fs.promises.readFile(path.join(nodePath, 'enode'), 'utf8');
+        enode = enode.trim();
       }
-      
-      console.info(`Discovery complete. Found ${this.networks.size} networks.`);
+      if (fs.existsSync(path.join(nodePath, 'address'))) {
+        address = await fs.promises.readFile(path.join(nodePath, 'address'), 'utf8');
+        address = address.trim();
+      }
     } catch (error) {
-      console.error('Failed to discover existing networks:', error);
+      console.warn(`Warning: Could not read node files for ${nodeId}: ${error}`);
     }
-  }
 
-  /**
-   * Extract network configuration from existing Docker resources
-   */
-  private async extractNetworkConfig(
-    networkInfo: any, 
-    networkDetails: any, 
-    containers: any[]
-  ): Promise<{
-    chainId: number;
-    subnet: string;
-    name: string;
-    besuVersion: string;
-    genesis?: any;
-    env?: Record<string, string>;
-  }> {
-    // Extract subnet from Docker network details
-    const subnet = networkDetails.IPAM?.Config?.[0]?.Subnet || '172.20.0.0/24';
+    // Extract node type and ports from container labels or config
+    const labels = containerInspect.Config.Labels || {};
+    const ports = containerInspect.NetworkSettings.Ports || {};
+
+    // Find RPC and P2P ports
+    let rpcPort = 0;
+    let p2pPort = 0;
     
-    // Extract network name (prefer original name or use Docker network name)
-    const name = networkInfo.Name;
-    
-    // Try to extract configuration from network labels first
-    let chainId: number | undefined;
-    let besuVersion: string | undefined;
-    let genesis: any = {};
-    let env: Record<string, string> = {};
-    
-    // Check network labels first (preferred source)
-    const networkLabels = networkDetails.Labels || {};
-    if (networkLabels[DOCKER_LABELS.NETWORK_CHAIN_ID]) {
-      const labelChainId = parseInt(networkLabels[DOCKER_LABELS.NETWORK_CHAIN_ID]);
-      if (!isNaN(labelChainId)) {
-        chainId = labelChainId;
-      }
-    }
-    if (networkLabels[DOCKER_LABELS.BESU_VERSION]) {
-      besuVersion = networkLabels[DOCKER_LABELS.BESU_VERSION];
-    }
-    
-    // If network labels don't have the info, check containers for configuration hints
-    if (!chainId || !besuVersion) {
-      for (const containerInfo of containers) {
-        try {
-          const container = this.docker.getContainer(containerInfo.Id);
-          const containerDetails = await container.inspect();
-          
-          // Extract chainId from container labels
-          if (!chainId) {
-            const labelChainId = containerDetails.Config.Labels?.[DOCKER_LABELS.NETWORK_CHAIN_ID];
-            if (labelChainId && !isNaN(parseInt(labelChainId))) {
-              chainId = parseInt(labelChainId);
-            }
-          }
-          
-          // Extract besuVersion from image tag
-          if (!besuVersion) {
-            const image = containerDetails.Config.Image;
-            if (image && image.includes('hyperledger/besu:')) {
-              const version = image.split(':')[1];
-              if (version && version !== 'latest') {
-                besuVersion = version;
-              }
-            }
-          }
-          
-          // Extract chainId from environment variables
-          if (!chainId) {
-            const envVars = containerDetails.Config.Env || [];
-            for (const envVar of envVars) {
-              if (!envVar) continue;
-              const [key, value] = envVar.split('=');
-              if (!key || !value) continue;
-              
-              if (key === 'CHAIN_ID' || key === 'NETWORK_ID') {
-                const numValue = parseInt(value);
-                if (!isNaN(numValue)) {
-                  chainId = numValue;
-                }
-              }
-              env[key] = value;
-            }
-          }
-          
-          // Try to extract chainId from Besu command arguments
-          if (!chainId) {
-            const cmd = containerDetails.Config.Cmd || [];
-            for (let i = 0; i < cmd.length; i++) {
-              const currentArg = cmd[i];
-              if (currentArg && (currentArg.includes('--network-id') || currentArg.includes('--chain-id'))) {
-                const nextArg = cmd[i + 1];
-                if (nextArg && !isNaN(parseInt(nextArg))) {
-                  chainId = parseInt(nextArg);
-                  break;
-                }
-                // Handle combined argument like --network-id=1337
-                if (currentArg.includes('=')) {
-                  const value = currentArg.split('=')[1];
-                  if (value && !isNaN(parseInt(value))) {
-                    chainId = parseInt(value);
-                    break;
-                  }
-                }
-              }
-            }
-          }
-          
-          // If we found both chainId and besuVersion, we can stop checking containers
-          if (chainId && besuVersion) {
-            break;
-          }
-          
-        } catch (error) {
-          console.warn(`Failed to extract config from container ${containerInfo.Names?.[0]}:`, error);
+    for (const [containerPort, hostBindings] of Object.entries(ports)) {
+      if (hostBindings && hostBindings.length > 0 && hostBindings[0]) {
+        const hostPort = parseInt(hostBindings[0].HostPort || '0');
+        if (containerPort.includes('854')) { // RPC ports (8545, 8546, etc.)
+          rpcPort = hostPort;
+        } else if (containerPort.includes('303')) { // P2P ports (30303, 30304, etc.)
+          p2pPort = hostPort;
         }
       }
     }
-    
+
+    // Determine node type from container name or labels
+    if (container.containerName.includes('bootnode')) {
+      nodeType = 'bootnode';
+    } else if (container.containerName.includes('miner')) {
+      nodeType = 'miner';
+    } else if (container.containerName.includes('rpc')) {
+      nodeType = 'rpc';
+    }
+
     return {
-      chainId: chainId ?? 1337, // Use default only if not extracted
-      subnet,
-      name,
-      besuVersion: besuVersion ?? 'latest', // Use default only if not extracted
-      genesis,
-      env
+      nodeId,
+      networkId,
+      container,
+      dockerStatus: containerInspect.State.Status,
+      isHealthy: containerInspect.State.Health?.Status === 'healthy' || containerInspect.State.Status === 'running',
+      rpcPort,
+      p2pPort,
+      nodeType,
+      enode,
+      address
     };
   }
 
-  /**
-   * Create Docker network with configuration
-   */
-  private async createDockerNetwork(config: Required<BesuNetworkConfig>): Promise<any> {
-    const networkConfig = {
-      Name: NAMING_PATTERNS.NETWORK_NAME(config.networkId),
-      Driver: 'bridge',
-      IPAM: {
-        Config: [{
-          Subnet: config.subnet
-        }]
-      },
-      Labels: {
-        [DOCKER_LABELS.NETWORK_ID]: config.networkId,
-        [DOCKER_LABELS.NETWORK_TYPE]: 'clique',
-        [DOCKER_LABELS.NETWORK_CHAIN_ID]: config.chainId.toString(),
-        [DOCKER_LABELS.NETWORK_SUBNET]: config.subnet,
-        [DOCKER_LABELS.BESU_VERSION]: config.besuVersion,
-        [DOCKER_LABELS.NETWORK_NAME]: config.name
-      }
-    };
-
-    return await this.docker.createNetwork(networkConfig);
-  }
-
-  /**
-   * Allocate an IP from the network pool
-   */
-  private allocateIp(networkId: string): string {
-    const ipPool = this.ipPools.get(networkId);
-    if (!ipPool) {
-      throw new Error(`IP pool not found for network ${networkId}`);
-    }
-    return NetworkManagerHelper.allocateIp(ipPool, networkId);
-  }
-
-  /**
-   * Free an IP back to the network pool
-   */
-  private freeIp(networkId: string, ip: string): void {
-    const ipPool = this.ipPools.get(networkId);
-    if (ipPool) {
-      NetworkManagerHelper.freeIp(ipPool, ip);
-    }
-  }
-
-  /**
-   * Update validation configuration
-   */
-  setValidationOptions(options: Partial<ValidationOptions>): void {
-    this.validationOptions = {
-      ...this.validationOptions,
-      ...options
-    };
-  }
-
-  /**
-   * Get current validation configuration
-   */
-  getValidationOptions(): ValidationOptions {
-    return { ...this.validationOptions };
-  }
-
-  /**
-   * Create a new Besu network with optional validation overrides
-   */
-  async createNetworkWithValidation(
-    config: BesuNetworkConfig, 
-    validationOverrides?: Partial<ValidationOptions>
-  ): Promise<NetworkInfo> {
-    // Temporarily override validation options if provided
-    const originalOptions = this.validationOptions;
-    if (validationOverrides) {
-      this.validationOptions = { ...this.validationOptions, ...validationOverrides };
-    }
-
-    try {
-      return await this.createNetwork(config);
-    } finally {
-      // Restore original validation options
-      this.validationOptions = originalOptions;
-    }
+  getNetwork(networkId: string): NetworkInfo | undefined {
+    return this.networks.get(networkId);
   }
 }

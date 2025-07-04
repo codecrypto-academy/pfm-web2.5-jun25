@@ -1,112 +1,83 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getNetworkManager } from '@/lib/networkManager';
+import { DockerManager } from 'besu-network-manager';
+import * as fs from 'fs';
+import * as path from 'path';
 
-/**
- * DELETE /api/networks/[id]/nodes/[nodeId] - Remove a node from the network
- */
+const networksDataDir = '/tmp/besu-networks';
+const dockerManager = new DockerManager();
+
+interface StoredNetworkData {
+  config: any;
+  nodes: any[];
+  genesis: any;
+  createdAt: string;
+}
+
+function loadNetworkData(networkId: string): StoredNetworkData | null {
+  const filePath = path.join(networksDataDir, `${networkId}.json`);
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function saveNetworkData(networkId: string, data: StoredNetworkData): void {
+  const filePath = path.join(networksDataDir, `${networkId}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+// DELETE /api/simple-networks/[id]/nodes/[nodeId] - Remove specific node from network
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; nodeId: string }> }
 ) {
   try {
-    const networkManager = getNetworkManager();
     const { id: networkId, nodeId } = await params;
 
-    // Check if network exists
-    const networkInfo = networkManager.getNetworkInfo(networkId);
-    if (!networkInfo) {
+    // Load network data
+    const networkData = loadNetworkData(networkId);
+    if (!networkData) {
       return NextResponse.json(
-        { error: 'Network not found', networkId },
+        { success: false, error: 'Network not found' },
         { status: 404 }
       );
     }
 
-    // Check if node exists
-    const nodeInfo = networkManager.getNodeInfo(networkId, nodeId);
-    if (!nodeInfo) {
+    // Find the node
+    const nodeIndex = networkData.nodes.findIndex(n => n.id === nodeId);
+    if (nodeIndex === -1) {
       return NextResponse.json(
-        { error: 'Node not found', networkId, nodeId },
+        { success: false, error: 'Node not found' },
         { status: 404 }
       );
     }
 
-    // Remove the node
-    await networkManager.removeNode(networkId, nodeId);
+    const node = networkData.nodes[nodeIndex];
+
+    // Don't allow removing the bootnode
+    if (node.type === 'bootnode') {
+      return NextResponse.json(
+        { success: false, error: 'Cannot remove bootnode' },
+        { status: 400 }
+      );
+    }
+
+    // Remove the Docker container
+    await dockerManager.removeNode(nodeId, networkId);
+
+    // Remove the node from the network data
+    networkData.nodes.splice(nodeIndex, 1);
+    saveNetworkData(networkId, networkData);
 
     return NextResponse.json({
-      message: 'Node removed successfully',
-      networkId,
-      nodeId
+      success: true,
+      message: `Node ${nodeId} removed successfully`
     });
 
   } catch (error) {
     console.error('Error removing node:', error);
-    
     return NextResponse.json(
-      { 
-        error: 'Failed to remove node',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * GET /api/networks/[id]/nodes/[nodeId] - Get node details
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string; nodeId: string }> }
-) {
-  try {
-    const networkManager = getNetworkManager();
-    const { id: networkId, nodeId } = await params;
-
-    // Check if network exists
-    const networkInfo = networkManager.getNetworkInfo(networkId);
-    if (!networkInfo) {
-      return NextResponse.json(
-        { error: 'Network not found', networkId },
-        { status: 404 }
-      );
-    }
-
-    // Check if node exists
-    const nodeInfo = await networkManager.getNodeInfo(networkId, nodeId);
-    if (!nodeInfo) {
-      return NextResponse.json(
-        { error: 'Node not found', networkId, nodeId },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      networkId,
-      node: {
-        id: nodeInfo.id,
-        type: nodeInfo.type,
-        containerId: nodeInfo.containerId,
-        containerName: nodeInfo.containerName,
-        ip: nodeInfo.ip,
-        status: nodeInfo.status,
-        createdAt: nodeInfo.createdAt,
-        credentials: {
-          address: nodeInfo.credentials.address,
-          publicKey: nodeInfo.credentials.publicKey
-        },
-        config: nodeInfo.config
-      }
-    });
-
-  } catch (error) {
-    console.error('Error getting node info:', error);
-    
-    return NextResponse.json(
-      { 
-        error: 'Failed to get node information',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { success: false, error: `Failed to remove node: ${error}` },
       { status: 500 }
     );
   }

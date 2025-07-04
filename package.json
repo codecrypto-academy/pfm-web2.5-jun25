@@ -6,7 +6,7 @@
   "type": "module",
   "workspaces": [
     "network-sdk",
-    "backend", 
+    "backend",
     "frontend",
     "scripts"
   ],
@@ -19,7 +19,7 @@
     "dev:frontend": "yarn workspace frontend run dev",
     "dev:scripts": "yarn workspace scripts run dev",
     "build:network-sdk": "yarn workspace network-sdk run build",
-    "build:backend": "yarn workspace backend run build", 
+    "build:backend": "yarn workspace backend run build",
     "build:frontend": "yarn workspace frontend run build",
     "build:scripts": "yarn workspace scripts run build",
     "start:backend": "yarn workspace backend run start",
@@ -50,5 +50,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
   }
 }

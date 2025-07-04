@@ -24,8 +24,6 @@
   },
   "references": [
     { "path": "./network-sdk" },
-    { "path": "./backend" },
-    { "path": "./frontend" },
     { "path": "./scripts" }
   ]
 }

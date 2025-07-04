@@ -15,32 +15,18 @@ export class KeyGenerator {
   /**
    * Generate a new key pair for a Besu node
    */
-  generateKeyPair(): NodeCredentials {
+  generateKeyPair(ip: string, port: number): NodeCredentials {
     const keyPair = this.ec.genKeyPair();
     const privateKey = keyPair.getPrivate('hex');
-    const publicKey = keyPair.getPublic(false, 'hex');
+    const publicKey = keyPair.getPublic(false, 'hex').slice(2); // Remove 04 prefix
     const address = this.publicKeyToAddress(publicKey);
+    const enode = `enode://${publicKey}@${ip}:${port}`;
 
     return {
       privateKey: this.addHexPrefix(privateKey),
       publicKey: this.addHexPrefix(publicKey),
-      address: this.addHexPrefix(address)
-    };
-  }
-
-  /**
-   * Generate key pair from existing private key
-   */
-  generateFromPrivateKey(privateKey: string): NodeCredentials {
-    const cleanPrivateKey = this.removeHexPrefix(privateKey);
-    const keyPair = this.ec.keyFromPrivate(cleanPrivateKey, 'hex');
-    const publicKey = keyPair.getPublic(false, 'hex');
-    const address = this.publicKeyToAddress(publicKey);
-
-    return {
-      privateKey: this.addHexPrefix(cleanPrivateKey),
-      publicKey: this.addHexPrefix(publicKey),
-      address: this.addHexPrefix(address)
+      address: this.addHexPrefix(address),
+      enode: enode
     };
   }
 
@@ -48,8 +34,9 @@ export class KeyGenerator {
    * Convert public key to Ethereum address
    */
   private publicKeyToAddress(publicKey: string): string {
-    // Remove the first byte (0x04) from uncompressed public key
-    const publicKeyBytes = Buffer.from(publicKey.slice(2), 'hex');
+    // Remove the first byte (0x04) from uncompressed public key if present
+    const cleanPublicKey = publicKey.startsWith('04') ? publicKey.slice(2) : publicKey;
+    const publicKeyBytes = Buffer.from(cleanPublicKey, 'hex');
     
     // Hash the public key with Keccak-256
     const hash = keccak('keccak256').update(publicKeyBytes).digest();
@@ -70,30 +57,6 @@ export class KeyGenerator {
    */
   private removeHexPrefix(hex: string): string {
     return hex.startsWith('0x') ? hex.slice(2) : hex;
-  }
-
-  /**
-   * Generate multiple key pairs
-   */
-  generateMultipleKeyPairs(count: number): NodeCredentials[] {
-    const keyPairs: NodeCredentials[] = [];
-    for (let i = 0; i < count; i++) {
-      keyPairs.push(this.generateKeyPair());
-    }
-    return keyPairs;
-  }
-
-  /**
-   * Validate a private key
-   */
-  isValidPrivateKey(privateKey: string): boolean {
-    try {
-      const cleanPrivateKey = this.removeHexPrefix(privateKey);
-      this.ec.keyFromPrivate(cleanPrivateKey, 'hex');
-      return true;
-    } catch {
-      return false;
-    }
   }
 
   /**

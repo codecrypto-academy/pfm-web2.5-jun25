@@ -4,6 +4,7 @@
     "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "node",
+    "composite": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,

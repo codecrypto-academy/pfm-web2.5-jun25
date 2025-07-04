@@ -1,90 +1,51 @@
-import { BesuNetworkConfig, NodeCredentials } from './types.js';
-
 /**
- * Generator for Besu genesis blocks with Clique consensus
+ * Genesis file generator - keeps the working logic from web2.5-besu
  */
+export interface GenesisConfig {
+  chainId: number;
+  validators: string[]; // List of validator addresses
+}
+
 export class GenesisGenerator {
   
   /**
-   * Generate genesis block configuration for Clique consensus
+   * Generate a simple genesis file based on working example
    */
-  generateGenesis(config: BesuNetworkConfig, validators: NodeCredentials[] = []): any {
-    const { chainId, genesis } = config;
+  static generateGenesis(config: GenesisConfig): any {
+    // Build extraData with validators
+    let extraData = '0x' + '0'.repeat(64); // 32 bytes of zeros
     
-    // Extract validator addresses for Clique consensus
-    const validatorAddresses = validators.map(v => v.address.toLowerCase().replace('0x', ''));
-    
-    // Create the initial signers string for Clique
-    // Format: concatenated addresses without 0x prefix + 65 zero bytes
-    const initialSigners = validatorAddresses.join('') + '0'.repeat(130);
-    
-    const genesisBlock = {
-      config: {
-        chainId: chainId,
-        homesteadBlock: 0,
-        eip150Block: 0,
-        eip155Block: 0,
-        eip158Block: 0,
-        byzantiumBlock: 0,
-        constantinopleBlock: 0,
-        petersburgBlock: 0,
-        istanbulBlock: 0,
-        berlinBlock: 0,
-        londonBlock: 0,
-        clique: {
-          period: 5, // 5 second block time
-          epoch: 30000 // Epoch length
-        },
-        ...genesis?.extraConfig
-      },
-      difficulty: genesis?.difficulty || '0x1',
-      gasLimit: genesis?.gasLimit || '0x1fffffffffffff',
-      extraData: `0x${'0'.repeat(64)}${initialSigners}`,
-      alloc: this.generateInitialAllocations(validators)
-    };
-    
-    return genesisBlock;
-  }
-  
-  /**
-   * Generate initial ETH allocations for validator accounts
-   */
-  private generateInitialAllocations(validators: NodeCredentials[]): Record<string, any> {
-    const allocations: Record<string, any> = {};
-    
-    // Give each validator some initial ETH
-    validators.forEach(validator => {
-      const address = validator.address.toLowerCase().replace('0x', '');
-      allocations[address] = {
-        balance: '0x21e19e0c9bab2400000' // 10000 ETH in wei
-      };
-    });
-    
-    return allocations;
-  }
-  
-  /**
-   * Add a validator to existing genesis configuration
-   */
-  addValidatorToGenesis(genesis: any, validator: NodeCredentials): any {
-    const address = validator.address.toLowerCase().replace('0x', '');
-    
-    // Add to allocations
-    if (!genesis.alloc) {
-      genesis.alloc = {};
+    // Add validator addresses (remove 0x prefix)
+    for (const validator of config.validators) {
+      extraData += validator.startsWith('0x') ? validator.slice(2) : validator;
     }
-    genesis.alloc[address] = {
-      balance: '0x21e19e0c9bab2400000' // 10000 ETH in wei
+    
+    // Add 65 bytes of zeros for the seal
+    extraData += '0'.repeat(130);
+    
+    const genesis = {
+      config: {
+        chainId: config.chainId,
+        berlinBlock: 0,
+        clique: {
+          blockperiodseconds: 4,
+          epochlength: 30000
+        }
+      },
+      coinbase: '0x0000000000000000000000000000000000000000',
+      difficulty: '0x1',
+      extraData,
+      gasLimit: '0xa00000',
+      mixHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '0x0',
+      timestamp: '0x5c51a607',
+      alloc: {
+        // Add some pre-funded accounts for testing
+        '0xaeeB85e5b9aD65E72F9924E68a164B85110d3df8': {
+          balance: '0x200000000000000000000000000000000000000000000000000000000000000'
+        }
+      }
     };
-    
-    // Update extraData with new validator
-    const currentExtraData = genesis.extraData || '0x' + '0'.repeat(64);
-    const prefix = currentExtraData.slice(0, 66); // 0x + 64 chars
-    const currentValidators = currentExtraData.slice(66, -130); // Remove prefix and suffix
-    const suffix = currentExtraData.slice(-130); // Last 130 chars (65 zero bytes)
-    
-    const newValidators = currentValidators + address;
-    genesis.extraData = prefix + newValidators + suffix;
     
     return genesis;
   }

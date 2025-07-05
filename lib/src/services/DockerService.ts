@@ -98,10 +98,8 @@ export class DockerService {
       const containerIds = Object.keys(containers);
       if (containerIds.length === 0) {
         console.log(`✅ No hay contenedores en la red "${name}".`);
-        return;
-      }
-
-      for (const id of containerIds) {
+      } else {
+        for (const id of containerIds) {
         const container = this.docker.getContainer(id);
 
         try {
@@ -125,9 +123,11 @@ export class DockerService {
       console.log(
         `✅ Todos los contenedores en la red "${name}" han sido eliminados.`
       );
+      }
+      
       await network.remove();
-
       this.logger.info(`Red Docker eliminada: ${name}`);
+
     } catch (error) {
       this.logger.error(`Error al eliminar la red Docker ${name}:`, error);
       throw error;
@@ -155,6 +155,15 @@ export class DockerService {
    * Obtiene el ID de una red Docker
    * @param name Nombre de la red
    */
+  public async listContainers(options: Docker.ContainerListOptions): Promise<Docker.ContainerInfo[]> {
+    try {
+      return this.docker.listContainers(options);
+    } catch (error) {
+      this.logger.error('Error al listar los contenedores Docker:', error);
+      throw error;
+    }
+  }
+
   public async getNetworkId(name: string): Promise<string | null> {
     try {
       const networks = await this.docker.listNetworks({

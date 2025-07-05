@@ -1,5 +1,6 @@
+import { LogLevel, Logger } from '../utils/Logger';
+
 import { DockerService } from './DockerService';
-import { Logger, LogLevel } from '../utils/Logger';
 
 export interface ContainerInfo {
   id: string;
@@ -59,7 +60,7 @@ export class DockerNetworkManager {
    */
   async getNetworkContainers(networkName: string): Promise<ContainerInfo[]> {
     const networks = await this.docker.listNetworks();
-    const network = networks.find(n => n.Name === networkName);
+    const network = networks.find((n: DockerNetworkInfo) => n.Name === networkName);
     if (!network || !network.Containers) {
       return [];
     }
@@ -75,55 +76,9 @@ export class DockerNetworkManager {
     return containers;
   }
 
-  /**
-   * Crea un contenedor con un nodo besu dentro de una red determinada
-   * @param options Opciones del contenedor
-   * @returns ID del contenedor creado
-   */
-  async createBesuContainer(options: {
-    name: string;
-    network: string;
-    rpcPort: string;
-    p2pPort: string;
-    volumes?: string[];
-    additionalOptions?: Record<string, string>;
-  }): Promise<string> {
-    const containerOptions = {
-      name: options.name,
-      image: 'hyperledger/besu:latest',
-      network: options.network,
-      volumes: options.volumes || [],
-      ports: {
-        [options.rpcPort]: '8545',
-        [options.p2pPort]: '30303'
-      },
-      command: [
-        '--data-path=/data',
-        '--rpc-http-enabled',
-        '--rpc-http-host=0.0.0.0',
-        '--host-allowlist=*',
-        '--rpc-http-cors-origins=*'
-      ],
-      environment: options.additionalOptions
-    };
 
-    return await this.docker.runContainer(containerOptions);
-  }
 
-  /**
-   * Elimina un contenedor de una red docker
-   * @param containerName Nombre del contenedor
-   */
-  async removeContainer(containerName: string): Promise<void> {
-    await this.docker.stopContainer(containerName);
-  }
 
-  /**
-   * Recupera la información de un contenedor determinado
-   * @param containerName Nombre del contenedor
-   * @returns Información del contenedor
-   */
-  async getContainerInfo(containerName: string): Promise<ContainerInfo | null> {
-    return await this.docker.getContainerInfo(containerName);
-  }
+
+
 }

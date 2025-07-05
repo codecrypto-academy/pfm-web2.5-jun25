@@ -1,0 +1,37 @@
+# Configuración del Nodo Besu: test-toml-fix
+# Generado automáticamente
+
+# Configuración de datos
+genesis-file="/opt/besu/genesis.json"
+
+# Configuración de red
+network-id=3801
+p2p-enabled=true
+p2p-host="0.0.0.0"
+p2p-port=31280
+max-peers=25
+discovery-enabled=true
+
+# Configuración de bootnode
+bootnodes=["enode://placeholder@127.0.0.1:30303"]
+
+# Configuración RPC
+rpc-http-enabled=true
+rpc-http-host="0.0.0.0"
+rpc-http-port=9522
+rpc-http-cors-origins=["*"]
+rpc-http-api=["ETH","NET","WEB3"]
+
+# Configuración de minería
+miner-enabled=false
+miner-stratum-enabled=false
+
+# Configuración de sincronización
+sync-mode="FULL"
+
+# Configuración de seguridad
+host-allowlist=["*"]
+
+# Configuración de logging
+logging="INFO"
+

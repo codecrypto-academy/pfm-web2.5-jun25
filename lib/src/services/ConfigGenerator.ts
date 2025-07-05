@@ -120,7 +120,6 @@ rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(',')}]
 
 # Configuración de minería
 ${this.getMiningConfig(nodeConfig)}
-miner-stratum-enabled=false
 
 # Configuración de sincronización
 sync-mode="FULL"

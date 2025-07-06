@@ -1,0 +1,25 @@
+{
+  "name": "web2.5-faucet",
+  "version": "1.0.0",
+  "description": "- Docker\r - Node.js (v18+ recomendado)\r - Bash (GNU/Linux o WSL en Windows)\r - Hyperledger Besu (imagen Docker)\r - Acceso a puertos locales (8545, etc.)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/diobando93/web2.5-faucet.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/diobando93/web2.5-faucet/issues"
+  },
+  "homepage": "https://github.com/diobando93/web2.5-faucet#readme",
+  "dependencies": {
+    "elliptic": "^6.6.1",
+    "ethers": "^6.15.0",
+    "keccak256": "^1.0.6"
+  }
+}

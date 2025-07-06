@@ -1,0 +1,1 @@
+export const PROJECT_LABEL = 'besu-blockchain';

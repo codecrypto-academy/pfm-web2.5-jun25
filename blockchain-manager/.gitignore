@@ -3,5 +3,6 @@ node_modules
 networks
 dist
 besu-network
+coverage
 
 .DS_Store

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { DockerNetworkManager } from 'besu-network-manager';
+import { createDockerNetworkManager } from 'besu-network-manager';
 
 export async function DELETE(request: Request) {
   try {
@@ -13,7 +13,7 @@ export async function DELETE(request: Request) {
       );
     }
     
-    const networkManager = new DockerNetworkManager();
+    const networkManager = createDockerNetworkManager();
     
     // Verificar que la red existe
     const networks = await networkManager.getNetworks();

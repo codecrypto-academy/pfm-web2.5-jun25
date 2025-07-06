@@ -1,15 +1,20 @@
 import { NextResponse } from 'next/server';
-import { DockerNetworkManager } from 'besu-network-manager';
+import { createDockerNetworkManager } from 'besu-network-manager';
 
 export async function GET() {
   try {
-    const networkManager = new DockerNetworkManager();
+    const networkManager = createDockerNetworkManager();
     
     // Obtener todas las redes Docker
     const networks = await networkManager.getNetworks();
     
+    // Filtrar solo las redes que empiecen con 'besu-'
+    const besuNetworks = networks.filter((network: any) => 
+      network.Name && network.Name.startsWith('besu-')
+    );
+    
     // Formatear los datos para el frontend
-    const formattedNetworks = networks.map(network => ({
+    const formattedNetworks = besuNetworks.map((network: any) => ({
       id: network.Id || '',
       name: network.Name || 'Sin nombre',
       driver: network.Driver || 'unknown',

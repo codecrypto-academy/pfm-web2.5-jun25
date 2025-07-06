@@ -1,4 +1,4 @@
-import { DockerNetworkManager } from 'besu-network-manager';
+import { createDockerNetworkManager } from 'besu-network-manager';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
@@ -15,16 +15,19 @@ export async function POST(request: Request) {
     // Validar que el nombre no contenga caracteres especiales
     if (!/^[a-zA-Z0-9_\-]+$/.test(name)) {
       return NextResponse.json(
-        { error: 'El nombre solo puede contener letras, números, guiones y guiones bajos' },
+        { error: 'El nombre de la red solo puede contener letras, números, guiones y guiones bajos' },
         { status: 400 }
       );
     }
     
-    const networkManager = new DockerNetworkManager();
+    const networkManager = createDockerNetworkManager();
+    
+    // Agregar prefijo 'besu-' al nombre de la red
+    const networkName = `besu-${name}`;
     
     // Verificar si la red ya existe
     const existingNetworks = await networkManager.getNetworks();
-    const networkExists = existingNetworks.some(network => network.Name === name);
+    const networkExists = existingNetworks.some(network => network.Name === networkName);
     
     if (networkExists) {
       return NextResponse.json(
@@ -34,12 +37,12 @@ export async function POST(request: Request) {
     }
     
     // Crear la nueva red usando la librería
-    const networkId = await networkManager.createNetwork(name);
+    const networkId = await networkManager.createNetwork(networkName);
     
     return NextResponse.json({
       success: true,
       networkId: networkId,
-      message: `Red '${name}' creada exitosamente`
+      message: `Red '${networkName}' creada exitosamente`
     });
     
   } catch (error) {

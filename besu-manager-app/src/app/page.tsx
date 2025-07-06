@@ -18,6 +18,11 @@ interface BesuNode {
   status: string;
   ports: string[];
   networkId: string;
+  blockNumber?: number;
+  peerCount?: number;
+  enodeUrl?: string;
+  ipAddress?: string;
+  nodeType?: string;
 }
 
 export default function Home() {
@@ -37,20 +42,30 @@ export default function Home() {
   const fetchNetworksAndNodes = async () => {
     try {
       setLoading(true);
-      const [networksResponse, nodesResponse] = await Promise.all([
-        fetch('/api/networks'),
-        fetch('/api/nodes')
-      ]);
+      const networksResponse = await fetch('/api/networks');
       
-      if (!networksResponse.ok || !nodesResponse.ok) {
-        throw new Error('Error al obtener datos');
+      if (!networksResponse.ok) {
+        throw new Error('Error al obtener redes');
       }
       
       const networksData = await networksResponse.json();
-      const nodesData = await nodesResponse.json();
-      
       setNetworks(networksData);
-      setNodes(nodesData);
+      
+      // Obtener nodos para cada red específica
+      const allNodes: BesuNode[] = [];
+      for (const network of networksData) {
+        try {
+          const nodesResponse = await fetch(`/api/networks/${network.name}/nodes`);
+          if (nodesResponse.ok) {
+            const networkNodes = await nodesResponse.json();
+            allNodes.push(...networkNodes);
+          }
+        } catch (err) {
+          console.error(`Error obteniendo nodos para red ${network.name}:`, err);
+        }
+      }
+      
+      setNodes(allNodes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -58,8 +73,8 @@ export default function Home() {
     }
   };
 
-  const getNodesForNetwork = (networkId: string) => {
-    return nodes.filter(node => node.networkId === networkId);
+  const getNodesForNetwork = (networkName: string) => {
+    return nodes.filter(node => node.networkId === networkName);
   };
 
   const handleNetworkCreated = () => {
@@ -151,7 +166,7 @@ export default function Home() {
         ) : (
           <div className="space-y-6">
             {networks.map((network) => {
-              const networkNodes = getNodesForNetwork(network.id);
+              const networkNodes = getNodesForNetwork(network.name);
               
               return (
                 <div key={network.id} className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -202,25 +217,68 @@ export default function Home() {
                           <div key={node.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                             <div className="flex items-center justify-between mb-2">
                               <h3 className="font-semibold text-gray-900">{node.name}</h3>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                node.status === 'running' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : node.status === 'exited'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {node.status}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-2">
-                              ID: {node.id.substring(0, 12)}...
-                            </p>
-                            {node.ports.length > 0 && (
-                              <div className="text-sm">
-                                <span className="text-gray-500">Puertos: </span>
-                                <span className="text-gray-700">{node.ports.join(', ')}</span>
+                              <div className="flex items-center gap-2">
+                                {node.nodeType && (
+                                  <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    {node.nodeType}
+                                  </span>
+                                )}
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  node.status === 'running' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : node.status === 'exited'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {node.status}
+                                </span>
                               </div>
-                            )}
+                            </div>
+                            
+                            <div className="space-y-1 text-sm">
+                              <p className="text-gray-600">
+                                ID: {node.id.substring(0, 12)}...
+                              </p>
+                              
+                              {node.ipAddress && (
+                                <p className="text-gray-600">
+                                  <span className="text-gray-500">IP: </span>
+                                  <span className="text-gray-700">{node.ipAddress}</span>
+                                </p>
+                              )}
+                              
+                              {node.ports.length > 0 && (
+                                <p className="text-gray-600">
+                                  <span className="text-gray-500">Puertos: </span>
+                                  <span className="text-gray-700">{node.ports.join(', ')}</span>
+                                </p>
+                              )}
+                              
+                              {node.status === 'running' && (
+                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                  {node.blockNumber !== undefined && (
+                                    <p className="text-gray-600">
+                                      <span className="text-gray-500">Bloque: </span>
+                                      <span className="text-green-700 font-medium">{node.blockNumber}</span>
+                                    </p>
+                                  )}
+                                  
+                                  {node.peerCount !== undefined && (
+                                    <p className="text-gray-600">
+                                      <span className="text-gray-500">Peers: </span>
+                                      <span className="text-blue-700 font-medium">{node.peerCount}</span>
+                                    </p>
+                                  )}
+                                  
+                                  {node.blockNumber !== undefined && node.blockNumber > 0 && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                      <span className="text-green-600 text-xs font-medium">Up & Running</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -254,7 +312,7 @@ export default function Home() {
             isOpen={isCreateNodeModalOpen}
             onClose={() => setIsCreateNodeModalOpen(false)}
             onNodeCreated={handleNodeCreated}
-            networkId={selectedNetwork.id}
+            networkId={selectedNetwork.name}
             networkName={selectedNetwork.name}
           />
         )}

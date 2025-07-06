@@ -59,21 +59,41 @@ export class DockerNetworkManager {
    * @returns Lista de contenedores en la red
    */
   async getNetworkContainers(networkName: string): Promise<ContainerInfo[]> {
-    const networks = await this.docker.listNetworks();
-    const network = networks.find((n: DockerNetworkInfo) => n.Name === networkName);
-    if (!network || !network.Containers) {
+    try {
+      // Obtener el ID de la red
+      const networkId = await this.docker.getNetworkId(networkName);
+      if (!networkId) {
+        return [];
+      }
+
+      // Inspeccionar la red para obtener información completa de contenedores
+      const networkDetails = await this.docker.inspectNetwork(networkId);
+      if (!networkDetails || !networkDetails.Containers) {
+        return [];
+      }
+
+      const containers: ContainerInfo[] = [];
+      const seenContainerIds = new Set<string>();
+      
+      for (const containerId of Object.keys(networkDetails.Containers)) {
+        // Evitar duplicados basándose en el ID del contenedor
+        if (seenContainerIds.has(containerId)) {
+          continue;
+        }
+        
+        const containerName = networkDetails.Containers[containerId].Name;
+        const containerInfo = await this.docker.getContainerInfo(containerName);
+        if (containerInfo) {
+          seenContainerIds.add(containerId);
+          containers.push(containerInfo);
+        }
+      }
+
+      return containers;
+    } catch (error) {
+      console.error(`Error obteniendo contenedores de la red ${networkName}:`, error);
       return [];
     }
-
-    const containers: ContainerInfo[] = [];
-    for (const containerId of Object.keys(network.Containers)) {
-      const containerInfo = await this.docker.getContainerInfo(network.Containers[containerId].Name);
-      if (containerInfo) {
-        containers.push(containerInfo);
-      }
-    }
-
-    return containers;
   }
 
 

@@ -26,6 +26,7 @@ import { BesuNetworkConfig } from './models/types';
 import { BesuNetworkManager } from './services/BesuNetworkManager';
 import { BesuNodeManager } from './services/BesuNodeManager';
 import { ConfigGenerator } from './services/ConfigGenerator';
+import { DockerNetworkManager } from './services/DockerNetworkManager';
 import { DockerService } from './services/DockerService';
 import { FileSystem } from './utils/FileSystem';
 import { GenesisGenerator } from './services/GenesisGenerator';
@@ -74,4 +75,62 @@ export function createBesuNodeManager(dataDir: string = './temp-nodes', logLevel
   const keyGenerator = new KeyGenerator(logger, fs);
   
   return new BesuNodeManager(docker, logger, fs, keyGenerator, dataDir);
+}
+
+/**
+ * Crea una instancia de DockerNetworkManager con todas las dependencias necesarias
+ * @param logLevel Nivel de log (opcional)
+ * @returns Instancia de DockerNetworkManager
+ */
+export function createDockerNetworkManager(logLevel: LogLevel = LogLevel.INFO): DockerNetworkManager {
+  return new DockerNetworkManager(logLevel);
+}
+
+/**
+ * Crea una instancia de GenesisGenerator con todas las dependencias necesarias
+ * @param logLevel Nivel de log (opcional)
+ * @returns Instancia de GenesisGenerator
+ */
+export function createGenesisGenerator(logLevel: LogLevel = LogLevel.INFO): GenesisGenerator {
+  const logger = new Logger({ level: logLevel });
+  const fs = new FileSystem();
+  return new GenesisGenerator(logger, fs);
+}
+
+/**
+ * Crea una instancia de ConfigGenerator con todas las dependencias necesarias
+ * @param logLevel Nivel de log (opcional)
+ * @returns Instancia de ConfigGenerator
+ */
+export function createConfigGenerator(logLevel: LogLevel = LogLevel.INFO): ConfigGenerator {
+  const logger = new Logger({ level: logLevel });
+  const fs = new FileSystem();
+  return new ConfigGenerator(logger, fs);
+}
+
+/**
+ * Crea una instancia de Logger
+ * @param logLevel Nivel de log (opcional)
+ * @returns Instancia de Logger
+ */
+export function createLogger(logLevel: LogLevel = LogLevel.INFO): Logger {
+  return new Logger({ level: logLevel });
+}
+
+/**
+ * Crea una instancia de FileSystem
+ * @returns Instancia de FileSystem
+ */
+export function createFileSystem(): FileSystem {
+  return new FileSystem();
+}
+
+/**
+ * Crea una instancia de DockerService con todas las dependencias necesarias
+ * @param logLevel Nivel de log (opcional)
+ * @returns Instancia de DockerService
+ */
+export function createDockerService(logLevel: LogLevel = LogLevel.INFO): DockerService {
+  const logger = new Logger({ level: logLevel });
+  return new DockerService({}, logger);
 }

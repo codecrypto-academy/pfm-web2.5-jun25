@@ -125,6 +125,8 @@ export interface BesuNodeStatus {
   isMining?: boolean;
   /** Indica si está validando (solo para SIGNER) */
   isValidating?: boolean;
+  /** Indica si el nodo es un bootnode */
+  isBootnode?: boolean;
 }
 
 /**

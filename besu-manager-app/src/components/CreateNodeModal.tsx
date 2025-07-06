@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface CreateNodeModalProps {
   isOpen: boolean;
@@ -8,6 +8,14 @@ interface CreateNodeModalProps {
   onNodeCreated: () => void;
   networkId: string;
   networkName: string;
+}
+
+interface BesuNode {
+  id: string;
+  name: string;
+  status: string;
+  ports: string[];
+  networkId: string;
 }
 
 export default function CreateNodeModal({ 
@@ -19,8 +27,45 @@ export default function CreateNodeModal({
 }: CreateNodeModalProps) {
   const [besuNodeNameValue, setBesuNodeNameValue] = useState('');
   const [nodeType, setNodeType] = useState<'signer' | 'miner' | 'normal'>('normal');
+  const [isBootnode, setIsBootnode] = useState(false);
+  
+  // Generar el nombre del contenedor basado en la convención
+  const generateContainerName = () => {
+    if (!besuNodeNameValue.trim()) return '';
+    const typePrefix = isBootnode ? 'bootnode' : nodeType;
+    return `${networkId}-${typePrefix}-${besuNodeNameValue.trim()}`;
+  };
+  const [selectedBootnode, setSelectedBootnode] = useState('');
+  const [availableBootnodes, setAvailableBootnodes] = useState<BesuNode[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
+
+  // Cargar nodos disponibles cuando se abre el modal
+  useEffect(() => {
+    if (isOpen) {
+      fetchAvailableNodes();
+    }
+  }, [isOpen, networkId]);
+
+  const fetchAvailableNodes = async () => {
+    try {
+      // Usar el endpoint específico de la red para obtener solo los nodos de esta red
+      const response = await fetch(`/api/networks/${networkId}/nodes`);
+      if (response.ok) {
+        const nodes = await response.json();
+        // Filtrar solo los bootnodes que estén ejecutándose
+        const networkBootnodes = nodes.filter((node: any) => {
+          return (
+            node.status === 'running' && 
+            node.isBootnode === true
+          );
+        });
+        setAvailableBootnodes(networkBootnodes);
+      }
+    } catch (err) {
+      console.error('Error cargando nodos:', err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +81,9 @@ export default function CreateNodeModal({
         body: JSON.stringify({
           networkId,
           nodeName: besuNodeNameValue,
-          nodeType
+          nodeType,
+          isBootnode,
+          selectedBootnode: !isBootnode ? selectedBootnode : undefined
         }),
       });
       
@@ -48,6 +95,8 @@ export default function CreateNodeModal({
       
       setBesuNodeNameValue('');
       setNodeType('normal');
+      setIsBootnode(false);
+      setSelectedBootnode('');
       onNodeCreated();
       onClose();
     } catch (err: any) {
@@ -60,6 +109,8 @@ export default function CreateNodeModal({
   const handleClose = () => {
     setBesuNodeNameValue('');
     setNodeType('normal');
+    setIsBootnode(false);
+    setSelectedBootnode('');
     setError('');
     onClose();
   };
@@ -79,17 +130,24 @@ export default function CreateNodeModal({
             <input
               type="text"
               id="besuNodeName"
-          value={besuNodeNameValue}
-          onChange={(e) => setBesuNodeNameValue(e.target.value)}
+              value={besuNodeNameValue}
+              onChange={(e) => setBesuNodeNameValue(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Ej: besu-node-1"
+              placeholder="Ej: node-1, validator-01, miner-alpha"
               required
               pattern="[a-zA-Z0-9_\-]+"
               title="Solo letras, números, guiones y guiones bajos"
             />
+            {besuNodeNameValue.trim() && (
+              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-xs text-blue-800">
+                  <strong>Nombre del contenedor:</strong> <code className="bg-blue-100 px-1 rounded">{generateContainerName()}</code>
+                </p>
+              </div>
+            )}
           </div>
           
-          <div className="mb-6">
+          <div className="mb-4">
             <label htmlFor="nodeType" className="block text-sm font-medium text-gray-700 mb-2">
               Tipo de Nodo
             </label>
@@ -104,6 +162,60 @@ export default function CreateNodeModal({
               <option value="signer">Signer (Validador PoA)</option>
             </select>
           </div>
+          
+          <div className="mb-4">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={isBootnode}
+                onChange={(e) => {
+                  setIsBootnode(e.target.checked);
+                  if (e.target.checked) {
+                    setSelectedBootnode(''); // Limpiar selección de bootnode si se marca como bootnode
+                  }
+                }}
+                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Configurar como Bootnode
+              </span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1">
+              Los bootnodes ayudan a otros nodos a descubrir y conectarse a la red
+            </p>
+          </div>
+          
+          {!isBootnode && availableBootnodes.length > 0 && (
+            <div className="mb-4">
+              <label htmlFor="bootnode" className="block text-sm font-medium text-gray-700 mb-2">
+                Bootnode para Sincronización (Opcional)
+              </label>
+              <select
+                id="bootnode"
+                value={selectedBootnode}
+                onChange={(e) => setSelectedBootnode(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Seleccionar bootnode (opcional)</option>
+                {availableBootnodes.map((node) => (
+                  <option key={node.id} value={node.name}>
+                    {node.name} ({node.status})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Selecciona un nodo existente para sincronización más rápida
+              </p>
+            </div>
+          )}
+          
+          {!isBootnode && availableBootnodes.length === 0 && (
+            <div className="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                No hay bootnodes disponibles en esta red. Este nodo se conectará usando descubrimiento automático.
+              </p>
+            </div>
+          )}
           
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">

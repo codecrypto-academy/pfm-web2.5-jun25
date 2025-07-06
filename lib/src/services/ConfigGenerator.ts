@@ -1,9 +1,10 @@
 import * as path from 'path';
 
 import { BesuNetworkConfig, BesuNodeConfig, BesuNodeType } from '../models/types';
-import { NodeConfigFactory } from '../utils/NodeConfigFactory';
+
 import { FileSystem } from '../utils/FileSystem';
 import { Logger } from '../utils/Logger';
+import { NodeConfigFactory } from '../utils/NodeConfigFactory';
 
 /**
  * Generador de archivos de configuración TOML para nodos Besu
@@ -33,20 +34,20 @@ export class ConfigGenerator {
 # Generado automáticamente
 
 # Configuración de datos
-genesis-file="/opt/besu/genesis.json"
+genesis-file="/genesis.json"
 
 # Configuración de red
 network-id=${networkConfig.chainId}
 p2p-enabled=true
 p2p-host="0.0.0.0"
-p2p-port=${nodeConfig.p2pPort}
+p2p-port=30303
 max-peers=25
 discovery-enabled=true
 
 # Configuración RPC
 rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
-rpc-http-port=${nodeConfig.rpcPort}
+rpc-http-port=8545
 rpc-http-cors-origins=["*"]
 rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(',')}]
 
@@ -59,9 +60,7 @@ sync-mode="FULL"
 # Configuración de seguridad
 host-allowlist=["*"]
 
-# Configuración de logging
-logging="INFO"
-${this.getAdditionalOptionsConfig(nodeConfig)}
+${this.getLoggingAndAdditionalConfig(nodeConfig)}
 `;
 
     await this.fs.writeFile(configPath, config);
@@ -98,13 +97,13 @@ ${this.getAdditionalOptionsConfig(nodeConfig)}
 # Generado automáticamente
 
 # Configuración de datos
-genesis-file="/opt/besu/genesis.json"
+genesis-file="/genesis.json"
 
 # Configuración de red
 network-id=${networkConfig.chainId}
 p2p-enabled=true
 p2p-host="0.0.0.0"
-p2p-port=${nodeConfig.p2pPort}
+p2p-port=30303
 max-peers=25
 discovery-enabled=true
 
@@ -114,7 +113,7 @@ bootnodes=["${bootnodeEnodeWithRealIP}"]
 # Configuración RPC
 rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
-rpc-http-port=${nodeConfig.rpcPort}
+rpc-http-port=8545
 rpc-http-cors-origins=["*"]
 rpc-http-api=[${nodeConfig.enabledApis.map(api => `"${api}"`).join(',')}]
 
@@ -127,9 +126,7 @@ sync-mode="FULL"
 # Configuración de seguridad
 host-allowlist=["*"]
 
-# Configuración de logging
-logging="INFO"
-${this.getAdditionalOptionsConfig(nodeConfig)}
+${this.getLoggingAndAdditionalConfig(nodeConfig)}
 `;
 
     await this.fs.writeFile(configPath, config);
@@ -195,5 +192,47 @@ miner-coinbase="${nodeConfig.validatorAddress || ''}"`;
       .join('\n');
 
     return `\n# Opciones adicionales\n${options}`;
+  }
+
+  /**
+   * Genera configuración de logging y opciones adicionales sin duplicaciones
+   * @param nodeConfig Configuración del nodo
+   */
+  private getLoggingAndAdditionalConfig(nodeConfig: BesuNodeConfig): string {
+    let config = '# Configuración de logging\n';
+    
+    // Verificar si logging está en additionalOptions
+    const hasLoggingInAdditional = nodeConfig.additionalOptions && 'logging' in nodeConfig.additionalOptions;
+    
+    if (hasLoggingInAdditional) {
+      // Si logging está en additionalOptions, usar ese valor
+      config += `logging="${nodeConfig.additionalOptions!.logging}"\n`;
+      
+      // Generar otras opciones adicionales excluyendo logging
+      const otherOptions = Object.entries(nodeConfig.additionalOptions!)
+        .filter(([key]) => key !== 'logging')
+        .map(([key, value]) => {
+          if (value === 'true' || value === 'false') {
+            return `${key}=${value}`;
+          }
+          return `${key}="${value}"`;
+        })
+        .join('\n');
+      
+      if (otherOptions) {
+        config += `\n# Opciones adicionales\n${otherOptions}`;
+      }
+    } else {
+      // Si no hay logging en additionalOptions, usar valor por defecto
+      config += 'logging="INFO"\n';
+      
+      // Agregar todas las opciones adicionales
+      const additionalConfig = this.getAdditionalOptionsConfig(nodeConfig);
+      if (additionalConfig) {
+        config += additionalConfig;
+      }
+    }
+    
+    return config;
   }
 }

@@ -92,6 +92,11 @@ export class GenesisGenerator {
       genesis.alloc = alloc;
     }
 
+    // Asegurar que el directorio padre existe
+    const path = require('path');
+    const parentDir = path.dirname(filePath);
+    await this.fs.ensureDir(parentDir);
+
     // Escribir el archivo génesis
     await this.fs.writeFile(filePath, JSON.stringify(genesis, null, 2));
     this.logger.info(`Archivo génesis generado en: ${filePath}`);

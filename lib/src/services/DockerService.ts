@@ -152,8 +152,8 @@ export class DockerService {
   }
 
   /**
-   * Obtiene el ID de una red Docker
-   * @param name Nombre de la red
+   * Obtiene informacion de todos los contenedores de una red
+   * @param option ContainerListOptions
    */
   public async listContainers(options: Docker.ContainerListOptions): Promise<Docker.ContainerInfo[]> {
     try {
@@ -180,6 +180,23 @@ export class DockerService {
         error
       );
       return null;
+    }
+  }
+
+  /**
+   * Inspecciona una red Docker para obtener información detallada
+   * @param networkId ID de la red
+   */
+  public async inspectNetwork(networkId: string): Promise<any> {
+    try {
+      const network = this.docker.getNetwork(networkId);
+      return await network.inspect();
+    } catch (error) {
+      this.logger.error(
+        `Error al inspeccionar la red Docker ${networkId}:`,
+        error
+      );
+      throw error;
     }
   }
 

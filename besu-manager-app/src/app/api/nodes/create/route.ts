@@ -1,9 +1,18 @@
+import {
+  BesuNodeType,
+  createBesuNodeManager,
+  createConfigGenerator,
+  createDockerNetworkManager,
+  createFileSystem,
+  createGenesisGenerator,
+  createLogger
+} from 'besu-network-manager';
+
 import { NextResponse } from 'next/server';
-import { createBesuNodeManager, DockerNetworkManager, BesuNodeType, GenesisGenerator, ConfigGenerator, Logger, FileSystem } from 'besu-network-manager';
 
 export async function POST(request: Request) {
   try {
-    const { networkId, nodeName: besuNodeName, nodeType = 'normal' } = await request.json();
+    const { networkId, nodeName: besuNodeName, nodeType = 'normal', isBootnode = false, selectedBootnode } = await request.json();
     
     if (!networkId || !besuNodeName) {
       return NextResponse.json(
@@ -20,11 +29,11 @@ export async function POST(request: Request) {
       );
     } */
     
-    const networkManager = new DockerNetworkManager();
+    const networkManager = createDockerNetworkManager();
     
     // Verificar que la red existe
     const networks = await networkManager.getNetworks();
-    const network = networks.find(net => net.Id === networkId);
+    const network = networks.find(net => net.Name === networkId);
     
     if (!network) {
       return NextResponse.json(
@@ -34,38 +43,53 @@ export async function POST(request: Request) {
     }
     
     // Mapear tipos de nodo de la UI a BesuNodeType
+    // Si es bootnode, siempre debe ser SIGNER (validador)
     let besuNodeType: BesuNodeType;
-    switch (nodeType) {
-      case 'signer':
-        besuNodeType = BesuNodeType.SIGNER;
-        break;
-      case 'miner':
-        besuNodeType = BesuNodeType.MINER;
-        break;
-      case 'normal':
-      default:
-        besuNodeType = BesuNodeType.NORMAL;
-        break;
+    if (isBootnode) {
+      besuNodeType = BesuNodeType.SIGNER;
+    } else {
+      switch (nodeType) {
+        case 'signer':
+          besuNodeType = BesuNodeType.SIGNER;
+          break;
+        case 'miner':
+          besuNodeType = BesuNodeType.MINER;
+          break;
+        case 'normal':
+        default:
+          besuNodeType = BesuNodeType.NORMAL;
+          break;
+      }
     }
     
-    // Generar puertos únicos para evitar conflictos
-    const baseRpcPort = 8545;
-    const baseP2pPort = 30303;
+    // Generar puertos externos únicos para evitar conflictos
+    // Los puertos internos del contenedor siempre serán 8545 (RPC) y 30303 (P2P)
+    const baseExternalRpcPort = 9000;
+    const baseExternalP2pPort = 31000;
     const portOffset = Math.floor(Math.random() * 1000) + 1; // Offset aleatorio entre 1-1000
     
     // Crear configuración del nodo usando NodeCreationConfig
+    // Los puertos aquí representan los puertos externos del host que se mapearán a los puertos estándar internos
+    // Construir el nombre completo del contenedor
+    const containerName = `${networkId}-${isBootnode ? 'bootnode' : nodeType}-besu-${besuNodeName}`;
+    
     const nodeCreationConfig = {
-      name: besuNodeName,
+      name: `besu-${besuNodeName}`,
       nodeType: besuNodeType,
-      rpcPort: baseRpcPort + portOffset,
-      p2pPort: baseP2pPort + portOffset
+      rpcPort: baseExternalRpcPort + portOffset,
+      p2pPort: baseExternalP2pPort + portOffset
     };
     
-    // Crear instancia de BesuNodeManager usando la función factory
-    const nodeManager = createBesuNodeManager('./temp-nodes');
+    // Crear instancia de BesuNodeManager usando el nombre del contenedor como directorio
+    const nodeManager = createBesuNodeManager(`./temp-nodes/${containerName}`);
     
     // Crear el nodo (genera configuración y claves)
     const createdNode = await nodeManager.createNode(nodeCreationConfig);
+    
+    // Marcar el nodo como bootnode si se especificó
+    if (isBootnode) {
+      createdNode.isBootnode = true;
+    }
     
     // Iniciar el contenedor Docker del nodo
     // Usar un archivo genesis específico para esta red
@@ -75,15 +99,14 @@ export async function POST(request: Request) {
     const bootnodes: string[] = [];
     
     // Crear archivo genesis específico para esta red usando GenesisGenerator
-    const logger = new Logger({ level: 'INFO' });
-    const fs = new FileSystem();
-    const genesisGenerator = new GenesisGenerator(logger, fs);
-    const configGenerator = new ConfigGenerator(logger, fs);
+    const logger = createLogger();
+    const nodeFs = createFileSystem();
+    const genesisGenerator = createGenesisGenerator();
+    const configGenerator = createConfigGenerator();
     
     // Verificar si el archivo genesis ya existe
-    const nodeFs = require('fs');
     
-    if (!nodeFs.existsSync(genesisPath)) {
+    if (!(await nodeFs.exists(genesisPath))) {
       // Generar chainId único basado en el networkId
       const chainId = parseInt(networkId.slice(-4), 16) || 1337;
       
@@ -105,16 +128,47 @@ export async function POST(request: Request) {
     // Generar archivo de configuración TOML usando ConfigGenerator
     const networkConfig = {
       chainId: parseInt(networkId.slice(-4), 16) || 1337,
-      name: networkName
+      name: networkName,
+      consensusProtocol: 'clique' as const,
+      blockPeriod: 15,
+      nodeCount: 1,
+      baseRpcPort: 8545,
+      baseP2pPort: 30303,
+      dataDir: './temp-nodes'
     };
     
     // Generar configuración específica según el tipo de nodo
-    if (createdNode.nodeType === BesuNodeType.BOOTNODE) {
+    if (isBootnode) {
       await configGenerator.generateBootnodeConfig(createdNode, networkConfig);
     } else {
-      // Para nodos regulares, necesitamos el enode del bootnode
-      // Por ahora usamos un bootnode por defecto, pero esto debería obtenerse dinámicamente
-      const bootnodeEnode = "enode://placeholder@127.0.0.1:30303";
+      // Para nodos regulares, obtener el enode del bootnode seleccionado
+      let bootnodeEnode = "enode://placeholder@127.0.0.1:30303";
+      
+      if (selectedBootnode) {
+        try {
+          // Intentar obtener el enode del bootnode seleccionado
+          // Construir el directorio del bootnode seleccionado
+          const selectedBootnodeDir = `./temp-nodes/${selectedBootnode}`;
+          const selectedNodeManager = createBesuNodeManager(selectedBootnodeDir);
+          // Extraer el nombre del nodo del contenedor (formato: {network}-{type}-besu-{name})
+          const nodeName = selectedBootnode.split('-besu-')[1];
+          const selectedNodeStatus = await selectedNodeManager.getNodeStatus(nodeName);
+          
+          if (selectedNodeStatus && selectedNodeStatus.enodeUrl) {
+            const enodeSplit1 = selectedNodeStatus.enodeUrl.split("@")
+            const enodeSplit2 = enodeSplit1[1].split(":")
+            enodeSplit2[0] = selectedNodeStatus.ipAddress as string
+            bootnodeEnode = `${enodeSplit1[0]}@${enodeSplit2[0]}:${enodeSplit2[1]}`
+
+            console.log(`Usando bootnode específico: ${bootnodeEnode}`);
+          } else {
+            console.warn(`No se pudo obtener enode del bootnode ${selectedBootnode}, usando placeholder`);
+          }
+        } catch (error) {
+          console.warn(`Error obteniendo enode del bootnode ${selectedBootnode}:`, error);
+        }
+      }
+      
       await configGenerator.generateNodeConfig(createdNode, networkConfig, bootnodeEnode);
     }
     

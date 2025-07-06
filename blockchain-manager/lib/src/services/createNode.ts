@@ -63,7 +63,8 @@ export async function createBesuNode(docker: Docker, nodeConfig: BesuNodeConfig)
         });
 
         if (containerFinder.length > 0) {
-            return containerFinder[0].Id;
+            const existingContainer = docker.getContainer(containerFinder[0].Id);
+            await existingContainer.remove({ force: true });
         }
 
 

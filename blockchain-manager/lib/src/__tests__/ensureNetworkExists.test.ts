@@ -6,7 +6,10 @@ import { PROJECT_LABEL } from "../constants";
 const NETWORK_ID = "22be93d5babb089c5aab8dbc369042fad48ff791584ca2da2100db837a1c7c30";
 
 describe('ensureNetworkExists', () => {
-
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+    
     const networkConfigStub = { name: "besu-network", subnet: "172.25.0.0/16", gateway: "172.25.0.1" };
 
     it('should create a network when it does not exist', async () => {
@@ -45,7 +48,7 @@ describe('ensureNetworkExists', () => {
         const docker = new Docker();
         jest.spyOn(docker, 'listNetworks').mockResolvedValue([
             {
-                Name: 'besu-network',
+                Name: networkConfigStub.name,
                 Id: NETWORK_ID
             } as Partial<Docker.NetworkInspectInfo> as Docker.NetworkInspectInfo
         ]);
@@ -67,7 +70,6 @@ describe('ensureNetworkExists', () => {
         jest.spyOn(docker, 'listNetworks').mockRejectedValue(new Error('Docker API error'));
 
         await expect(ensureNetworkExists(docker, networkConfigStub)).rejects.toThrow('Docker API error');
-
     });
 
     it('should throw error when createNetwork fails', async () => {

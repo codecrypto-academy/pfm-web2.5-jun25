@@ -1,0 +1,11 @@
+# Ignore everything inside wisdom
+wisdom/*
+
+# But don't ignore the gemini folder inside wisdom
+!wisdom/gemini/
+!wisdom/gemini/**
+
+# (Optional) Ignore common temporary files
+*.log
+*.tmp
+.DS_Store

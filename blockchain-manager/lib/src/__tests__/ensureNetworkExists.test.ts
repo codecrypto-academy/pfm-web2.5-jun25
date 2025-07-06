@@ -1,5 +1,5 @@
 import Docker from "dockerode";
-import { ensureNetworkExists } from "../services/createNetwork";
+import { ensureNetworkExists } from "../services/ensureNetworkExists";
 import { PROJECT_LABEL } from "../constants";
 
 

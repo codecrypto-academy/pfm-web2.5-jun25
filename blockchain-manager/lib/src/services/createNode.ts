@@ -1,46 +1,53 @@
 import Docker from "dockerode";
+import fs from "fs";
 import { PROJECT_LABEL } from "../constants";
+import { generateNodeIdentity } from "./generateNodeIdentity";
 
 export interface BesuNodeConfig {
     name: string;
-    network: string;
-    ip: string;
-    image: string;
+    network: {
+        name: string;
+        ip: string;
+    }
     hostPort: number;
-    containerPort: number;
-    dataPath: string;
-    configFile: string;
-    privateKeyFile: string;
-    genesisFile: string;
-    labels?: Record<string, string>;
 }
 
-export async function createNode(docker: Docker, nodeConfig: BesuNodeConfig): Promise<string> {
+export async function createBesuNode(docker: Docker, nodeConfig: BesuNodeConfig): Promise<string> {
 
+    const { address, enode, privateKey, publicKey } = generateNodeIdentity(nodeConfig.network.ip);
+
+    const nodeIdentityPath = `${process.cwd()}/${nodeConfig.network.name}`;
+    if (!fs.existsSync(`${nodeIdentityPath}/${nodeConfig.name}`)) {
+        fs.mkdirSync(`${nodeIdentityPath}/${nodeConfig.name}`, { recursive: true });
+    }
+
+    fs.writeFileSync(`${nodeIdentityPath}/${nodeConfig.name}/key.priv`, privateKey);
+        
     const containerConfig: Docker.ContainerCreateOptions = {
-        Image: nodeConfig.image,
+        Image: "hyperledger/besu:latest",
         name: nodeConfig.name,
         Cmd: [
-            `--config-file=${nodeConfig.configFile}`,
-            `--data-path=${nodeConfig.dataPath}`,
-            `--node-private-key-file=${nodeConfig.privateKeyFile}`,
-            `--genesis-file=${nodeConfig.genesisFile}`
+            `--config-file=/data/config.toml`,
+            `--data-path=${nodeIdentityPath}`,
+            `--node-private-key-file=${nodeIdentityPath}/${nodeConfig.name}/key.priv`,
+            `--genesis-file=/data/genesis.json`
         ],
         Labels: {
-            ...nodeConfig.labels,
+            "node": nodeConfig.name,
+            "network": nodeConfig.network.name,
             "project": PROJECT_LABEL,
         },
         HostConfig: {
             PortBindings: {
-                [`${nodeConfig.containerPort}/tcp`]: [{ HostPort: nodeConfig.hostPort.toString() }]
+                ['8545/tcp']: [{ HostPort: nodeConfig.hostPort.toString() }]
             },
-            Binds: [`${nodeConfig.dataPath}:/data`]
+            Binds: [`${nodeIdentityPath}:/data`]
         },
         NetworkingConfig: {
             EndpointsConfig: {
-                [nodeConfig.network]: {
+                [nodeConfig.network.name]: {
                     IPAMConfig: {
-                        IPv4Address: nodeConfig.ip
+                        IPv4Address: nodeConfig.network.ip
                     }
                 }
             }

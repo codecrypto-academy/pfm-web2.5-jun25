@@ -1,34 +1,35 @@
 import Docker from "dockerode";
-import { ensureNetworkExists } from "./services/createNetwork";
-import { BesuNodeConfig, createNode } from "./services/createNode";
-import { PROJECT_LABEL } from "./constants";
-
+import fs from "fs";
+import {
+    PROJECT_LABEL,
+    NETWORK_NAME,
+    NETWORK_SUBNET,
+    NETWORK_GATEWAY,
+    BOOTNODE_IP,
+    BOOTNODE_NAME,
+    BOOTNODE_PORT
+} from "./constants";
+import { ensureNetworkExists } from "./services/ensureNetworkExists";
+import { BesuNodeConfig, createBesuNode } from "./services/createNode";
 
 const docker = new Docker();
 
 (async () => {
-    const networkId = await ensureNetworkExists(docker, { name: "besu-network", subnet: "172.25.0.0/16", gateway: "172.25.0.1" });
+    const networkId = await ensureNetworkExists(docker, { name: NETWORK_NAME, subnet: NETWORK_SUBNET, gateway: NETWORK_GATEWAY });
 
     const nodeConfig: BesuNodeConfig = {
-        name: "besu-network-bootnode",
-        network: "besu-network",
-        ip: "172.25.0.2",
-        image: "hyperledger/besu:latest",
-        hostPort: 8888,
-        containerPort: 8545,
-        dataPath: "/path/to/networks/besu-network",
-        configFile: "/data/config.toml",
-        privateKeyFile: "/data/bootnode/key.priv",
-        genesisFile: "/data/genesis.json",
-        labels: {
-            "nodo": "bootnode",
-            "network": "besu-network",
-            "project": PROJECT_LABEL,
-        }
+        name: BOOTNODE_NAME,
+        network: {
+            name: NETWORK_NAME,
+            ip: BOOTNODE_IP
+        },
+        hostPort: Number(BOOTNODE_PORT),
     };
 
-    const containerId = await createNode(docker, nodeConfig);
-    
+
+
+    const containerId = await createBesuNode(docker, nodeConfig);
+
 })();
 
 

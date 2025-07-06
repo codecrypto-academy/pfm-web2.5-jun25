@@ -1,6 +1,5 @@
 import pkg from 'elliptic';
 const { ec: EC } = pkg;
-
 import { Buffer } from 'buffer';
 import keccak256 from 'keccak256';
 

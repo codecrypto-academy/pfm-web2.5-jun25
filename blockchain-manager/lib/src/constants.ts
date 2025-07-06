@@ -5,3 +5,6 @@ export const NETWORK_GATEWAY = "172.25.0.1";
 export const BOOTNODE_NAME = "bootnode";
 export const BOOTNODE_IP = "172.25.0.10";
 export const BOOTNODE_PORT = 8580;
+export const MINERNODE_NAME = "miner";
+export const MINERNODE_IP = "172.25.0.20";
+export const MINERNODE_PORT = 8581;

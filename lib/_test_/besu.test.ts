@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
+import { cleanupTestNetworks, setupTestEnvironment, generateTestNetworkName, checkDockerAvailability } from './test-utils';
 
 /**
  * Archivo consolidado de tests para la librería Besu Network
@@ -14,6 +15,25 @@ import { execSync } from 'child_process';
  * - test-connectivity.ts
  */
 
+// Global test setup and cleanup
+beforeAll(async () => {
+  console.log('🧪 Setting up test environment...');
+  if (checkDockerAvailability()) {
+    await cleanupTestNetworks({ verbose: true });
+    console.log('✅ Test environment ready');
+  } else {
+    console.log('⚠️  Docker not available, tests will run in mock mode');
+  }
+}, 30000);
+
+afterAll(async () => {
+  console.log('🧹 Cleaning up after all tests...');
+  if (checkDockerAvailability()) {
+    await cleanupTestNetworks({ verbose: true });
+    console.log('✅ Test cleanup completed');
+  }
+}, 30000);
+
 // ========================================
 // TESTS DE CRYPTOLIB
 // ========================================
@@ -23,15 +43,14 @@ describe('CryptoLib', () => {
 
     beforeEach(() => {
         cryptoLib = new CryptoLib();
-    });
-
-    test('should generate valid key pair', () => {
+    });    test('should generate valid key pair', () => {
         const ip = '192.168.1.100';
         const keyPair = cryptoLib.generateKeyPair(ip);
-
+        
         expect(keyPair.privateKey).toHaveLength(64);
         expect(keyPair.publicKey).toMatch(/^04[0-9a-f]{128}$/);
-        expect(keyPair.address).toHaveLength(40);
+        expect(keyPair.address).toHaveLength(42); // includes 0x prefix
+        expect(keyPair.address).toMatch(/^0x[0-9a-f]{40}$/);
         expect(keyPair.enode).toContain(`@${ip}:30303`);
     });
 
@@ -39,8 +58,8 @@ describe('CryptoLib', () => {
         const publicKey = '04' + 'a'.repeat(128); // Mock public key
         const address = cryptoLib.publicKeyToAddress(publicKey);
         
-        expect(address).toHaveLength(40);
-        expect(address).toMatch(/^[0-9a-f]{40}$/);
+        expect(address).toHaveLength(42); // includes 0x prefix
+        expect(address).toMatch(/^0x[0-9a-f]{40}$/);
     });
 
     test('should sign and verify message', () => {
@@ -179,7 +198,10 @@ describe('BesuNode', () => {
             chainId: 1001, // Create tests use chainId 1000-1999 range  
             subnet: '172.21.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique' as const,
-            gasLimit: '0x47E7C4'
+            gasLimit: '0x47E7C4',
+            signerAccounts: [
+                { address: '0x1111111111111111111111111111111111111111', weiAmount: '100000000000000000000000' }              
+            ]
         };
 
         const node = new BesuNode(config, fileService);
@@ -197,7 +219,8 @@ describe('BesuNode', () => {
             ip: '172.20.0.22', // Create tests use 172.20-172.79 subnet range
             port: 30303,
             rpcPort: 21021,
-            type: 'miner' as const
+            type: 'miner' as const,
+            signerAddress: '0x1111111111111111111111111111111111111111'
         };
 
         const networkConfig = {
@@ -213,7 +236,7 @@ describe('BesuNode', () => {
         const tomlConfig = node.generateTomlConfig(networkConfig, bootnodeEnode);
         
         expect(tomlConfig).toContain('miner-enabled=true');
-        expect(tomlConfig).toContain(`miner-coinbase="0x${node.getKeys().address}"`);
+        expect(tomlConfig).toContain(`miner-coinbase="${node.getKeys().address}"`);
         expect(tomlConfig).toContain(`bootnodes=["${bootnodeEnode}"]`);
     });
 
@@ -308,12 +331,17 @@ describe('Subnet conflict resolution tests', () => {
 
         // Configuración con una subred que normalmente causaría conflictos
         const networkConfig: BesuNetworkConfig = {
-            name: 'create-conflict-resolution-test', // Create tests use unique names
+            name: generateTestNetworkName('conflict-resolution'), // Use unique name
             chainId: 1004, // Create tests use chainId 1000-1999 range
             subnet: '172.23.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
-            blockTime: 5
+            blockTime: 5,
+            signerAccounts : [
+                { address: '0x1111111111111111111111111111111111111111', weiAmount: '100000000000000000000000' },
+                { address: '0x2222222222222222222222222222222222222222', weiAmount: '100000000000000000000000' },
+                { address: '0x3333333333333333333333333333333333333333', weiAmount: '100000000000000000000000' }
+              ]
         };
 
         console.log(`📊 Verificando disponibilidad de subnet: ${networkConfig.subnet}`);
@@ -323,12 +351,17 @@ describe('Subnet conflict resolution tests', () => {
         const besuNetwork = new BesuNetwork(networkConfig);
 
         try {
+            // Setup test environment
+            const cleanup = await setupTestEnvironment({ verbose: true });
+            
             console.log('🚀 Creando red con auto-resolución de conflictos habilitada...');
             
             await besuNetwork.create({
                 nodes: [
                     { name: 'bootnode1', ip: '172.23.0.20', rpcPort: 21100, type: 'bootnode' },
-                    { name: 'miner1', ip: '172.23.0.22', rpcPort: 21101, type: 'miner' }
+                    { name: 'miner1', ip: '172.23.0.22', rpcPort: 21101, type: 'miner' },
+                    { name: 'miner2', ip: '172.23.0.23', rpcPort: 21103, type: 'miner' },
+                    { name: 'miner3', ip: '172.23.0.24', rpcPort: 21105, type: 'miner' }
                 ],
                 autoResolveSubnetConflicts: true // Habilitado por defecto
             });
@@ -349,6 +382,7 @@ describe('Subnet conflict resolution tests', () => {
             // Limpiar
             console.log('\n🧹 Limpiando recursos...');
             await besuNetwork.destroy();
+            await cleanup();
             console.log('✅ Recursos limpiados');
 
         } catch (error) {
@@ -357,6 +391,7 @@ describe('Subnet conflict resolution tests', () => {
             // Intentar limpiar en caso de error
             try {
                 await besuNetwork.destroy();
+                await cleanupTestNetworks({ verbose: true });
             } catch (cleanupError) {
                 console.error('❌ Error durante la limpieza:', cleanupError);
             }
@@ -502,7 +537,7 @@ describe('Connectivity tests', () => {
         console.log('🧪 Prueba de conectividad - Red Besu avanzada\n');
         
         const networkConfig: BesuNetworkConfig = {
-            name: 'create-connectivity-test', // Create tests use unique names
+            name: generateTestNetworkName('connectivity'), // Use unique name
             chainId: 1006, // Create tests use chainId 1000-1999 range
             subnet: '172.31.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
@@ -513,6 +548,9 @@ describe('Connectivity tests', () => {
         const besuNetwork = new BesuNetwork(networkConfig);
 
         try {
+            // Setup test environment with cleanup
+            const cleanup = await setupTestEnvironment({ verbose: true });
+            
             // Crear red más pequeña para prueba rápida
             await besuNetwork.create({
                 nodes: [
@@ -562,6 +600,7 @@ describe('Connectivity tests', () => {
             console.log('\n🧹 Limpiando...');
             await besuNetwork.stop();
             await besuNetwork.destroy();
+            await cleanup(); // Use the cleanup function
             console.log('✅ Limpieza completada');
 
         } catch (error) {
@@ -571,6 +610,7 @@ describe('Connectivity tests', () => {
             try {
                 await besuNetwork.stop();
                 await besuNetwork.destroy();
+                await cleanupTestNetworks({ verbose: true });
             } catch (cleanupError) {
                 console.error('❌ Error en limpieza:', cleanupError);
             }
@@ -591,7 +631,7 @@ export async function testConnectivity() {
     console.log('🧪 Prueba de conectividad - Red Besu avanzada\n');
     
     const networkConfig: BesuNetworkConfig = {
-        name: 'create-connectivity-test-2', // Create tests use unique names
+        name: generateTestNetworkName('connectivity-helper'), // Use unique name
         chainId: 1007, // Create tests use chainId 1000-1999 range
         subnet: '172.32.0.0/16', // Create tests use 172.20-172.79 subnet range
         consensus: 'clique',
@@ -602,6 +642,9 @@ export async function testConnectivity() {
     const besuNetwork = new BesuNetwork(networkConfig);
 
     try {
+        // Setup test environment
+        const cleanup = await setupTestEnvironment({ verbose: true });
+        
         // Crear red más pequeña para prueba rápida
         await besuNetwork.create({
             nodes: [
@@ -648,6 +691,7 @@ export async function testConnectivity() {
         console.log('\n🧹 Limpiando...');
         await besuNetwork.stop();
         await besuNetwork.destroy();
+        await cleanup();
         console.log('✅ Limpieza completada');
 
     } catch (error) {
@@ -657,6 +701,7 @@ export async function testConnectivity() {
         try {
             await besuNetwork.stop();
             await besuNetwork.destroy();
+            await cleanupTestNetworks({ verbose: true });
         } catch (cleanupError) {
             console.error('❌ Error en limpieza:', cleanupError);
         }
@@ -2024,4 +2069,31 @@ describe('Node Validation Tests', () => {
     });
 
 
+});
+
+describe('BesuNetwork - asociación miners/signerAccounts', () => {
+    test('debe lanzar error si hay más miners que signerAccounts', async () => {
+        const config = {
+            name: 'test-miners-signeraccounts',
+            chainId: 12345,
+            subnet: '172.50.0.0/16',
+            consensus: 'clique' as const,
+            gasLimit: '0x47E7C4',
+            signerAccounts: [
+                { address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9', weiAmount: '100000000000000000000000' }
+            ]
+        };
+        const network = new BesuNetwork(config);
+        // Use 3 miners (odd number) with non-consecutive ports to avoid validation errors
+        // This should pass all other validations but fail on insufficient signerAccounts
+        await expect(network.create({
+            nodes: [
+                { name: 'bootnode', ip: '172.50.0.10', rpcPort: 8545, type: 'bootnode' },
+                { name: 'miner1', ip: '172.50.0.11', rpcPort: 8546, type: 'miner' },
+                { name: 'miner2', ip: '172.50.0.12', rpcPort: 8548, type: 'miner' }, // non-consecutive port
+                { name: 'miner3', ip: '172.50.0.13', rpcPort: 8550, type: 'miner' }  // non-consecutive port
+            ],
+            autoGenerateSignerAccounts: false // Disable auto-generation to test validation
+        })).rejects.toThrow('Each miner node must have an associated signerAccount');
+    });
 });

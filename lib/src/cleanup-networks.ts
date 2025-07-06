@@ -18,11 +18,13 @@ async function cleanupDockerNetworks() {
         networks.forEach(network => console.log(`  - ${network}`));
         console.log('');
 
-        // Buscar redes Besu específicamente
+        // Buscar redes Besu y test específicamente
         const besuNetworks = networks.filter(network => 
             network.includes('besu') || 
             network.includes('mi-red') ||
-            network.includes('ejemplo')
+            network.includes('ejemplo') ||
+            network.includes('test-') ||
+            network.includes('test_')
         );
 
         if (besuNetworks.length > 0) {

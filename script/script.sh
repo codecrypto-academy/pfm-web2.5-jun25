@@ -1125,6 +1125,50 @@ cleanup_environment() {
     echo ""  # Add blank line for better readability
 }
 
+# Cleanup containers only - stops containers but preserves nodes, network, and configuration
+cleanup_containers_only() {
+    log_step "Stopping Containers (Preserving Configuration)"
+    
+    # Stop and remove all containers with project label but keep everything else
+    log_clean "Stopping and removing containers with label: $NETWORK_LABEL"
+    local containers=$(docker ps -a --filter "label=$NETWORK_LABEL" -q)
+    if [[ -n "$containers" ]]; then
+        log_debug "Found containers to stop: $containers"
+        echo "$containers" | xargs -r docker stop 2>/dev/null || true
+        echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
+        
+        # Verify containers are removed
+        local remaining=$(docker ps -a --filter "label=$NETWORK_LABEL" -q)
+        if [[ -n "$remaining" ]]; then
+            log_warning "Some containers could not be removed: $remaining"
+        else
+            log_success "All containers stopped and removed successfully"
+        fi
+    else
+        log_success "No containers found with label: $NETWORK_LABEL"
+    fi
+    
+    # Keep Docker network for future use
+    log_success "Docker network preserved: $NETWORK_NAME"
+    
+    # Keep nodes directory and all files
+    local nodes_dir="${SCRIPT_DIR}/nodes"
+    if [[ -d "$nodes_dir" ]]; then
+        log_success "Nodes directory preserved: $nodes_dir"
+    fi
+    
+    # Keep genesis.json
+    local genesis_file="${SCRIPT_DIR}/genesis.json"
+    if [[ -f "$genesis_file" ]]; then
+        log_success "Genesis file preserved: $genesis_file"
+    fi
+    
+    log_success "Configuration preserved for future --no-cleanup runs"
+    log_tip "To restart the network later, run: ./script.sh --no-cleanup"
+    
+    echo ""  # Add blank line for better readability
+}
+
 # Create Docker network with the configured settings
 create_docker_network() {
     log_step "Creating Docker Network"
@@ -3565,14 +3609,15 @@ prompt_final_actions() {
     while true; do
         echo -e "Choose an option:"
         echo -e "   ${COLOR_CYAN}[1]${COLOR_RESET} Continue and monitor blocks in real-time"
-        echo -e "   ${COLOR_CYAN}[2]${COLOR_RESET} Stop the network now and exit"
+        echo -e "   ${COLOR_CYAN}[2]${COLOR_RESET} Stop containers but preserve configuration (for --no-cleanup)"
+        echo -e "   ${COLOR_CYAN}[3]${COLOR_RESET} Stop the network completely and exit"
         
         # Ensure we can read user input by redirecting from terminal
         if [[ -t 0 ]]; then
-            read -p "Your choice [1-2]: " choice
+            read -p "Your choice [1-3]: " choice
         else
             # If stdin is not a terminal, try to read from /dev/tty
-            read -p "Your choice [1-2]: " choice < /dev/tty
+            read -p "Your choice [1-3]: " choice < /dev/tty
         fi
 
         case $choice in
@@ -3591,16 +3636,27 @@ prompt_final_actions() {
                 exit 0
                 ;;
             2)
-                log_step "Stopping network as requested..."
+                log_step "Stopping containers but preserving configuration..."
+                
+                # Call the partial cleanup function to stop only containers
+                cleanup_containers_only
+                
+                log_success "Containers stopped successfully!"
+                log_success "Configuration preserved for future use."
+                log_tip "To restart the network later, run: ./script.sh --no-cleanup"
+                exit 0
+                ;;
+            3)
+                log_step "Stopping network completely as requested..."
                 
                 # Call the main cleanup function to stop containers and network
                 cleanup_environment
                 
-                log_success "Network stopped successfully. Goodbye!"
+                log_success "Network stopped completely. Goodbye!"
                 exit 0
                 ;;
             *)
-                log_warning "Invalid option. Please enter 1 or 2."
+                log_warning "Invalid option. Please enter 1, 2, or 3."
                 echo "" # Add a newline for readability before re-prompting
                 ;;
         esac

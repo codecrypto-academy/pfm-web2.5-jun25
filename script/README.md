@@ -5,6 +5,10 @@
 ![Docker](https://img.shields.io/badge/Docker-Required-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
+> ⚠ **WSL Note:** If the script freezes at `Verifying npm installation...`, it's likely because the current directory was deleted or renamed from Windows.
+> 💡 To fix it, run `cd ~` and then `cd /mnt/c/.../your-project` to refresh WSL’s working directory state.
+> This resolves internal `npm` errors like `uv_cwd` caused by broken path references in cross-platform filesystems.
+
 ## 📜 Table of Contents
 
 1.  [General Description](#-general-description)
@@ -16,9 +20,10 @@
 5.  [Execution Options](#-execution-options)
     *   [Normal Mode (with Cleanup)](#normal-mode-with-cleanup)
     *   [Persistence Mode (`--no-cleanup`)](#persistence-mode---no-cleanup)
-6.  [Configuration File Analysis (`config.yaml`)](#-configuration-file-analysis-configyaml)
-7.  [Internal Design Decisions](#-internal-design-decisions)
-8.  [Common Errors & Troubleshooting](#-common-errors--troubleshooting)
+6.  [Common Workflows](#-common-workflows)
+7.  [Configuration File Analysis (`config.yaml`)](#-configuration-file-analysis-configyaml)
+8.  [Internal Design Decisions](#-internal-design-decisions)
+9.  [Common Errors & Troubleshooting](#-common-errors--troubleshooting)
 
 ## 🎯 General Description
 
@@ -81,7 +86,10 @@ If you plan to reuse this script in a different project or folder structure, you
     ```bash
     ./script.sh
     ```
-    Upon completion, the script will present an interactive menu allowing you to continue monitoring blocks or to stop and clean up the network.
+    Upon completion, the script will present an **interactive menu** with three options:
+    - **[1]** Continue monitoring blocks in real-time
+    - **[2]** Stop containers but preserve configuration (for later `--no-cleanup` restart)
+    - **[3]** Stop the network completely and clean up everything
 
 ## 🛠️ How it Works: The Execution Flow
 
@@ -112,9 +120,12 @@ The script follows a well-defined operational flow to ensure a clean and predict
         *   **Block Production**: Waits for at least one new block to be mined.
         *   **Transactions**: If `testTransactions` are configured, it signs and sends transactions to the network and awaits their confirmation.
 
-5.  **Phase 5: Monitoring**
-    *   Once everything is deployed and verified, the script enters a passive monitoring mode, displaying each new block as it's created on the network in real-time.
-    *   You can stop the entire environment at any time with `CTRL+C`.
+5.  **Phase 5: Interactive Menu & Monitoring**
+    *   Once everything is deployed and verified, the script presents an **interactive menu** with three options:
+        1.  **[1] Continue and monitor blocks in real-time** - Enters passive monitoring mode, displaying each new block as it's created. You can stop with `CTRL+C`.
+        2.  **[2] Stop containers but preserve configuration** - Stops all Docker containers but keeps the `nodes/` directory, `genesis.json`, and Docker network intact. Perfect for development workflows where you want to pause and resume later using `--no-cleanup`.
+        3.  **[3] Stop the network completely** - Performs full cleanup: stops containers, removes Docker network, and deletes all generated files.
+    *   This flexible approach allows you to choose the appropriate cleanup level based on your needs.
 
 ## ⚙️ Execution Options
 
@@ -125,7 +136,11 @@ The script's behavior changes fundamentally based on the `--no-cleanup` flag.
 This is the default mode (`./script.sh`).
 
 *   **On Start**: It completely destroys any remnants of a previous run (containers, Docker network, `nodes/` directory). It creates a **brand new network from scratch**, with new keys and a fresh initial state.
-*   **On Exit** (via `CTRL+C` or normal termination): A cleanup process (`trap`) is triggered, which stops the containers and removes the Docker network and the `nodes/` directory. The system is left clean.
+*   **On Completion**: Presents an interactive menu with three exit options:
+    - **[1]** Continue monitoring blocks (exit with `CTRL+C` triggers full cleanup)
+    - **[2]** Stop containers but preserve configuration for future `--no-cleanup` runs
+    - **[3]** Stop and clean up everything immediately
+*   **Emergency Exit** (via `CTRL+C` during monitoring): A cleanup process (`trap`) is triggered, which stops the containers and removes the Docker network and the `nodes/` directory. The system is left clean.
 
 **When to use it**: When you want a fresh start, need to test a new genesis configuration, or want to ensure no residual state interferes.
 
@@ -133,10 +148,53 @@ This is the default mode (`./script.sh`).
 
 Activated with `./script.sh --no-cleanup`.
 
-*   **On Start**: It **does not** delete the `nodes/` directory or the Docker network. It assumes they exist and are valid. It simply stops and removes old containers and launches new ones using the keys, addresses, and `genesis.json` already on disk.
-*   **On Exit**: It stops the containers but **leaves the `nodes/` directory and the Docker network intact**.
+*   **On Start**: It **does not** delete the `nodes/` directory or the Docker network. If they exist from a previous run, it reuses them. If they don't exist (first time running `--no-cleanup`), the script gracefully ignores the flag, logs a message, and proceeds with normal mode to create everything from scratch.
+*   **During Execution**: It simply stops and removes old containers and launches new ones using the existing keys, addresses, and `genesis.json` already on disk.
+*   **On Exit**: When using the interactive menu option **[2]**, it stops the containers but **leaves the `nodes/` directory and the Docker network intact** for future `--no-cleanup` runs.
 
-**When to use it**: When you want to restart the nodes of an existing network without losing the blockchain history or node identities. This is useful for applying changes to a DApp's code and testing it against a persistent network state.
+**When to use it**: 
+- **Development Workflow**: After using option **[2]** to pause your network, restart it later with `--no-cleanup` to continue with the same blockchain state.
+- **Testing**: When you want to restart nodes without losing blockchain history or node identities.
+- **DApp Development**: Apply changes to your application code and test against a persistent network state.
+
+> **💡 Smart Behavior**: If you run `./script.sh --no-cleanup` but no previous configuration exists, the script automatically detects this and creates everything from scratch (same as normal mode), ensuring a smooth experience regardless of whether you have prior state or not.
+
+## 🔄 Common Workflows
+
+Understanding when to use each option helps optimize your development process:
+
+### 🆕 Fresh Start Workflow
+```bash
+./script.sh                    # Creates everything from scratch
+# Choose option [3] to clean up completely when done
+```
+**Use when**: First time setup, testing configuration changes, or ensuring a completely clean state.
+
+### 🔧 Development Workflow (Pause & Resume)
+```bash
+./script.sh                    # Initial setup
+# Choose option [2] to preserve configuration
+
+# Later, resume with existing state:
+./script.sh --no-cleanup      # Restart with same keys/blockchain
+# Choose option [2] again to pause, or [3] to clean up completely
+```
+**Use when**: Developing DApps, testing against persistent blockchain state, or working across multiple sessions.
+
+### 🔄 Quick Restart Workflow
+```bash
+./script.sh --no-cleanup      # If previous state exists, reuse it
+                               # If no previous state, creates from scratch
+```
+**Use when**: You want to restart quickly, regardless of whether previous state exists.
+
+### ⚡ Testing Workflow
+```bash
+./script.sh                    # Setup
+# Choose option [1] to monitor and test live
+# Use Ctrl+C to stop with full cleanup
+```
+**Use when**: Running automated tests, demos, or one-time validations.
 
 ## 📄 Configuration File Analysis (`config.yaml`)
 

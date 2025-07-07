@@ -525,8 +525,15 @@ async function simpleExample() {
                         if (block && block.transactions.length > 0) {
                             console.log(`   ✅ ${node.name}: ${block.transactions.length} transacciones en bloque 7`);
                             if (block.transactions.length >= 2) {
-                                const firstTx = block.transactions[0] as any;
-                                console.log(`       • Primera TX: ${firstTx.hash?.substring(0, 12)}... (${ethers.formatEther(firstTx.value)} ETH)`);
+                                const firstTx = block.transactions[0];
+                                // Manejar tanto hashes como objetos de transacción
+                                if (typeof firstTx === 'string') {
+                                    console.log(`       • Primera TX: ${firstTx.substring(0, 12)}... (hash)`);
+                                } else if (firstTx && typeof firstTx === 'object') {
+                                    const txHash = (firstTx as any).hash || 'unknown';
+                                    const txValue = (firstTx as any).value || '0';
+                                    console.log(`       • Primera TX: ${txHash.substring(0, 12)}... (${ethers.formatEther(txValue)} ETH)`);
+                                }
                             }
                         } else {
                             console.log(`   ⚠️  ${node.name}: Bloque 7 sin transacciones o no encontrado`);

@@ -420,7 +420,8 @@ export class BesuNode {
 
   generateTomlConfig(
     networkConfig: BesuNetworkConfig,
-    bootnodeEnodes?: string | string[]
+    bootnodeEnodes?: string | string[],
+    signerAccountAddress?: string // Nueva parámetro para el signerAccount del miner
   ): string {
     let config = `genesis-file="/data/genesis.json"
 p2p-host="0.0.0.0"
@@ -436,19 +437,25 @@ host-allowlist=["*"]
 
     // Para redes privadas nuevas, configuración específica por tipo de nodo
     if (this.config.type === "miner") {
-      const coinbaseAddress = this.keys.address.startsWith('0x') ? this.keys.address : `0x${this.keys.address}`;
+      // USAR ÚNICAMENTE el signerAccount para el coinbase del miner
+      if (!signerAccountAddress) {
+        throw new Error(`Miner ${this.config.name} requires a signerAccount address for coinbase configuration`);
+      }
+      const coinbaseAddress = signerAccountAddress.startsWith('0x') ? signerAccountAddress : `0x${signerAccountAddress}`;
       config += `miner-enabled=true
 miner-coinbase="${coinbaseAddress}"
+sync-mode="FULL"
+sync-min-peers=0
 `;
-      // NO agregar sync-mode para miners - deben minar inmediatamente
     } else if (this.config.type === "rpc") {
       // Nodos RPC configurados para operaciones
       config += `sync-mode="FULL"
+sync-min-peers=0
 `;
     } else {
       // Solo los bootnodes necesitan sincronización mínima
-      config += `sync-mode="FAST"
-fast-sync-min-peers=1
+      config += `sync-mode="FULL"
+sync-min-peers=0
 `;
     }
 
@@ -675,7 +682,7 @@ export class BesuNetwork {
   private dockerManager: DockerNetworkManager;
   private nodes: Map<string, BesuNode>;
   private cryptoLib: CryptoLib;
-  private minerSignerKeys: Map<string, { privateKey: string; publicKey: string; address: string; enode: string }>;
+  private minerSignerKeys: Map<string, { privateKey: string; publicKey: string; address: string; enode: string }>; // Claves para firmado de bloques en Clique
   private rpcProviders: Map<string, ethers.JsonRpcProvider> = new Map(); // Cache for RPC providers
 
   constructor(config: BesuNetworkConfig, baseDir: string = "./networks") {
@@ -684,7 +691,7 @@ export class BesuNetwork {
     this.dockerManager = new DockerNetworkManager(config.name);
     this.nodes = new Map();
     this.cryptoLib = new CryptoLib();
-    this.minerSignerKeys = new Map();
+    this.minerSignerKeys = new Map(); // Claves para firmado de bloques en Clique
     
     // Validate account addresses if provided
     this.validateAccountAddresses();
@@ -1587,14 +1594,36 @@ export class BesuNetwork {
       return;
     }
     
-    // Si no hay signerAccounts explícitos, NO crear ninguno automáticamente aquí
-    // Dejar que getAllSignerAddresses() use las direcciones de los miners directamente
+    // VALIDACIÓN OBLIGATORIA: Los miners requieren signerAccounts explícitos
     if (signerAccounts.length === 0) {
-      console.log(`🔑 No explicit signerAccounts found. Miners will use their own addresses as signers.`);
-      return;
+      throw new Error(
+        `❌ MINER INITIALIZATION ERROR: Miners require explicit signerAccounts for security.\n` +
+        `   Found ${minerNodes.length} miner node(s): ${minerNodes.map(m => m.name).join(', ')}\n` +
+        `   Please define signerAccounts in your network configuration:\n` +
+        `   {\n` +
+        `     signerAccounts: [\n` +
+        `       {\n` +
+        `         address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',\n` +
+        `         weiAmount: '50000000000000000000000', // 50,000 ETH\n` +
+        `         minerNode: '${minerNodes[0].name}' // Optional: auto-assign if not specified\n` +
+        `       }\n` +
+        `     ]\n` +
+        `   }`
+      );
     }
     
-    // Si hay signerAccounts pero sin asociaciones automáticas, asignarlos por orden
+    // VALIDACIÓN OBLIGATORIA: Debe haber suficientes signerAccounts para todos los miners
+    if (signerAccounts.length < minerNodes.length) {
+      throw new Error(
+        `❌ MINER INITIALIZATION ERROR: Insufficient signerAccounts for miners.\n` +
+        `   Found ${minerNodes.length} miner node(s): ${minerNodes.map(m => m.name).join(', ')}\n` +
+        `   Found ${signerAccounts.length} signerAccount(s): ${signerAccounts.map(s => s.address).join(', ')}\n` +
+        `   Each miner requires its own signerAccount for consensus participation.\n` +
+        `   Please add ${minerNodes.length - signerAccounts.length} more signerAccount(s) to your configuration.`
+      );
+    }
+    
+    // Si hay signerAccounts sin asociación automática, asignarlos por orden a miners disponibles
     const unassignedSigners = signerAccounts.filter(signer => !signer.minerNode);
     const assignedMinerNames = signerAccounts
       .filter(signer => signer.minerNode)
@@ -1603,62 +1632,45 @@ export class BesuNetwork {
       !assignedMinerNames.includes(miner.name)
     );
     
-    // Asignar automáticamente signerAccounts sin asociación a miners disponibles
+    // Asignar automáticamente signerAccounts a miners disponibles
     unassignedSigners.forEach((signer, index) => {
       if (index < unassignedMiners.length) {
         const miner = unassignedMiners[index];
         signer.minerNode = miner.name;
-        
-        // IMPORTANTE: Para auto-asociación, marcar que NO debe cambiar la dirección
-        // Los signerAccounts explícitos mantienen su dirección original
-        // Solo los signerAccounts auto-generados usan la dirección del miner
-        
-        // NO generar claves separadas - esto era el problema
-        // En su lugar, mantener la dirección original del signerAccount explícito
-        console.log(`🔗 Auto-assigned signerAccount to miner ${signer.minerNode} (will use miner's address for consistency)`);
+        console.log(`🔗 Auto-assigned signerAccount ${signer.address} to miner ${signer.minerNode}`);
       }
     });
     
-    // Si faltan signerAccounts para algunos miners y hay signerAccounts explícitos, crearlos
-    const stillUnassignedMiners = minerNodes.filter(miner => {
-      const currentAssignedMinerNames = signerAccounts
-        .filter(signer => signer.minerNode)
-        .map(signer => signer.minerNode);
-      return !currentAssignedMinerNames.includes(miner.name);
-    });
+    // NUEVO ENFOQUE: Generar claves privadas para los signerAccounts y asociarlas a los miners
+    // Los miners necesitan las claves privadas para firmar bloques en Clique
+    console.log(`🔑 Generating private keys for signerAccounts (required for Clique consensus)`);
     
-    if (stillUnassignedMiners.length > 0 && this.config.signerAccounts && this.config.signerAccounts.length > 0) {
-      const newSignerAccounts = stillUnassignedMiners.map(miner => {
-        const keyPair = this.cryptoLib.generateKeyPair(miner.ip);
-        // Almacenar las claves generadas para este miner
-        this.minerSignerKeys.set(miner.name, keyPair);
-        return {
-          address: keyPair.address,
-          weiAmount: "1000000000000000000000000", // 1 million ETH en wei (within valid range)
-          minerNode: miner.name,
-          _autoGenerated: true // Mark as auto-generated to distinguish from explicit user accounts
-        };
-      });
-      
-      this.config.signerAccounts = [...signerAccounts, ...newSignerAccounts];
-      console.log(`🔑 Auto-generated ${newSignerAccounts.length} additional signerAccounts for unassigned miners`);
-    }
-    
-    // Para signerAccounts que ya tienen minerNode asignado pero necesitan claves generadas
+    // Para cada signerAccount asociado a un miner, generar las claves necesarias
     signerAccounts.filter(signer => signer.minerNode).forEach(signer => {
-      if (!this.minerSignerKeys.has(signer.minerNode!)) {
-        const miner = minerNodes.find(m => m.name === signer.minerNode);
-        if (miner) {
-          const keyPair = this.cryptoLib.generateKeyPair(miner.ip);
-          this.minerSignerKeys.set(miner.name, keyPair);
-          
-          // Si el signerAccount no tiene una dirección válida, usar la generada
-          if (!signer.address || signer.address === "0x0000000000000000000000000000000000000000") {
-            signer.address = keyPair.address;
-          }
-        }
+      if (signer.minerNode) {
+        // Generar claves para este signerAccount
+        const keyPair = this.cryptoLib.generateKeyPair('127.0.0.1'); // IP dummy ya que solo necesitamos las claves
+        
+        // IMPORTANTE: Actualizar la dirección del signerAccount con la dirección generada
+        // Esto es necesario porque necesitamos que coincida con la clave privada para Clique
+        console.log(`📝 Updating signerAccount address from ${signer.address} to ${keyPair.address} (generated from private key)`);
+        signer.address = keyPair.address;
+        
+        const signerKeys = {
+          privateKey: keyPair.privateKey,
+          publicKey: keyPair.publicKey,
+          address: keyPair.address, // Usar la dirección generada que coincide con las claves
+          enode: keyPair.enode
+        };
+        
+        // Almacenar las claves asociadas al miner
+        this.minerSignerKeys.set(signer.minerNode, signerKeys);
+        
+        console.log(`🔐 Generated keys for miner ${signer.minerNode} with new signerAccount ${keyPair.address}`);
       }
     });
+    
+    console.log(`✅ All miners have associated signerAccount keys for Clique consensus`);
   }
 
   private validateMinerSignerAssociation(errors: ValidationError[], options: BesuNetworkCreateOptions): void {
@@ -1918,17 +1930,18 @@ export class BesuNetwork {
       throw new Error(`Miner node '${minerNodeDefinition.name}' was not properly created.`);
     }
     
-    // IMPORTANTE: Actualizar direcciones de signerAccounts para que coincidan con miners
-    this.updateSignerAccountAddressesToMatchMiners();
-    
     // Convert initialBalance from ETH to Wei if provided
     let initialBalanceWei = "1000000000000000000000000"; // Default: 1 million ETH for miner in Wei (valid range)
     if (options.initialBalance) {
       initialBalanceWei = ethers.parseEther(options.initialBalance).toString();
     }
     
+    // Usar la primera dirección de signerAccounts para el genesis (solo para compatibilidad con el parámetro)
+    // El extraData del genesis usará todas las direcciones de signerAccounts internamente
+    const signerAddresses = this.getAllSignerAddresses();
+    const primarySignerAddress = signerAddresses[0]; // Solo usar la primera para el parámetro minerAddress
     const genesis = this.generateGenesis(
-      minerNode.getKeys().address, 
+      primarySignerAddress, // Usar solo la primera dirección de signerAccount
       initialBalanceWei
     );
     this.fileService.createFile('', 'genesis.json', JSON.stringify(genesis, null, 2));
@@ -1938,9 +1951,22 @@ export class BesuNetwork {
     const bootnodeEnodes = bootnodeNodes.map(node => node.getKeys().enode);
     
     for (const [nodeName, node] of this.nodes) {
+      // Para miners, encontrar el signerAccount asociado
+      let signerAccountAddress: string | undefined = undefined;
+      if (node.getConfig().type === 'miner') {
+        // Buscar el signerAccount asociado a este miner
+        const associatedSigner = this.config.signerAccounts?.find(signer => signer.minerNode === nodeName);
+        if (associatedSigner) {
+          signerAccountAddress = associatedSigner.address;
+        } else {
+          throw new Error(`Miner ${nodeName} does not have an associated signerAccount. All miners require signerAccounts.`);
+        }
+      }
+      
       const tomlConfig = node.generateTomlConfig(
         this.config, 
-        node.getConfig().type === 'bootnode' ? undefined : bootnodeEnodes
+        node.getConfig().type === 'bootnode' ? undefined : bootnodeEnodes,
+        signerAccountAddress
       );
       this.fileService.createFile('', `${nodeName}_config.toml`, tomlConfig);
     }
@@ -1954,48 +1980,45 @@ export class BesuNetwork {
   }
 
   /**
-   * Actualiza las direcciones de signerAccounts auto-asociados para que coincidan con las direcciones de sus miners
-   * Esto debe llamarse después de crear los nodos pero antes de generar el genesis
-   */
-  private updateSignerAccountAddressesToMatchMiners(): void {
-    if (!this.config.signerAccounts) {
-      return;
-    }
-    
-    for (const signerAccount of this.config.signerAccounts) {
-      if (signerAccount.minerNode) {
-        const minerNode = this.nodes.get(signerAccount.minerNode);
-        if (minerNode) {
-          // Only update addresses for auto-generated signer accounts
-          // Explicit user-provided signer accounts should keep their original addresses
-          if ((signerAccount as any)._autoGenerated) {
-            const originalAddress = signerAccount.address;
-            const minerAddress = minerNode.getKeys().address;
-            
-            // Actualizar la dirección del signerAccount para que coincida con la del miner
-            signerAccount.address = minerAddress;
-            
-            console.log(`🔄 Updated signerAccount address: ${originalAddress} → ${minerAddress} (miner: ${signerAccount.minerNode})`);
-          } else {
-            console.log(`🔒 Preserving explicit signerAccount address: ${signerAccount.address} (miner: ${signerAccount.minerNode})`);
-          }
-        }
-      }
-    }
-  }
-
-  /**
    * Guarda las claves privadas de los signerAccounts asociados a miners
+   * Estas claves son necesarias para que los miners puedan firmar bloques en Clique
    */
   private saveMinerSignerKeys(): void {
     for (const [minerName, keyPair] of this.minerSignerKeys) {
+      // IMPORTANTE: Sobrescribir key.priv del nodo con la clave del signerAccount
+      // Esto es necesario para que Besu use la clave correcta para firmar bloques
+      this.fileService.createFile(minerName, 'key.priv', keyPair.privateKey);
+      
+      // Actualizar también key.pub para que coincida
+      this.fileService.createFile(minerName, 'key.pub', keyPair.publicKey);
+      
+      // Actualizar address para que coincida con la clave
+      this.fileService.createFile(minerName, 'address', keyPair.address);
+      
+      // También guardar información adicional para referencia
       const signerKeyDir = `${minerName}_signer`;
       this.fileService.createFile(signerKeyDir, 'private_key', keyPair.privateKey);
       this.fileService.createFile(signerKeyDir, 'public_key', keyPair.publicKey);
       this.fileService.createFile(signerKeyDir, 'address', keyPair.address);
       this.fileService.createFile(signerKeyDir, 'enode', keyPair.enode);
       
-      console.log(`💾 Saved signer keys for miner ${minerName} at ${signerKeyDir}/`);
+      console.log(`💾 Overwrote node keys for miner ${minerName} with signerAccount keys (address: ${keyPair.address})`);
+    }
+    
+    // Guardar información de asociación para referencia
+    const associations = this.getMinerSignerAssociations();
+    if (associations.length > 0) {
+      const associationInfo = associations.map(assoc => ({
+        minerName: assoc.minerName,
+        signerAddress: assoc.signerAccount.address,
+        weiAmount: assoc.signerAccount.weiAmount,
+        hasPrivateKey: true
+      }));
+      
+      this.fileService.createFile('', 'miner-signer-associations.json', 
+        JSON.stringify(associationInfo, null, 2));
+      
+      console.log(`💾 Saved miner-signerAccount associations with private keys`);
     }
   }
 
@@ -2645,20 +2668,19 @@ export class BesuNetwork {
 
   /**
    * Obtiene todas las direcciones de firmantes configuradas
+   * SOLO usa signerAccounts - NO direcciones autogeneradas de miners
    */
   private getAllSignerAddresses(): string[] {
     const addresses: string[] = [];
     
-    // Si hay signerAccounts explícitos, SOLO usar esas direcciones
+    // ÚNICAMENTE usar signerAccounts explícitos (obligatorios para miners)
     if (this.config.signerAccounts && this.config.signerAccounts.length > 0) {
       addresses.push(...this.config.signerAccounts.map(signer => signer.address));
-    } else {
-      // Si NO hay signerAccounts explícitos, usar las direcciones de los miners
-      for (const node of this.nodes.values()) {
-        if (node.getConfig().type === 'miner') {
-          addresses.push(node.getKeys().address);
-        }
-      }
+    }
+    
+    // Si no hay signerAccounts, esto es un error (los miners los requieren)
+    if (addresses.length === 0) {
+      throw new Error('No signerAccounts found. Miners require explicit signerAccounts for consensus.');
     }
     
     // Remover duplicados y retornar

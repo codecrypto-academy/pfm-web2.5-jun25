@@ -1,298 +1,317 @@
+/**
+ * Networks API - Main endpoint for network management
+ * GET /api/networks - List all networks
+ * POST /api/networks - Create a new network
+ * 
+ * @example POST /api/networks
+ * {
+ *   "networkId": "my-test-network",
+ *   "chainId": 1337,
+ *   "nodeCount": 3,
+ *   "subnet": "172.21.0.0/24",
+ *   "gateway": "172.21.0.1",
+ *   "baseRpcPort": 8545,
+ *   "baseP2pPort": 30303,
+ *   "bootnodeCount": 1,
+ *   "minerCount": 2,
+ *   "besuImage": "hyperledger/besu:latest",
+ *   "memoryLimit": "2g",
+ *   "cpuLimit": "1.0"
+ * }
+ * 
+ * @example Response
+ * {
+ *   "success": true,
+ *   "network": {
+ *     "networkId": "my-test-network",
+ *     "chainId": 1337,
+ *     "dockerNetworkId": "abc123",
+ *     "subnet": "172.21.0.0/24",
+ *     "gateway": "172.21.0.1",
+ *     "containersCreated": 3,
+ *     "nodes": [...]
+ *   }
+ * }
+ */
 import { NextRequest, NextResponse } from 'next/server';
-import { DockerManager, GenesisGenerator, KeyGenerator } from 'besu-network-manager';
-import type { NetworkConfig, BesuNodeConfig } from 'besu-network-manager';
-import * as fs from 'fs';
+import { 
+  DockerManager, 
+  GenesisGenerator, 
+  KeyGenerator,
+  NetworkConfig,
+  BesuNodeConfig 
+} from 'besu-network-manager';
+import { NetworkStorage, StoredNetworkData } from '@/lib/storage';
+import { 
+  generateNodeIPs, 
+  generateNodePorts, 
+  generateNodeTypes, 
+  validateNetworkConfig 
+} from '@/lib/networkUtils';
+import { 
+  NETWORK_DEFAULTS, 
+  PORT_DEFAULTS, 
+  getBesuImage,
+  DOCKER_DEFAULTS,
+  NODE_ID_GENERATION,
+  FILE_NAMING
+} from '@/lib/config';
+import type { 
+  CreateNetworkRequest, 
+  CreateNetworkResponse,
+  ListNetworksResponse,
+  NetworkListQuery
+} from '@/lib/types';
 import * as path from 'path';
+import * as fs from 'fs';
 
-// Simple in-memory storage (will move to database later)
-const networksDataDir = '/tmp/besu-networks';
-
-// Ensure data directory exists
-if (!fs.existsSync(networksDataDir)) {
-  fs.mkdirSync(networksDataDir, { recursive: true });
-}
-
+// Initialize SDK components
 const dockerManager = new DockerManager();
+const keyGenerator = new KeyGenerator();
 
-interface StoredNetworkData {
-  config: NetworkConfig;
-  nodes: BesuNodeConfig[];
-  genesis: any;
-  createdAt: string;
-}
+/**
+ * GET /api/networks
+ * List all networks
+ */
+export async function GET() {
+  try {
+    const networkIds = NetworkStorage.listNetworks();
+    const networks = networkIds.map(id => {
+      const data = NetworkStorage.loadNetwork(id);
+      if (!data) return null;
+      
+      return {
+        networkId: id,
+        chainId: data.config.chainId,
+        subnet: data.config.subnet,
+        nodesCount: data.nodes.length,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt
+      };
+    }).filter(Boolean);
 
-// Helper functions for file-based storage
-function saveNetworkData(networkId: string, data: StoredNetworkData): void {
-  const filePath = path.join(networksDataDir, `${networkId}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
-function loadNetworkData(networkId: string): StoredNetworkData | null {
-  const filePath = path.join(networksDataDir, `${networkId}.json`);
-  if (!fs.existsSync(filePath)) {
-    return null;
+    return NextResponse.json({
+      success: true,
+      networks
+    });
+  } catch (error) {
+    console.error('Failed to list networks:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to list networks' },
+      { status: 500 }
+    );
   }
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
-function deleteNetworkData(networkId: string): void {
-  const filePath = path.join(networksDataDir, `${networkId}.json`);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-}
-
-function listNetworkIds(): string[] {
-  return fs.readdirSync(networksDataDir)
-    .filter(file => file.endsWith('.json'))
-    .map(file => file.replace('.json', ''));
-}
-
-// Helper function to generate IP addresses
-function generateNodeIPs(subnet: string, count: number): string[] {
-  // Simple IP generation - assumes /24 subnet
-  const baseIP = subnet.split('/')[0].split('.').slice(0, 3).join('.');
-  const ips: string[] = [];
-  for (let i = 0; i < count; i++) {
-    ips.push(`${baseIP}.${10 + i}`); // Start from .10
-  }
-  return ips;
-}
-
-// Helper function to allocate ports
-function allocatePorts(nodeCount: number): { rpcPorts: number[], p2pPorts: number[] } {
-  const rpcPorts: number[] = [];
-  const p2pPorts: number[] = [];
-  
-  for (let i = 0; i < nodeCount; i++) {
-    rpcPorts.push(8545 + i);
-    p2pPorts.push(30303 + i);
-  }
-  
-  return { rpcPorts, p2pPorts };
-}
-
-function getAllNetworks(): StoredNetworkData[] {
-  const networkIds = listNetworkIds();
-  const networks: StoredNetworkData[] = [];
-  
-  for (const networkId of networkIds) {
-    const networkData = loadNetworkData(networkId);
-    if (networkData) {
-      networks.push(networkData);
-    }
-  }
-  
-  return networks;
-}
-
+/**
+ * POST /api/networks
+ * Create a new network
+ * 
+ * Body: {
+ *   networkId: string,
+ *   chainId: number,
+ *   nodeCount: number,
+ *   subnet?: string,
+ *   gateway?: string,
+ *   baseRpcPort?: number,
+ *   baseP2pPort?: number,
+ *   bootnodeCount?: number,
+ *   minerCount?: number
+ * }
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { networkId, chainId, subnet = '172.20.0.0/24', nodes = [] } = body;
+    const { 
+      networkId, 
+      chainId, 
+      nodeCount = NETWORK_DEFAULTS.NODE_COUNT,
+      subnet = NETWORK_DEFAULTS.SUBNET,
+      gateway = NETWORK_DEFAULTS.GATEWAY,
+      baseRpcPort = PORT_DEFAULTS.BASE_RPC_PORT,
+      baseP2pPort = PORT_DEFAULTS.BASE_P2P_PORT,
+      bootnodeCount = NETWORK_DEFAULTS.BOOTNODE_COUNT,
+      minerCount,
+      besuImage = DOCKER_DEFAULTS.BESU_IMAGE,
+      memoryLimit = DOCKER_DEFAULTS.MEMORY_LIMIT,
+      cpuLimit = DOCKER_DEFAULTS.CPU_LIMIT,
+      labels = {},
+      env = {}
+    } = body;
 
-    // Validation
-    if (!networkId || !chainId) {
+    // Validate input
+    const validation = validateNetworkConfig({
+      networkId,
+      chainId,
+      nodeCount,
+      subnet,
+      gateway
+    });
+
+    if (!validation.valid) {
       return NextResponse.json(
-        { success: false, error: 'networkId and chainId are required' },
+        { success: false, error: 'Validation failed', details: validation.errors },
         { status: 400 }
       );
     }
 
     // Check if network already exists
-    if (loadNetworkData(networkId)) {
+    if (NetworkStorage.loadNetwork(networkId)) {
       return NextResponse.json(
-        { success: false, error: `Network ${networkId} already exists` },
-        { status: 400 }
+        { success: false, error: 'Network already exists' },
+        { status: 409 }
       );
     }
 
     // Check Docker availability
-    if (!(await dockerManager.isDockerAvailable())) {
+    if (!await dockerManager.isDockerAvailable()) {
       return NextResponse.json(
         { success: false, error: 'Docker is not available' },
         { status: 500 }
       );
     }
 
-    // Generate gateway IP
-    const gateway = subnet.replace('/24', '').replace(/\d+$/, '1');
-
+    // 1. Generate network configuration
     const networkConfig: NetworkConfig = {
       networkId,
       chainId,
       subnet,
-      gateway
+      gateway,
+      nodes: []
     };
 
-    // Create initial bootnode
-    const bootnodeKeyPair = KeyGenerator.generateKeyPair();
-    const nodeIPs = generateNodeIPs(subnet, 1 + nodes.length);
-    const { rpcPorts, p2pPorts } = allocatePorts(1 + nodes.length);
+    // 2. Generate dynamic node configurations
+    const nodeIPs = generateNodeIPs(subnet, nodeCount);
+    const { rpcPorts, p2pPorts } = generateNodePorts(nodeCount, baseRpcPort, baseP2pPort);
+    const nodeTypes = generateNodeTypes(nodeCount, bootnodeCount, minerCount);
+    
+    const nodeCredentials = [];
+    const validators = [];
 
-    const bootnodeConfig: BesuNodeConfig = {
-      id: 'bootnode',
-      type: 'bootnode',
-      rpcPort: rpcPorts[0],
-      p2pPort: p2pPorts[0],
-      ip: nodeIPs[0],
-      privateKey: bootnodeKeyPair.privateKey,
-      address: bootnodeKeyPair.address
-    };
-
-    // Prepare additional nodes
-    const allNodes: BesuNodeConfig[] = [bootnodeConfig];
-    for (let i = 0; i < nodes.length; i++) {
-      const nodeKeyPair = KeyGenerator.generateKeyPair();
+    for (let i = 0; i < nodeCount; i++) {
+      const ip = nodeIPs[i];
+      const rpcPort = rpcPorts[i];
+      const p2pPort = p2pPorts[i];
+      const nodeType = nodeTypes[i];
+      
+      const credentials = keyGenerator.generateKeyPair(ip, p2pPort);
+      
       const nodeConfig: BesuNodeConfig = {
-        id: nodes[i].id || `node-${i + 1}`,
-        type: nodes[i].type || 'miner',
-        rpcPort: rpcPorts[i + 1],
-        p2pPort: p2pPorts[i + 1],
-        ip: nodeIPs[i + 1],
-        privateKey: nodeKeyPair.privateKey,
-        address: nodeKeyPair.address
+        id: NODE_ID_GENERATION.NETWORK_PATTERN(i),
+        type: nodeType as 'bootnode' | 'miner' | 'rpc',
+        ip,
+        rpcPort,
+        p2pPort,
+        address: credentials.address,
+        enode: credentials.enode
       };
-      allNodes.push(nodeConfig);
+
+      // Set bootnodes for non-bootnode nodes
+      if (nodeConfig.type !== 'bootnode' && nodeCredentials.length > 0) {
+        // Use all bootnode enodes as bootnodes
+        const bootnodeEnodes = nodeCredentials
+          .slice(0, bootnodeCount)
+          .map(cred => cred.enode);
+        nodeConfig.bootnodes = bootnodeEnodes;
+      }
+
+      networkConfig.nodes.push(nodeConfig);
+      nodeCredentials.push(credentials);
+
+      if (nodeConfig.type === 'miner') {
+        validators.push(credentials.address);
+      }
     }
 
-    // Generate genesis with bootnode as validator
+    // 3. Generate genesis file
     const genesis = GenesisGenerator.generateGenesis({
       chainId,
-      validators: [bootnodeKeyPair.address]
+      validators
     });
 
-    // Write genesis to file
-    const genesisPath = GenesisGenerator.writeGenesisToFile(networkId, genesis);
+    // 4. Create Docker network
+    const dockerNetworkId = await dockerManager.createDockerNetwork(networkConfig);
 
-    // Create Docker network
-    await dockerManager.createDockerNetwork(networkConfig);
+    // 5. Create network directory structure
+    const networkPath = await NetworkStorage.createNetworkDirectory(networkId);
 
-    console.log('About to create bootnode:', bootnodeConfig.id);
-    // Create bootnode first
-    await dockerManager.createBesuContainer(networkConfig, bootnodeConfig, genesisPath);
-    console.log('Bootnode created successfully');
-
-    // Wait a bit for bootnode to start
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    console.log('About to create additional nodes:', allNodes.slice(1).map(n => n.id));
-    // Create other nodes
-    for (const nodeConfig of allNodes.slice(1)) {
-      console.log('Creating node:', nodeConfig.id);
-      await dockerManager.createBesuContainer(networkConfig, nodeConfig, genesisPath);
-      console.log('Node created:', nodeConfig.id);
+    // 6. Save node keys and files
+    for (let i = 0; i < networkConfig.nodes.length; i++) {
+      const node = networkConfig.nodes[i];
+      const credentials = nodeCredentials[i];
+      
+      // Create node directory
+      const nodePath = await NetworkStorage.createNodeDirectory(networkId, node.id);
+      
+      // Save node files
+      await fs.promises.writeFile(
+        path.join(nodePath, FILE_NAMING.NODE_FILES.PRIVATE_KEY), 
+        credentials.privateKey.slice(2)
+      );
+      await fs.promises.writeFile(
+        path.join(nodePath, FILE_NAMING.NODE_FILES.ADDRESS), 
+        credentials.address
+      );
+      await fs.promises.writeFile(
+        path.join(nodePath, FILE_NAMING.NODE_FILES.ENODE), 
+        credentials.enode
+      );
     }
 
-    // Save network data
+    // Save genesis file
+    await fs.promises.writeFile(
+      path.join(networkPath, FILE_NAMING.NETWORK_FILES.GENESIS),
+      JSON.stringify(genesis, null, 2)
+    );
+
+    // 7. Create and start containers
+    const containers = [];
+    for (const node of networkConfig.nodes) {
+      const nodePath = NetworkStorage.getNodePath(networkId, node.id);
+      const container = await dockerManager.createBesuContainer(
+        networkConfig,
+        node,
+        nodePath
+      );
+      containers.push(container);
+    }
+
+    // 8. Save network metadata
     const networkData: StoredNetworkData = {
       config: networkConfig,
-      nodes: allNodes,
+      nodes: networkConfig.nodes,
       genesis,
-      createdAt: new Date().toISOString()
+      dockerNetworkId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
-    saveNetworkData(networkId, networkData);
 
-    console.info(`Network ${networkId} created successfully`);
+    NetworkStorage.saveNetwork(networkId, networkData);
 
     return NextResponse.json({
       success: true,
       network: {
         networkId,
         chainId,
+        dockerNetworkId,
         subnet,
-        nodeCount: allNodes.length,
-        nodes: allNodes.map(node => ({
-          id: node.id,
-          type: node.type,
-          rpcPort: node.rpcPort,
-          p2pPort: node.p2pPort,
-          ip: node.ip,
-          address: node.address
+        gateway,
+        containersCreated: containers.length,
+        nodes: networkConfig.nodes.map(n => ({
+          id: n.id,
+          type: n.type,
+          ip: n.ip,
+          rpcPort: n.rpcPort,
+          p2pPort: n.p2pPort,
+          address: n.address
         }))
       }
     });
 
   } catch (error) {
-    console.error('Failed to create network:', error);
+    console.error('Network creation failed:', error);
     return NextResponse.json(
-      { success: false, error: `Failed to create network: ${error}` },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET() {
-  try {
-    const networkIds = listNetworkIds();
-    const networks = [];
-
-    for (const networkId of networkIds) {
-      const data = loadNetworkData(networkId);
-      if (data) {
-        const dockerInfo = dockerManager.getNetworkInfo(networkId);
-        networks.push({
-          networkId,
-          chainId: data.config.chainId,
-          subnet: data.config.subnet,
-          nodeCount: data.nodes.length,
-          status: dockerInfo ? 'running' : 'stopped',
-          createdAt: data.createdAt
-        });
-      }
-    }
-
-    return NextResponse.json({ success: true, networks });
-  } catch (error) {
-    console.error('Failed to list networks:', error);
-    return NextResponse.json(
-      { success: false, error: `Failed to list networks: ${error}` },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE /api/networks - Delete all networks
-export async function DELETE(request: NextRequest) {
-  try {
-    const networks = getAllNetworks();
-    const results = [];
-    
-    for (const network of networks) {
-      try {
-        // Remove Docker network and all containers
-        await dockerManager.removeDockerNetwork(network.config.networkId);
-        
-        // Remove network data file
-        const filePath = path.join(networksDataDir, `${network.config.networkId}.json`);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-        
-        results.push({
-          networkId: network.config.networkId,
-          status: 'removed'
-        });
-      } catch (error) {
-        console.error(`Failed to remove network ${network.config.networkId}:`, error);
-        results.push({
-          networkId: network.config.networkId,
-          status: 'error',
-          error: String(error)
-        });
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Processed ${networks.length} networks`,
-      results
-    });
-
-  } catch (error) {
-    console.error('Error deleting networks:', error);
-    return NextResponse.json(
-      { success: false, error: `Failed to delete networks: ${error}` },
+      { success: false, error: 'Failed to create network' },
       { status: 500 }
     );
   }

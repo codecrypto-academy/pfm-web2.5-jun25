@@ -29,16 +29,6 @@ export interface ContainerInfo {
   status: 'running' | 'stopped' | 'error';
 }
 
-export interface NetworkInfo {
-  networkId: string;
-  dockerNetworkId: string;
-  containers: Map<string, ContainerInfo>;
-  networkPath: string;
-  chainId: number;
-  subnet: string;
-  gateway: string;
-}
-
 export interface NodeCredentials {
   privateKey: string;
   publicKey: string;

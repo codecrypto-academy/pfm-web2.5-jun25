@@ -1,16 +1,16 @@
-# Besu Network Manager
+# Besu Network SDK
 
-A TypeScript library for managing Hyperledger Besu networks with Clique consensus using Docker containers.
+A clean, focused TypeScript library providing essential building blocks for managing Hyperledger Besu networks with Docker containers. This SDK provides individual components that can be composed together in applications like Next.js to create complete network management solutions.
 
 ## Features
 
-- **Docker-based**: Uses dockerode to manage Besu containers, no shell scripts required
+- **Modular Architecture**: Individual components for Docker, Genesis, and Key management
+- **Docker Integration**: Native dockerode integration for container management
 - **Clique Consensus**: Built-in support for Clique PoA consensus mechanism
-- **Dynamic IP Management**: Automatic IP allocation within configurable subnets
-- **TypeScript Support**: Fully typed with comprehensive TypeScript definitions
-- **Network Management**: Create, delete, and modify networks with multiple node types
-- **Node Management**: Add/remove nodes dynamically with automatic configuration
-- **Key Generation**: Built-in Ethereum key generation and enode URL creation
+- **TypeScript First**: Fully typed with comprehensive TypeScript definitions
+- **Key Generation**: Ethereum key generation with enode URL creation
+- **Genesis Generation**: Clique genesis block generation with validator configuration
+- **Network Management**: Docker network and container lifecycle management
 
 ## Installation
 
@@ -26,183 +26,441 @@ npm install besu-network-manager
 - Node.js 16+ 
 - TypeScript 4.5+ (for development)
 
-## Quick Start
+## Components Overview
+
+The SDK provides three main components:
+
+- **`DockerManager`** - Handles Docker networks and container operations
+- **`GenesisGenerator`** - Creates Clique consensus genesis blocks  
+- **`KeyGenerator`** - Generates Ethereum keypairs and enode URLs
+
+## Usage Examples
+
+### 1. DockerManager - Container & Network Operations
 
 ```typescript
-import { NetworkManager } from 'besu-network-manager';
+import { DockerManager, NetworkConfig, BesuNodeConfig } from 'besu-network-manager';
 
-// Create a network manager instance
-const manager = new NetworkManager();
+const dockerManager = new DockerManager();
 
-// Create a simple network configuration
-const networkConfig = {
-  networkId: 'my-test-network',
+// Check Docker availability
+const isAvailable = await dockerManager.isDockerAvailable();
+if (!isAvailable) {
+  throw new Error('Docker is not available');
+}
+
+// Create a Docker network
+const networkConfig: NetworkConfig = {
+  networkId: 'my-besu-network',
   chainId: 1337,
   subnet: '172.20.0.0/24',
-  besuVersion: 'latest'
+  gateway: '172.20.0.1',
+  nodes: [] // Will be populated with node configs
 };
 
-// Add some initial nodes
-networkConfig.nodes = [
-  { id: 'miner1', type: 'miner', rpcPort: 8545 },
-  { id: 'rpc1', type: 'rpc', rpcPort: 8546 }
-];
+const dockerNetworkId = await dockerManager.createDockerNetwork(networkConfig);
+console.log('Docker network created:', dockerNetworkId);
 
-// Create the network
-const networkInfo = await manager.createNetwork(networkConfig);
-console.log('Network created:', networkInfo.networkId);
+// Check if network exists
+const exists = await dockerManager.networkExists('my-besu-network');
+console.log('Network exists:', exists);
 
-// Add another node dynamically
-const newNode = { id: 'miner2', type: 'miner', rpcPort: 8547 };
-await manager.addNode(networkInfo.networkId, newNode);
-
-// Get network status
-const status = await manager.getNetworkStatus(networkInfo.networkId);
-console.log('Network status:', status);
-
-// Clean up
-await manager.deleteNetwork(networkInfo.networkId);
+// Find containers in network
+const containers = await dockerManager.findNetworkContainers('my-besu-network');
+console.log('Containers in network:', containers.length);
 ```
 
-## API Reference
-
-### NetworkManager
-
-The main class for managing Besu networks.
-
-#### Methods
-
-- `createNetwork(config: BesuNetworkConfig): Promise<NetworkInfo>`
-- `deleteNetwork(networkId: string): Promise<void>`
-- `addNode(networkId: string, nodeConfig: BesuNodeConfig): Promise<NodeInfo>`
-- `removeNode(networkId: string, nodeId: string): Promise<void>`
-- `getNetworkInfo(networkId: string): NetworkInfo | undefined`
-- `getNetworkStatus(networkId: string): Promise<NetworkStatus>`
-- `listNetworks(): NetworkInfo[]`
-- `isDockerAvailable(): boolean`
-
-### Configuration Types
-
-#### BesuNetworkConfig
-
-```typescript
-interface BesuNetworkConfig {
-  networkId: string;           // Unique network identifier
-  chainId: number;            // Blockchain chain ID
-  subnet: string;             // Docker network subnet (CIDR)
-  name?: string;              // Display name
-  besuVersion?: string;       // Docker image version
-  nodes?: BesuNodeConfig[];   // Initial nodes
-  genesis?: GenesisConfig;    // Genesis block overrides
-}
-```
-
-#### BesuNodeConfig
-
-```typescript
-interface BesuNodeConfig {
-  id: string;                        // Unique node identifier
-  type: 'bootnode' | 'miner' | 'rpc' | 'validator';
-  ip?: string;                       // Specific IP (auto-assigned if not provided)
-  rpcPort?: number;                  // RPC port (default: 8545)
-  p2pPort?: number;                  // P2P port (default: 30303)
-  mining?: boolean;                  // Enable mining
-  credentials?: NodeCredentials;     // Node keys (auto-generated if not provided)
-  env?: Record<string, string>;     // Environment variables
-  extraArgs?: string[];             // Additional Besu arguments
-}
-```
-
-## Advanced Usage
-
-### Custom Docker Configuration
-
-```typescript
-import Docker from 'dockerode';
-
-const docker = new Docker({
-  socketPath: '/var/run/docker.sock'
-});
-
-const manager = new NetworkManager(docker);
-```
-
-### Custom Genesis Configuration
-
-```typescript
-const networkConfig = createNetworkConfig('custom-network', 1337);
-networkConfig.genesis = {
-  gasLimit: '0x1fffffffffffff',
-  difficulty: '0x1',
-  extraConfig: {
-    clique: {
-      period: 3,  // 3 second block time
-      epoch: 30000
-    }
-  }
-};
-```
-
-### Event Handling
-
-```typescript
-manager.on('networkCreated', (networkInfo) => {
-  console.log('Network created:', networkInfo.networkId);
-});
-
-manager.on('nodeAdded', (networkId, nodeInfo) => {
-  console.log('Node added:', nodeInfo.id, 'to network:', networkId);
-});
-
-manager.on('dockerUnavailable', (error) => {
-  console.log('Docker not available:', error.suggestions);
-});
-
-manager.on('error', (error) => {
-  console.error('Network manager error:', error);
-});
-```
-
-### Key Generation
+### 2. KeyGenerator - Ethereum Key Management
 
 ```typescript
 import { KeyGenerator } from 'besu-network-manager';
 
-const keyGen = new KeyGenerator();
+const keyGenerator = new KeyGenerator();
 
-// Generate new keys
-const credentials = keyGen.generateKeyPair();
-console.log('Address:', credentials.address);
-console.log('Private Key:', credentials.privateKey);
+// Generate a new keypair with enode
+const credentials = keyGenerator.generateKeyPair('172.20.0.10', 30303);
+console.log('Generated credentials:', {
+  address: credentials.address,
+  enode: credentials.enode,
+  // privateKey and publicKey are also available
+});
 
 // Generate from existing private key
-const existingCredentials = keyGen.generateFromPrivateKey('0x...');
+const existingKey = '0x1234567890abcdef...';
+const restoredCredentials = keyGenerator.fromPrivateKey(
+  existingKey, 
+  '172.20.0.11', 
+  30303
+);
 
-// Generate multiple keys
-const multipleKeys = keyGen.generateMultipleKeyPairs(5);
+// Generate multiple keypairs (useful for initial network setup)
+const multipleKeys = KeyGenerator.generateMultiple(3, '172.20.0.0/24', 30303);
+multipleKeys.forEach((cred, index) => {
+  console.log(`Node ${index + 1}:`, cred.address);
+});
 ```
 
-## Network Types
+### 3. GenesisGenerator - Clique Genesis Blocks
 
-### Bootnode
-- Entry point for network discovery
-- Automatically created as the first node
-- Maintains peer connections
+```typescript
+import { GenesisGenerator } from 'besu-network-manager';
 
-### Miner
-- Participates in block production
-- Validates transactions
-- Can be validator in Clique consensus
+// Generate genesis with validators
+const validatorAddresses = [
+  '0x1234567890123456789012345678901234567890',
+  '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'
+];
 
-### RPC
-- Provides JSON-RPC API access
-- Read-only node (no mining)
-- Used for client connections
+const genesis = GenesisGenerator.generateGenesis({
+  chainId: 1337,
+  validators: validatorAddresses,
+  gasLimit: '0x1fffffffffffff'
+});
 
-### Validator
-- Participates in Clique consensus
-- Signs blocks in rotation
-- Requires initial allocation in genesis
+console.log('Generated genesis:', JSON.stringify(genesis, null, 2));
+
+// Validate existing genesis
+const isValid = GenesisGenerator.isValidGenesis(genesis);
+console.log('Genesis is valid:', isValid);
+```
+
+### 4. Complete Network Creation Example (Next.js API Route)
+
+```typescript
+// pages/api/networks/create.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { 
+  DockerManager, 
+  GenesisGenerator, 
+  KeyGenerator,
+  NetworkConfig,
+  BesuNodeConfig 
+} from 'besu-network-manager';
+import * as fs from 'fs';
+import * as path from 'path';
+
+export async function POST(request: NextRequest) {
+  const dockerManager = new DockerManager();
+  const keyGenerator = new KeyGenerator();
+  
+  try {
+    const { networkId, chainId, nodeCount } = await request.json();
+    
+    // 1. Check Docker availability
+    if (!await dockerManager.isDockerAvailable()) {
+      return NextResponse.json(
+        { error: 'Docker is not available' }, 
+        { status: 500 }
+      );
+    }
+    
+    // 2. Generate network configuration
+    const networkConfig: NetworkConfig = {
+      networkId,
+      chainId,
+      subnet: '172.20.0.0/24',
+      gateway: '172.20.0.1',
+      nodes: []
+    };
+    
+    // 3. Generate keys for nodes
+    const nodeCredentials = [];
+    const validators = [];
+    
+    for (let i = 0; i < nodeCount; i++) {
+      const ip = `172.20.0.${10 + i}`;
+      const credentials = keyGenerator.generateKeyPair(ip, 30303 + i);
+      
+      const nodeConfig: BesuNodeConfig = {
+        id: `node-${i}`,
+        type: i === 0 ? 'bootnode' : 'miner',
+        ip,
+        rpcPort: 8545 + i,
+        p2pPort: 30303 + i,
+        address: credentials.address,
+        enode: credentials.enode
+      };
+      
+      networkConfig.nodes.push(nodeConfig);
+      nodeCredentials.push(credentials);
+      
+      if (nodeConfig.type === 'miner') {
+        validators.push(credentials.address);
+      }
+    }
+    
+    // 4. Generate genesis file
+    const genesis = GenesisGenerator.generateGenesis({
+      chainId,
+      validators
+    });
+    
+    // 5. Create Docker network
+    const dockerNetworkId = await dockerManager.createDockerNetwork(networkConfig);
+    
+    // 6. Create node directories and save keys
+    const networkPath = `/tmp/besu-networks/${networkId}`;
+    await fs.promises.mkdir(networkPath, { recursive: true });
+    
+    for (let i = 0; i < networkConfig.nodes.length; i++) {
+      const node = networkConfig.nodes[i];
+      const credentials = nodeCredentials[i];
+      
+      // Create node directory
+      const nodePath = path.join(networkPath, node.id);
+      await fs.promises.mkdir(nodePath, { recursive: true });
+      
+      // Save node files
+      await fs.promises.writeFile(
+        path.join(nodePath, 'key'), 
+        credentials.privateKey.slice(2)
+      );
+      await fs.promises.writeFile(
+        path.join(nodePath, 'address'), 
+        credentials.address
+      );
+      await fs.promises.writeFile(
+        path.join(nodePath, 'enode'), 
+        credentials.enode
+      );
+    }
+    
+    // Save genesis file
+    await fs.promises.writeFile(
+      path.join(networkPath, 'genesis.json'),
+      JSON.stringify(genesis, null, 2)
+    );
+    
+    // 7. Create and start containers
+    const containers = [];
+    for (const node of networkConfig.nodes) {
+      const nodePath = path.join(networkPath, node.id);
+      const container = await dockerManager.createBesuContainer(
+        networkConfig,
+        node,
+        nodePath
+      );
+      containers.push(container);
+    }
+    
+    return NextResponse.json({
+      success: true,
+      network: {
+        networkId,
+        dockerNetworkId,
+        chainId,
+        containers: containers.length,
+        nodes: networkConfig.nodes.map(n => ({
+          id: n.id,
+          type: n.type,
+          rpcPort: n.rpcPort,
+          address: n.address
+        }))
+      }
+    });
+    
+  } catch (error) {
+    console.error('Network creation failed:', error);
+    return NextResponse.json(
+      { error: 'Failed to create network' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### 5. Adding a Node to Existing Network
+
+```typescript
+// pages/api/networks/[id]/nodes/add.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { DockerManager, KeyGenerator } from 'besu-network-manager';
+import * as fs from 'fs';
+import * as path from 'path';
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const dockerManager = new DockerManager();
+  const keyGenerator = new KeyGenerator();
+  
+  try {
+    const { id: networkId } = await params;
+    const { nodeType, ip, rpcPort, p2pPort } = await request.json();
+    
+    // 1. Check if network exists
+    if (!await dockerManager.networkExists(networkId)) {
+      return NextResponse.json(
+        { error: 'Network not found' }, 
+        { status: 404 }
+      );
+    }
+    
+    // 2. Generate node configuration
+    const nodeId = `node-${Date.now()}`;
+    const credentials = keyGenerator.generateKeyPair(ip, p2pPort);
+    
+    const nodeConfig = {
+      id: nodeId,
+      type: nodeType,
+      ip,
+      rpcPort,
+      p2pPort,
+      address: credentials.address,
+      enode: credentials.enode
+    };
+    
+    // 3. Create node directory and save keys
+    const networkPath = `/tmp/besu-networks/${networkId}`;
+    const nodePath = path.join(networkPath, nodeId);
+    await fs.promises.mkdir(nodePath, { recursive: true });
+    
+    await fs.promises.writeFile(
+      path.join(nodePath, 'key'), 
+      credentials.privateKey.slice(2)
+    );
+    await fs.promises.writeFile(
+      path.join(nodePath, 'address'), 
+      credentials.address
+    );
+    await fs.promises.writeFile(
+      path.join(nodePath, 'enode'), 
+      credentials.enode
+    );
+    
+    // 4. Add node to network
+    const networkConfig = {
+      networkId,
+      chainId: 1337, // Load from stored config
+      subnet: '172.20.0.0/24',
+      gateway: '172.20.0.1',
+      nodes: [nodeConfig]
+    };
+    
+    const container = await dockerManager.addNodeToNetwork(
+      networkConfig,
+      nodeConfig,
+      nodePath
+    );
+    
+    return NextResponse.json({
+      success: true,
+      node: {
+        id: nodeId,
+        containerId: container.containerId,
+        type: nodeType,
+        address: credentials.address,
+        rpcPort,
+        p2pPort
+      }
+    });
+    
+  } catch (error) {
+    console.error('Failed to add node:', error);
+    return NextResponse.json(
+      { error: 'Failed to add node' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### 6. Network Cleanup
+
+```typescript
+// pages/api/networks/[id]/delete.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { DockerManager } from 'besu-network-manager';
+import * as fs from 'fs';
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const dockerManager = new DockerManager();
+  
+  try {
+    const { id: networkId } = await params;
+    
+    // 1. Remove all containers in the network
+    const containers = await dockerManager.findNetworkContainers(networkId);
+    for (const container of containers) {
+      await dockerManager.removeContainer(container.Id);
+    }
+    
+    // 2. Remove Docker network
+    await dockerManager.removeDockerNetwork(networkId);
+    
+    // 3. Clean up files
+    const networkPath = `/tmp/besu-networks/${networkId}`;
+    if (fs.existsSync(networkPath)) {
+      await fs.promises.rm(networkPath, { recursive: true });
+    }
+    
+    return NextResponse.json({ success: true });
+    
+  } catch (error) {
+    console.error('Failed to delete network:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete network' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## Type Definitions
+
+```typescript
+// Core network configuration
+interface NetworkConfig {
+  networkId: string;
+  chainId: number;
+  subnet: string;
+  gateway: string;
+  nodes: BesuNodeConfig[];
+  genesis?: any;
+}
+
+// Node configuration
+interface BesuNodeConfig {
+  id: string;
+  type: 'bootnode' | 'miner' | 'rpc';
+  rpcPort: number;
+  p2pPort: number;
+  ip: string;
+  enode?: string;
+  address?: string;
+  bootnodes?: string[];
+}
+
+// Container information
+interface ContainerInfo {
+  id: string;
+  containerId: string;
+  containerName: string;
+  status: 'running' | 'stopped' | 'error';
+}
+
+// Node credentials
+interface NodeCredentials {
+  privateKey: string;
+  publicKey: string;
+  address: string;
+  enode: string;
+}
+```
+
+## Architecture Principles
+
+This SDK follows a **modular, building-block approach**:
+
+1. **Single Responsibility**: Each component has one clear purpose
+2. **Composable**: Components can be combined in applications as needed  
+3. **Framework Agnostic**: Works with Next.js, Express, or any Node.js application
+4. **Docker Native**: Direct integration with Docker APIs, no shell scripts
+5. **Type Safe**: Full TypeScript support with comprehensive type definitions
 
 ## Development
 
@@ -213,93 +471,16 @@ yarn install
 # Build the project
 yarn build
 
-# Run linting
-yarn lint
-
-# Format code
-yarn format
-```
-
-## Docker Requirements
-
-The library requires access to Docker daemon. Ensure Docker is running and accessible:
-
-```bash
-# Test Docker connectivity
-docker ps
-
-# Check Docker network capabilities
-docker network ls
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Docker Permission Denied**
-   - Ensure your user is in the `docker` group
-   - Or run with appropriate permissions
-
-2. **Port Conflicts**
-   - Ensure RPC/P2P ports are available
-   - Use different port ranges for multiple networks
-
-3. **Subnet Conflicts**
-   - Use unique subnets for each network
-   - Check existing Docker networks: `docker network ls`
-
-4. **Container Startup Issues**
-   - Check Docker logs: `docker logs <container-name>`
-   - Verify Besu image is available: `docker images hyperledger/besu`
-
-### Debug Mode
-
-Enable debug logging:
-
-```typescript
-const manager = new NetworkManager();
-manager.on('error', console.error);
-manager.on('dockerUnavailable', (error) => {
-  console.log('Docker issue:', error.suggestions);
-});
-
-// Check Docker availability
-if (!manager.isDockerAvailable()) {
-  console.log('Docker is not available');
-}
-```
-
-## Project Structure
-
-```
-network-sdk/
-├── src/
-│   ├── index.ts              # Main exports
-│   ├── types.ts              # TypeScript definitions
-│   ├── NetworkManager.ts     # Main orchestration class
-│   ├── KeyGenerator.ts       # Key generation utilities
-│   ├── GenesisGenerator.ts   # Genesis block creation
-│   └── ConfigGenerator.ts    # Docker configuration
-├── dist/                     # Compiled JavaScript + .d.ts
-├── package.json              # Dependencies and scripts
-├── tsconfig.json             # TypeScript config
-└── README.md                 # Documentation
+# Check types
+npx tsc --noEmit
 ```
 
 ## Requirements
 
-- Docker daemon running
+- Docker daemon running and accessible
 - Node.js 16+
 - Proper Docker permissions for container management
 
 ## License
 
 MIT
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request

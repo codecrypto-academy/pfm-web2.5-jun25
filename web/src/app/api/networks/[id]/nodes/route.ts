@@ -1,43 +1,102 @@
+/**
+ * Network Nodes API
+ * GET /api/networks/[id]/nodes - List nodes in network
+ * POST /api/networks/[id]/nodes - Add node to network
+ */
 import { NextRequest, NextResponse } from 'next/server';
-import { DockerManager, GenesisGenerator } from 'besu-network-manager';
-import type { BesuNodeConfig } from 'besu-network-manager';
-import * as fs from 'fs';
+import { DockerManager, KeyGenerator, BesuNodeConfig } from 'besu-network-manager';
+import { NetworkStorage } from '@/lib/storage';
+import { generateNodeIPs } from '@/lib/networkUtils';
+import { PORT_DEFAULTS, NODE_ID_GENERATION, FILE_NAMING } from '@/lib/config';
+import type { AddNodeRequest } from '@/lib/types';
 import * as path from 'path';
+import * as fs from 'fs';
 
-const networksDataDir = '/tmp/besu-networks';
 const dockerManager = new DockerManager();
+const keyGenerator = new KeyGenerator();
 
-interface StoredNetworkData {
-  config: any;
-  nodes: BesuNodeConfig[];
-  genesis: any;
-  createdAt: string;
-}
+/**
+ * GET /api/networks/[id]/nodes
+ * List all nodes in a network
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: networkId } = await params;
+    
+    const networkData = NetworkStorage.loadNetwork(networkId);
+    if (!networkData) {
+      return NextResponse.json(
+        { success: false, error: 'Network not found' },
+        { status: 404 }
+      );
+    }
 
-function loadNetworkData(networkId: string): StoredNetworkData | null {
-  const filePath = path.join(networksDataDir, `${networkId}.json`);
-  if (!fs.existsSync(filePath)) {
-    return null;
+    // Get Docker container status for each node
+    const nodesWithStatus = [];
+    
+    for (const node of networkData.nodes) {
+      const container = await dockerManager.findNodeContainer(networkId, node.id);
+      nodesWithStatus.push({
+        id: node.id,
+        type: node.type,
+        ip: node.ip,
+        rpcPort: node.rpcPort,
+        p2pPort: node.p2pPort,
+        address: node.address,
+        enode: node.enode,
+        containerStatus: container ? {
+          containerId: container.Id,
+          state: container.State,
+          status: container.Status
+        } : null
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      networkId,
+      nodes: nodesWithStatus
+    });
+
+  } catch (error) {
+    console.error('Failed to list nodes:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to list nodes' },
+      { status: 500 }
+    );
   }
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
-function saveNetworkData(networkId: string, data: StoredNetworkData): void {
-  const filePath = path.join(networksDataDir, `${networkId}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
-// POST /api/simple-networks/[id]/nodes - Add node to network
+/**
+ * POST /api/networks/[id]/nodes
+ * Add a new node to an existing network
+ * 
+ * Body: {
+ *   type: 'miner' | 'rpc',
+ *   ip?: string,
+ *   rpcPort?: number,
+ *   p2pPort?: number,
+ *   ipOffset?: number,
+ *   portStrategy?: 'sequential' | 'random',
+ *   nodeIdPrefix?: string,
+ *   memoryLimit?: string,
+ *   cpuLimit?: string,
+ *   labels?: Record<string, string>,
+ *   env?: Record<string, string>
+ * }
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: networkId } = await params;
-    const nodeConfig: BesuNodeConfig = await request.json();
-
-    // Load network data
-    const networkData = loadNetworkData(networkId);
+    const body: AddNodeRequest = await request.json();
+    
+    const networkData = NetworkStorage.loadNetwork(networkId);
     if (!networkData) {
       return NextResponse.json(
         { success: false, error: 'Network not found' },
@@ -45,169 +104,153 @@ export async function POST(
       );
     }
 
-    // Check if node already exists
-    if (networkData.nodes.find(n => n.id === nodeConfig.id)) {
+    // Check if Docker network exists
+    if (!await dockerManager.networkExists(networkId)) {
       return NextResponse.json(
-        { success: false, error: 'Node with this ID already exists' },
+        { success: false, error: 'Docker network not found' },
+        { status: 404 }
+      );
+    }
+
+    const { 
+      type = 'miner',
+      ip,
+      rpcPort,
+      p2pPort,
+      ipOffset = 10,
+      portStrategy = 'sequential',
+      nodeIdPrefix = 'node',
+      memoryLimit,
+      cpuLimit,
+      labels,
+      env
+    } = body;
+
+    // Validate node type
+    if (!['miner', 'rpc'].includes(type)) {
+      return NextResponse.json(
+        { success: false, error: 'Node type must be "miner" or "rpc"' },
         { status: 400 }
       );
     }
 
-    // Generate ports for the new node
-    const baseRpcPort = 8545;
-    const baseP2pPort = 30303;
-    const nodeIndex = networkData.nodes.length;
+    // Generate default values if not provided
+    const nextNodeIndex = networkData.nodes.length;
     
-    const newNode: BesuNodeConfig = {
-      ...nodeConfig,
-      rpcPort: nodeConfig.rpcPort || baseRpcPort + nodeIndex,
-      p2pPort: nodeConfig.p2pPort || baseP2pPort + nodeIndex,
+    // Use network subnet to generate appropriate IP if not provided
+    let nodeIp = ip;
+    if (!nodeIp) {
+      const availableIPs = generateNodeIPs(networkData.config.subnet, nextNodeIndex + 1, ipOffset);
+      nodeIp = availableIPs[nextNodeIndex];
+    }
+    
+    // Get used ports for conflict checking
+    const usedRpcPorts = networkData.nodes.map(node => node.rpcPort);
+    const usedP2pPorts = networkData.nodes.map(node => node.p2pPort);
+    
+    // Auto-assign ports only if not provided by user
+    let nodeRpcPort = rpcPort;
+    let nodeP2pPort = p2pPort;
+    
+    if (!nodeRpcPort) {
+      // Find next available RPC port starting from configured base
+      let candidatePort = PORT_DEFAULTS.BASE_RPC_PORT;
+      while (usedRpcPorts.includes(candidatePort)) {
+        candidatePort++;
+      }
+      nodeRpcPort = candidatePort;
+    }
+    
+    if (!nodeP2pPort) {
+      // Find next available P2P port starting from configured base
+      let candidatePort = PORT_DEFAULTS.BASE_P2P_PORT;
+      while (usedP2pPorts.includes(candidatePort)) {
+        candidatePort++;
+      }
+      nodeP2pPort = candidatePort;
+    }
+
+    // Check for port conflicts (if user provided specific ports)
+    if (usedRpcPorts.includes(nodeRpcPort)) {
+      return NextResponse.json(
+        { success: false, error: `RPC port ${nodeRpcPort} is already in use` },
+        { status: 400 }
+      );
+    }
+    
+    if (usedP2pPorts.includes(nodeP2pPort)) {
+      return NextResponse.json(
+        { success: false, error: `P2P port ${nodeP2pPort} is already in use` },
+        { status: 400 }
+      );
+    }
+
+    // Generate node credentials
+    const nodeId = NODE_ID_GENERATION.DYNAMIC_PATTERN(nodeIdPrefix);
+    const credentials = keyGenerator.generateKeyPair(nodeIp, nodeP2pPort);
+
+    // Find existing bootnodes
+    const bootnodes = networkData.nodes
+      .filter(node => node.type === 'bootnode')
+      .map(node => node.enode)
+      .filter(Boolean) as string[];
+
+    const nodeConfig: BesuNodeConfig = {
+      id: nodeId,
+      type,
+      ip: nodeIp,
+      rpcPort: nodeRpcPort,
+      p2pPort: nodeP2pPort,
+      address: credentials.address,
+      enode: credentials.enode,
+      bootnodes: bootnodes.length > 0 ? bootnodes : undefined
     };
 
-    // Get the bootnode enode URL for this node to connect to
-    let bootnodeEnode: string | undefined;
+    // Create node directory and save keys
+    const nodePath = await NetworkStorage.createNodeDirectory(networkId, nodeId);
     
-    // Find the bootnode container to get its actual enode URL
-    const bootnodeNode = networkData.nodes.find(n => n.type === 'bootnode');
-    
-    if (bootnodeNode) {
-      try {
-        // Query the bootnode's admin API to get its actual enode URL
-        const response = await fetch(`http://localhost:${bootnodeNode.rpcPort}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'admin_nodeInfo',
-            params: [],
-            id: 1
-          })
-        });
-        
-        if (response.ok) {
-          const data = await response.json() as any;
-          const enodeUrl = data.result?.enode;
-          
-          if (enodeUrl) {
-            // Replace 0.0.0.0 with the actual Docker network IP
-            const dockerNetworkName = `besu-${networkId}`;
-            const networks = await dockerManager.docker.listNetworks({ 
-              filters: { name: [dockerNetworkName] } 
-            });
-            
-            if (networks.length > 0) {
-              const network = networks[0];
-              const containers = Object.values(network.Containers || {});
-              const bootnodeContainer = containers.find(c => 
-                c.Name?.includes('bootnode')
-              );
-              
-              if (bootnodeContainer && bootnodeContainer.IPv4Address) {
-                const dockerIP = bootnodeContainer.IPv4Address.split('/')[0];
-                bootnodeEnode = enodeUrl.replace('0.0.0.0', dockerIP);
-                console.info(`Extracted bootnode enode: ${bootnodeEnode}`);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.warn(`Failed to get bootnode enode: ${error}`);
-      }
-    }
-
-    // Fallback: if we couldn't extract the bootnode enode, use a hardcoded approach
-    if (!bootnodeEnode && bootnodeNode) {
-      // Manually construct the bootnode enode based on the known IP
-      bootnodeEnode = `enode://b8192094a2faa745c4854e5bb2ea835e6af4b71d72dbbdfde24c21ff8422f614aa032abfa0ad7ce253dc086f7aee876b5db0cf5b76b718a193f5dceb47eb17cd@172.30.0.10:30303`;
-      console.info(`Using fallback bootnode enode: ${bootnodeEnode}`);
-    }
-
-    // Create the Docker container for the new node
-    const result = await dockerManager.createBesuNode(
-      newNode,
-      networkData.genesis,
-      networkId,
-      bootnodeEnode
+    await fs.promises.writeFile(
+      path.join(nodePath, FILE_NAMING.NODE_FILES.PRIVATE_KEY), 
+      credentials.privateKey.slice(2)
+    );
+    await fs.promises.writeFile(
+      path.join(nodePath, FILE_NAMING.NODE_FILES.ADDRESS), 
+      credentials.address
+    );
+    await fs.promises.writeFile(
+      path.join(nodePath, FILE_NAMING.NODE_FILES.ENODE), 
+      credentials.enode
     );
 
-    // Add the node to the network data
-    networkData.nodes.push(newNode);
-    saveNetworkData(networkId, networkData);
+    // Add node to Docker network
+    const container = await dockerManager.addNodeToNetwork(
+      networkData.config,
+      nodeConfig,
+      nodePath
+    );
+
+    // Update network metadata
+    NetworkStorage.addNodeToNetwork(networkId, nodeConfig);
 
     return NextResponse.json({
       success: true,
       node: {
-        id: newNode.id,
-        type: newNode.type,
-        rpcPort: newNode.rpcPort,
-        p2pPort: newNode.p2pPort,
-        containerId: result.containerId,
-        containerName: result.containerName
+        id: nodeId,
+        type,
+        ip: nodeIp,
+        rpcPort: nodeRpcPort,
+        p2pPort: nodeP2pPort,
+        address: credentials.address,
+        enode: credentials.enode,
+        containerId: container.containerId,
+        containerName: container.containerName
       }
     });
 
   } catch (error) {
-    console.error('Error adding node:', error);
+    console.error('Failed to add node:', error);
     return NextResponse.json(
-      { success: false, error: `Failed to add node: ${error}` },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE /api/simple-networks/[id]/nodes/[nodeId] - Remove node from network
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: networkId } = await params;
-    const url = new URL(request.url);
-    const nodeId = url.pathname.split('/').pop();
-
-    if (!nodeId) {
-      return NextResponse.json(
-        { success: false, error: 'Node ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Load network data
-    const networkData = loadNetworkData(networkId);
-    if (!networkData) {
-      return NextResponse.json(
-        { success: false, error: 'Network not found' },
-        { status: 404 }
-      );
-    }
-
-    // Find the node
-    const nodeIndex = networkData.nodes.findIndex(n => n.id === nodeId);
-    if (nodeIndex === -1) {
-      return NextResponse.json(
-        { success: false, error: 'Node not found' },
-        { status: 404 }
-      );
-    }
-
-    const node = networkData.nodes[nodeIndex];
-
-    // Remove the Docker container
-    await dockerManager.removeNode(nodeId, networkId);
-
-    // Remove the node from the network data
-    networkData.nodes.splice(nodeIndex, 1);
-    saveNetworkData(networkId, networkData);
-
-    return NextResponse.json({
-      success: true,
-      message: `Node ${nodeId} removed successfully`
-    });
-
-  } catch (error) {
-    console.error('Error removing node:', error);
-    return NextResponse.json(
-      { success: false, error: `Failed to remove node: ${error}` },
+      { success: false, error: 'Failed to add node to network' },
       { status: 500 }
     );
   }

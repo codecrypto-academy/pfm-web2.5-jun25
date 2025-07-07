@@ -54,7 +54,7 @@ export class DockerNetworkManager {
   }
 
   /**
-   * Recupera los contenedores dentro de una red determinada
+   * Recupera los contenedores dentro de una red determinada (incluyendo contenedores detenidos)
    * @param networkName Nombre de la red
    * @returns Lista de contenedores en la red
    */
@@ -66,26 +66,52 @@ export class DockerNetworkManager {
         return [];
       }
 
-      // Inspeccionar la red para obtener información completa de contenedores
-      const networkDetails = await this.docker.inspectNetwork(networkId);
-      if (!networkDetails || !networkDetails.Containers) {
-        return [];
-      }
-
+      // Obtener todos los contenedores (incluyendo detenidos)
+      const allContainers = await this.docker.listContainers({ all: true });
       const containers: ContainerInfo[] = [];
       const seenContainerIds = new Set<string>();
       
-      for (const containerId of Object.keys(networkDetails.Containers)) {
-        // Evitar duplicados basándose en el ID del contenedor
-        if (seenContainerIds.has(containerId)) {
+      // Primero, obtener contenedores actualmente conectados a la red
+      const networkDetails = await this.docker.inspectNetwork(networkId);
+      if (networkDetails && networkDetails.Containers) {
+        for (const containerId of Object.keys(networkDetails.Containers)) {
+          if (seenContainerIds.has(containerId)) {
+            continue;
+          }
+          
+          const containerName = networkDetails.Containers[containerId].Name;
+          const containerInfo = await this.docker.getContainerInfo(containerName);
+          if (containerInfo) {
+            seenContainerIds.add(containerId);
+            containers.push(containerInfo);
+          }
+        }
+      }
+      
+      // Luego, buscar contenedores detenidos que pertenecen a esta red
+      for (const container of allContainers) {
+        if (seenContainerIds.has(container.Id)) {
           continue;
         }
         
-        const containerName = networkDetails.Containers[containerId].Name;
-        const containerInfo = await this.docker.getContainerInfo(containerName);
-        if (containerInfo) {
-          seenContainerIds.add(containerId);
-          containers.push(containerInfo);
+        // Inspeccionar el contenedor para ver sus configuraciones de red
+         try {
+           const containerDetails = await this.docker.inspectContainer(container.Id);
+          
+          // Verificar si el contenedor está configurado para esta red
+          if (containerDetails.NetworkSettings && containerDetails.NetworkSettings.Networks) {
+            const networks = Object.keys(containerDetails.NetworkSettings.Networks);
+            if (networks.includes(networkName) || networks.includes(networkId)) {
+              const containerInfo = await this.docker.getContainerInfo(container.Names[0]);
+              if (containerInfo) {
+                seenContainerIds.add(container.Id);
+                containers.push(containerInfo);
+              }
+            }
+          }
+        } catch (error) {
+          // Ignorar errores al inspeccionar contenedores individuales
+          continue;
         }
       }
 

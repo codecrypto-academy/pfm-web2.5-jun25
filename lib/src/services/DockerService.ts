@@ -526,4 +526,21 @@ export class DockerService {
       throw error;
     }
   }
+
+  /**
+   * Inspecciona un contenedor por ID
+   * @param containerId ID del contenedor
+   */
+  public async inspectContainer(containerId: string): Promise<any> {
+    try {
+      const container = this.docker.getContainer(containerId);
+      return await container.inspect();
+    } catch (error) {
+      this.logger.error(
+        `Error al inspeccionar el contenedor ${containerId}:`,
+        error
+      );
+      throw error;
+    }
+  }
 }

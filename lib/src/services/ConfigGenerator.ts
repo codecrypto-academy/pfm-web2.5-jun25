@@ -140,8 +140,9 @@ ${this.getLoggingAndAdditionalConfig(nodeConfig)}
   private getMiningConfig(nodeConfig: BesuNodeConfig): string {
     switch (nodeConfig.nodeType) {
       case BesuNodeType.SIGNER:
-        return `miner-enabled=true
-miner-coinbase="${nodeConfig.validatorAddress || ''}"`;
+        // En Clique, los nodos SIGNER validan/firman bloques pero no minan
+        // La validación se hace automáticamente si la clave privada está en el directorio de datos
+        return `miner-enabled=false`;
       
       case BesuNodeType.MINER:
         return `miner-enabled=true

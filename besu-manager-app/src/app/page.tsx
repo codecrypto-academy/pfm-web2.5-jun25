@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import CreateNetworkModal from '../components/CreateNetworkModal';
 import DeleteNetworkModal from '../components/DeleteNetworkModal';
 import CreateNodeModal from '../components/CreateNodeModal';
+import DeleteNodeModal from '../components/DeleteNodeModal';
 
 interface DockerNetwork {
   id: string;
@@ -23,6 +24,7 @@ interface BesuNode {
   enodeUrl?: string;
   ipAddress?: string;
   nodeType?: string;
+  isBootnode?: boolean;
 }
 
 export default function Home() {
@@ -33,7 +35,9 @@ export default function Home() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isCreateNodeModalOpen, setIsCreateNodeModalOpen] = useState(false);
+  const [isDeleteNodeModalOpen, setIsDeleteNodeModalOpen] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState<DockerNetwork | null>(null);
+  const [selectedNode, setSelectedNode] = useState<BesuNode | null>(null);
 
   useEffect(() => {
     fetchNetworksAndNodes();
@@ -96,6 +100,15 @@ export default function Home() {
   };
 
   const handleNodeCreated = () => {
+    fetchNetworksAndNodes();
+  };
+
+  const handleDeleteNode = (node: BesuNode) => {
+    setSelectedNode(node);
+    setIsDeleteNodeModalOpen(true);
+  };
+
+  const handleNodeDeleted = () => {
     fetchNetworksAndNodes();
   };
 
@@ -223,6 +236,11 @@ export default function Home() {
                                     {node.nodeType}
                                   </span>
                                 )}
+                                {node.isBootnode && (
+                                  <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                    Bootnode
+                                  </span>
+                                )}
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                   node.status === 'running' 
                                     ? 'bg-green-100 text-green-800' 
@@ -232,6 +250,18 @@ export default function Home() {
                                 }`}>
                                   {node.status}
                                 </span>
+                                <button
+                                  onClick={() => handleDeleteNode(node)}
+                                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                    node.isBootnode 
+                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                                      : 'bg-red-100 text-red-800 hover:bg-red-200'
+                                  }`}
+                                  disabled={node.isBootnode}
+                                  title={node.isBootnode ? 'Los nodos bootnode no se pueden eliminar' : 'Eliminar nodo'}
+                                >
+                                  🗑️
+                                </button>
                               </div>
                             </div>
                             
@@ -314,6 +344,18 @@ export default function Home() {
             onNodeCreated={handleNodeCreated}
             networkId={selectedNetwork.name}
             networkName={selectedNetwork.name}
+          />
+        )}
+        
+        {selectedNode && (
+          <DeleteNodeModal
+            isOpen={isDeleteNodeModalOpen}
+            onClose={() => setIsDeleteNodeModalOpen(false)}
+            onDelete={handleNodeDeleted}
+            nodeName={selectedNode.name}
+            nodeId={selectedNode.id}
+            networkId={selectedNode.networkId}
+            isBootnode={selectedNode.isBootnode || false}
           />
         )}
      </div>

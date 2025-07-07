@@ -175,14 +175,15 @@ export class NodeConfigFactory {
 
     switch (nodeConfig.nodeType) {
       case BesuNodeType.SIGNER:
-        options.push('--miner-enabled=true');
-        if (nodeConfig.validatorAddress) {
-          options.push(`--miner-coinbase=${nodeConfig.validatorAddress}`);
-        }
+        // En Clique, los nodos SIGNER validan automáticamente si tienen la clave privada
+        // No necesitan miner-enabled=true
         break;
 
       case BesuNodeType.MINER:
         options.push('--miner-enabled=true');
+        // Para nodos MINER en Clique, el miner-coinbase debería ser una dirección de validador
+        // que esté en el extraData del genesis, no necesariamente la dirección del nodo
+        // Si no se especifica validatorAddress, se puede omitir miner-coinbase
         if (nodeConfig.validatorAddress) {
           options.push(`--miner-coinbase=${nodeConfig.validatorAddress}`);
         }

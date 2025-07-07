@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     const networkName = network.Name || networkId;
     const path = require('path');
     const genesisPath = path.resolve(`./temp-nodes/genesis-${networkName}.json`);
-    const bootnodes: string[] = [];
+    let bootnodes: string[] = [];
     
     // Crear archivo genesis específico para esta red usando GenesisGenerator
     const logger = createLogger();
@@ -114,15 +114,60 @@ export async function POST(request: Request) {
       const genesisOptions = {
         chainId: chainId,
         consensusProtocol: 'clique' as const,
-        blockPeriod: 15,
-        validatorAddresses: [
-          '0xfe3b557e8fb62b89f4916b721be55ceb828dbd73',
-          '0x627306090abaB3A6e1400e9345bC60c78a8BEf57'
-        ]
+        blockPeriod: 5,
+        validatorAddresses: createdNode.validatorAddress ? [
+          createdNode.validatorAddress // Usar la dirección del nodo actual
+        ] : []
       };
       
       // Generar el archivo genesis usando la librería
       await genesisGenerator.generateGenesisFile(genesisPath, genesisOptions);
+    } else {
+      // Si el archivo génesis ya existe, leer las direcciones de validadores existentes
+      try {
+        const existingGenesis = JSON.parse(await nodeFs.readFile(genesisPath));
+        
+        // Extraer direcciones existentes del extraData
+        const extraData = existingGenesis.extraData;
+        const prefix = extraData.substring(0, 66); // 0x + 64 zeros
+        const suffix = extraData.substring(extraData.length - 130); // 130 zeros
+        const existingValidators = extraData.substring(66, extraData.length - 130);
+        
+        // Convertir direcciones existentes a array
+        const validatorAddresses = [];
+        for (let i = 0; i < existingValidators.length; i += 40) {
+          if (i + 40 <= existingValidators.length) {
+            validatorAddresses.push('0x' + existingValidators.substring(i, i + 40));
+          }
+        }
+        
+        // Para nodos SIGNER, agregar su dirección al extraData si no existe
+        if (besuNodeType === BesuNodeType.SIGNER && createdNode.validatorAddress) {
+          const newAddress = createdNode.validatorAddress.toLowerCase();
+          if (!validatorAddresses.some(addr => addr.toLowerCase() === newAddress)) {
+            validatorAddresses.push(createdNode.validatorAddress);
+            
+            // Regenerar el extraData
+            const validators = validatorAddresses
+              .map(addr => addr.toLowerCase().substring(2))
+              .join('');
+            existingGenesis.extraData = prefix + validators + suffix;
+            
+            // Guardar el archivo actualizado
+            await nodeFs.writeFile(genesisPath, JSON.stringify(existingGenesis, null, 2));
+            logger.info(`Archivo génesis actualizado con nueva dirección: ${createdNode.validatorAddress}`);
+          }
+        }
+        
+        // Para nodos MINER, asignar una dirección de validador existente como miner-coinbase
+        if (besuNodeType === BesuNodeType.MINER && validatorAddresses.length > 0) {
+          // Usar la primera dirección de validador disponible como miner-coinbase
+          createdNode.validatorAddress = validatorAddresses[0];
+          logger.info(`Nodo MINER configurado con miner-coinbase: ${createdNode.validatorAddress}`);
+        }
+      } catch (error) {
+        logger.warn('Error procesando archivo génesis:', error);
+      }
     }
     
     // Generar archivo de configuración TOML usando ConfigGenerator
@@ -130,7 +175,7 @@ export async function POST(request: Request) {
       chainId: parseInt(networkId.slice(-4), 16) || 1337,
       name: networkName,
       consensusProtocol: 'clique' as const,
-      blockPeriod: 15,
+      blockPeriod: 5,
       nodeCount: 1,
       baseRpcPort: 8545,
       baseP2pPort: 30303,
@@ -146,20 +191,15 @@ export async function POST(request: Request) {
       
       if (selectedBootnode) {
         try {
-          // Intentar obtener el enode del bootnode seleccionado
-          // Construir el directorio del bootnode seleccionado
-          const selectedBootnodeDir = `./temp-nodes/${selectedBootnode}`;
-          const selectedNodeManager = createBesuNodeManager(selectedBootnodeDir);
+          // Crear un nodeManager temporal para obtener el estado del bootnode
+          const tempNodeManager = createBesuNodeManager('./temp-nodes');
           // Extraer el nombre del nodo del contenedor (formato: {network}-{type}-besu-{name})
           const nodeName = selectedBootnode.split('-besu-')[1];
-          const selectedNodeStatus = await selectedNodeManager.getNodeStatus(nodeName);
+          const selectedNodeStatus = await tempNodeManager.getNodeStatus(nodeName);
           
-          if (selectedNodeStatus && selectedNodeStatus.enodeUrl) {
-            const enodeSplit1 = selectedNodeStatus.enodeUrl.split("@")
-            const enodeSplit2 = enodeSplit1[1].split(":")
-            enodeSplit2[0] = selectedNodeStatus.ipAddress as string
-            bootnodeEnode = `${enodeSplit1[0]}@${enodeSplit2[0]}:${enodeSplit2[1]}`
-
+          if (selectedNodeStatus && selectedNodeStatus.enodeUrl && selectedNodeStatus.enodeUrl !== 'P2P network initializing...') {
+            // Usar el enode tal como viene del nodo, ya incluye la IP correcta
+            bootnodeEnode = selectedNodeStatus.enodeUrl;
             console.log(`Usando bootnode específico: ${bootnodeEnode}`);
           } else {
             console.warn(`No se pudo obtener enode del bootnode ${selectedBootnode}, usando placeholder`);
@@ -170,6 +210,11 @@ export async function POST(request: Request) {
       }
       
       await configGenerator.generateNodeConfig(createdNode, networkConfig, bootnodeEnode);
+      
+      // Agregar el bootnode al array de bootnodes para el comando Docker
+      if (bootnodeEnode !== "enode://placeholder@127.0.0.1:30303") {
+        bootnodes = [bootnodeEnode];
+      }
     }
     
     await nodeManager.startNode(createdNode, network.Name || networkId, genesisPath, bootnodes);

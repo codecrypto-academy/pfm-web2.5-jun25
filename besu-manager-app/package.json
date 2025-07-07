@@ -12,6 +12,7 @@
     "@types/dockerode": "^3.3.42",
     "besu-network-manager": "file:../lib/besu-network-manager-1.0.0.tgz",
     "dockerode": "^4.0.7",
+    "ethers": "^6.15.0",
     "next": "15.3.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

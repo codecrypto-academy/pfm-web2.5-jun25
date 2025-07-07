@@ -1,6 +1,7 @@
 import { FileSystem } from '../utils/FileSystem';
 import { GenesisOptions } from '../models/types';
 import { Logger } from '../utils/Logger';
+import { ethers } from 'ethers';
 
 /**
  * Servicio para generar archivos génesis para redes Besu
@@ -17,6 +18,45 @@ export class GenesisGenerator {
   constructor(logger: Logger, fs: FileSystem) {
     this.logger = logger;
     this.fs = fs;
+  }
+
+  /**
+   * Genera cuentas prefundeadas desde un mnemonic específico
+   * @param count Número de cuentas a generar
+   * @returns Objeto con direcciones y balances para el genesis
+   */
+  private generatePrefundedAccountsFromMnemonic(count: number = 10): Record<string, { balance: string }> {
+    // Usar el mnemonic personalizado especificado
+    // Este mnemonic es válido según BIP39 y genera cuentas determinísticas
+    const customMnemonic = 'test test test test test test test test test test test junk';
+    
+    this.logger.info(`Generando ${count} cuentas prefundeadas desde mnemonic personalizado`);
+    
+    const alloc: Record<string, { balance: string }> = {};
+    const balance = '0x200000000000000000000000000000000'; // ~10^18 wei
+    
+    try {
+      // Generar cuentas derivadas usando el path estándar de Ethereum
+      for (let i = 0; i < count; i++) {
+        const derivationPath = `m/44'/60'/0'/0/${i}`;
+        const wallet = ethers.HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(customMnemonic), derivationPath);
+        const address = wallet.address.toLowerCase();
+        alloc[address] = { balance };
+        
+        this.logger.debug(`Cuenta ${i}: ${address}`);
+      }
+      
+      this.logger.info(`✅ Generadas ${count} cuentas prefundeadas desde mnemonic personalizado`);
+      
+    } catch (error) {
+      this.logger.error('Error generando cuentas desde mnemonic:', error);
+      // Fallback a cuentas hardcodeadas si hay error
+      alloc['0xfe3b557e8fb62b89f4916b721be55ceb828dbd73'] = { balance };
+      alloc['0x627306090abaB3A6e1400e9345bC60c78a8BEf57'] = { balance };
+      alloc['0xf17f52151EbEF6C7334FAD080c5704D77216b732'] = { balance };
+    }
+    
+    return alloc;
   }
 
   /**
@@ -74,23 +114,20 @@ export class GenesisGenerator {
       }
     }
 
-    // Añadir cuentas pre-financiadas si no se han especificado
-    if (!options.alloc || Object.keys(options.alloc).length === 0) {
-      // Financiar las cuentas de los validadores
-      const alloc: Record<string, { balance: string }> = {};
-      for (const address of options.validatorAddresses) {
-        // Las direcciones en alloc deben mantener el prefijo 0x y estar en minúsculas
-        const cleanAddress = address.toLowerCase();
-        alloc[cleanAddress] = { balance: '0x200000000000000000000000000000000' };
-      }
-
-      // Añadir algunas cuentas adicionales para pruebas
-      alloc['0xfe3b557e8fb62b89f4916b721be55ceb828dbd73'] = { balance: '0x200000000000000000000000000000000' };
-      alloc['0x627306090abaB3A6e1400e9345bC60c78a8BEf57'] = { balance: '0x200000000000000000000000000000000' };
-      alloc['0xf17f52151EbEF6C7334FAD080c5704D77216b732'] = { balance: '0x200000000000000000000000000000000' };
-
-      genesis.alloc = alloc;
+    // SIEMPRE generar cuentas prefundeadas desde mnemonic personalizado
+    const mnemonicAlloc = this.generatePrefundedAccountsFromMnemonic(10);
+    
+    // Combinar con alloc existente si existe
+    const finalAlloc = { ...mnemonicAlloc, ...(options.alloc || {}) };
+    
+    // Financiar también las cuentas de los validadores
+    for (const address of options.validatorAddresses) {
+      // Las direcciones en alloc deben mantener el prefijo 0x y estar en minúsculas
+      const cleanAddress = address.toLowerCase();
+      finalAlloc[cleanAddress] = { balance: '0x200000000000000000000000000000000' };
     }
+
+    genesis.alloc = finalAlloc;
 
     // Asegurar que el directorio padre existe
     const path = require('path');

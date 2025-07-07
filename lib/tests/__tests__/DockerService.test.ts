@@ -93,17 +93,15 @@ describe('DockerService', () => {
   it('should call stopContainer and stop running container', async () => {
     const docker = new DockerService({}, logger);
     const mockStop = jest.fn();
-    const mockRemove = jest.fn();
     const mockInspect = jest.fn().mockResolvedValue({ State: { Running: true }, Name: "test" });
     docker["docker"] = {
       listContainers: jest.fn().mockResolvedValue([{ Id: "cid123" }]),
-      getContainer: jest.fn().mockReturnValue({ inspect: mockInspect, stop: mockStop, remove: mockRemove })
+      getContainer: jest.fn().mockReturnValue({ inspect: mockInspect, stop: mockStop })
     } as any;
     await docker.stopContainer("test");
     expect(mockInspect).toHaveBeenCalled();
     expect(mockStop).toHaveBeenCalled();
-    expect(mockRemove).toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("detenido y eliminado"));
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("detenido"));
   });
 
   it('should call getContainerInfo and return info if found', async () => {

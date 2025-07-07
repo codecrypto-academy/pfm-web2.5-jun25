@@ -1,31 +1,53 @@
 import * as path from 'path';
+import { promises as fs } from 'fs';
 
-import { BesuNodeConfig, BesuNodeStatus, BesuNodeType, NodeCreationConfig } from '../models/types';
+import { BesuNodeConfig, BesuNodeType, NodeCreationConfig } from '../models/types';
 
 import { DockerService } from './DockerService';
+import { ConfigGenerator } from './ConfigGenerator';
+import { IpManager } from './IpManager';
 import { FileSystem } from '../utils/FileSystem';
-import { KeyGenerator } from './KeyGenerator';
 import { Logger } from '../utils/Logger';
-import { NodeConfigFactory } from '../utils/NodeConfigFactory';
+import { ethers } from 'ethers';
+
+// Interfaz para el estado de un nodo (solo lo necesario)
+interface BesuNodeStatus {
+  containerId: string;
+  name: string;
+  nodeType?: BesuNodeType;
+  containerStatus: 'running' | 'stopped' | 'exited' | 'unknown';
+  blockNumber?: number;
+  peerCount?: number;
+  enodeUrl?: string;
+  ipAddress?: string;
+  ports: {
+    rpc: number;
+    p2p: number;
+  };
+  isMining?: boolean;
+  isValidating?: boolean;
+  isBootnode?: boolean;
+}
 
 export class BesuNodeManager {
   private docker: DockerService;
   private logger: Logger;
   private fs: FileSystem;
-  private keyGenerator: KeyGenerator;
+  private configGenerator: ConfigGenerator;
+  private ipManager: IpManager;
   private dataDir: string;
 
   constructor(
     docker: DockerService,
     logger: Logger,
     fs: FileSystem,
-    keyGenerator: KeyGenerator,
     dataDir: string
   ) {
     this.docker = docker;
     this.logger = logger;
     this.fs = fs;
-    this.keyGenerator = keyGenerator;
+    this.configGenerator = new ConfigGenerator(logger, fs);
+    this.ipManager = new IpManager(fs, logger, docker, dataDir);
     this.dataDir = dataDir;
   }
 
@@ -34,21 +56,52 @@ export class BesuNodeManager {
     const nodeDir = path.join(this.dataDir, nodeConfig.name);
     await this.fs.ensureDir(nodeDir);
 
-    const { privateKey, publicKey, address } = await this.keyGenerator.generateNodeKeys(nodeDir);
+    // Generar claves usando ethers directamente
+    const wallet = ethers.Wallet.createRandom();
+    const privateKey = wallet.privateKey;
+    const address = wallet.address;
 
-    const fullNodeConfig = NodeConfigFactory.createNodeConfig(
-      nodeConfig.nodeType,
-      nodeConfig.name,
-      nodeConfig.rpcPort || 0,
-      nodeConfig.p2pPort || 0,
-      nodeDir,
-      address,
-      privateKey,
-      nodeConfig.additionalOptions || {}
-    );
+    // Guardar la clave privada (sin prefijo 0x para Besu)
+    const privateKeyPath = path.join(nodeDir, 'key');
+    await this.fs.writeFile(privateKeyPath, privateKey.substring(2));
+
+    // Guardar la dirección
+    const addressPath = path.join(nodeDir, 'address');
+    await this.fs.writeFile(addressPath, address);
+
+    // Crear configuración del nodo
+    const fullNodeConfig: BesuNodeConfig = {
+      name: nodeConfig.name,
+      nodeType: nodeConfig.nodeType,
+      rpcPort: nodeConfig.rpcPort || 0,
+      p2pPort: nodeConfig.p2pPort || 0,
+      dataDir: path.resolve(nodeDir),
+      validatorAddress: address,
+      privateKey: privateKey,
+      enabledApis: this.getDefaultApis(nodeConfig.nodeType),
+      additionalOptions: nodeConfig.additionalOptions || {},
+      isValidator: nodeConfig.isValidator,
+      isBootnode: nodeConfig.isBootnode,
+      linkedTo: nodeConfig.linkedTo
+    };
 
     this.logger.info(`Node ${nodeConfig.name} created successfully.`);
     return fullNodeConfig;
+  }
+
+  private getDefaultApis(nodeType: BesuNodeType): string[] {
+    const baseApis = ['ETH', 'NET', 'WEB3', 'ADMIN'];
+    
+    switch (nodeType) {
+      case BesuNodeType.SIGNER:
+        return [...baseApis, 'CLIQUE', 'DEBUG', 'MINER'];
+      case BesuNodeType.MINER:
+        return [...baseApis, 'MINER', 'DEBUG'];
+      case BesuNodeType.NORMAL:
+        return baseApis;
+      default:
+        return baseApis;
+    }
   }
 
   public async startNode(nodeConfig: BesuNodeConfig, networkName: string, genesisPath: string, bootnodes: string[]): Promise<void> {
@@ -57,6 +110,10 @@ export class BesuNodeManager {
     // Create container name with naming convention: {network}-{type}-{name}
     const nodeTypePrefix = nodeConfig.isBootnode ? 'bootnode' : nodeConfig.nodeType;
     const containerName = `${networkName}-${nodeTypePrefix}-${nodeConfig.name}`;
+
+    // Obtener o asignar IP estática para el nodo
+    const staticIp = await this.ipManager.getOrAssignStaticIp(nodeConfig.name, networkName);
+    this.logger.info(`Using static IP ${staticIp} for node ${nodeConfig.name}`);
 
     const command = [
       '--config-file=/data/config.toml',
@@ -79,17 +136,157 @@ export class BesuNodeManager {
         [nodeConfig.p2pPort.toString()]: '30303',
       },
       command: command,
+      staticIp: staticIp,
     });
 
     await this.waitForNodeReady(nodeConfig);
-    this.logger.info(`Node ${nodeConfig.name} started.`);
+    this.logger.info(`Node ${nodeConfig.name} started with static IP ${staticIp}.`);
   }
 
   public async stopNode(besuNodeName: string): Promise<void> {
-    const containerName = `besu-${besuNodeName}`;
     this.logger.info(`Stopping node: ${besuNodeName}`);
+    
+    // Find the container using both naming conventions
+    const containers = await this.docker.listContainers({ all: true });
+    let containerName = '';
+    
+    for (const container of containers) {
+      const name = container.Names[0].startsWith('/') ? container.Names[0].substring(1) : container.Names[0];
+      const extractedName = this.extractNodeNameFromContainer(name);
+      if (extractedName === besuNodeName) {
+        containerName = name;
+        break;
+      }
+    }
+    
+    if (!containerName) {
+      throw new Error(`Container for node ${besuNodeName} not found`);
+    }
+    
     await this.docker.stopContainer(containerName);
     this.logger.info(`Node ${besuNodeName} stopped.`);
+  }
+
+  public async deleteNode(besuNodeName: string, networkName: string): Promise<void> {
+    this.logger.info(`Deleting node: ${besuNodeName}`);
+    
+    // Find the container using both naming conventions
+    const containers = await this.docker.listContainers({ all: true });
+    let containerName = '';
+    let containerId = '';
+    
+    for (const container of containers) {
+      const name = container.Names[0].startsWith('/') ? container.Names[0].substring(1) : container.Names[0];
+      const extractedName = this.extractNodeNameFromContainer(name);
+      if (extractedName === besuNodeName) {
+        containerName = name;
+        containerId = container.Id;
+        break;
+      }
+    }
+    
+    if (!containerName) {
+      throw new Error(`Container for node ${besuNodeName} not found`);
+    }
+    
+    // Stop the container first
+    try {
+      await this.docker.stopContainer(containerName);
+    } catch (error) {
+      this.logger.warn(`Container ${containerName} was already stopped: ${error}`);
+    }
+    
+    // Remove the container
+    await this.docker.removeContainer(containerId, true);
+    
+    // Remove IP mapping
+    await this.ipManager.removeIpMapping(besuNodeName, networkName);
+    
+    // Remove node data directory
+    const nodeDataDir = path.join(this.dataDir, containerName);
+    try {
+      await this.fs.removeDir(nodeDataDir, true);
+      this.logger.info(`Node data directory removed: ${nodeDataDir}`);
+    } catch (error) {
+      this.logger.warn(`Could not remove node data directory ${nodeDataDir}: ${error}`);
+    }
+    
+    this.logger.info(`Node ${besuNodeName} deleted completely.`);
+  }
+
+  public async startExistingNode(besuNodeName: string, networkName: string): Promise<void> {
+    this.logger.info(`Starting existing node: ${besuNodeName}`);
+    
+    // Get node status to check if it exists and get configuration
+    const nodeStatus = await this.getNodeStatus(besuNodeName);
+    if (!nodeStatus) {
+      throw new Error(`Node ${besuNodeName} not found`);
+    }
+    
+    if (nodeStatus.containerStatus === 'running') {
+      this.logger.info(`Node ${besuNodeName} is already running`);
+      return;
+    }
+    
+    // Find the container
+    const containers = await this.docker.listContainers({ all: true });
+    let containerName = '';
+    
+    for (const container of containers) {
+      const name = container.Names[0].startsWith('/') ? container.Names[0].substring(1) : container.Names[0];
+      const extractedName = this.extractNodeNameFromContainer(name);
+      if (extractedName === besuNodeName) {
+        containerName = name;
+        break;
+      }
+    }
+    
+    if (!containerName) {
+      throw new Error(`Container for node ${besuNodeName} not found`);
+    }
+    
+    // Start the existing container
+    try {
+      const containers = await this.docker.listContainers({ all: true });
+      const containerInfo = containers.find(c => c.Id === nodeStatus.containerId);
+      
+      if (!containerInfo) {
+        throw new Error(`Container ${nodeStatus.containerId} not found`);
+      }
+      
+      if (containerInfo.State === 'running') {
+        this.logger.info(`Container for node ${besuNodeName} is already running`);
+        return;
+      }
+      
+      // Start the existing container using Docker API
+      await this.docker.startContainer(nodeStatus.containerId);
+      this.logger.info(`Started existing container: ${containerName}`);
+    } catch (error) {
+      this.logger.error(`Error starting existing container: ${error}`);
+      throw error;
+    }
+    
+    this.logger.info(`Node ${besuNodeName} started.`);
+  }
+
+  public async restartNode(besuNodeName: string, networkName: string): Promise<void> {
+    this.logger.info(`Restarting node: ${besuNodeName}`);
+    
+    try {
+      // Stop the node first (this will only stop, not remove the container)
+      await this.stopNode(besuNodeName);
+      
+      // Wait a moment for cleanup
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Start the existing node (this will reuse the existing container)
+      await this.startExistingNode(besuNodeName, networkName);
+      
+    } catch (error) {
+      this.logger.error(`Error restarting node ${besuNodeName}:`, error);
+      throw error;
+    }
   }
 
   public async getNodeStatus(besuNodeName: string): Promise<BesuNodeStatus | null> {
@@ -139,43 +336,53 @@ export class BesuNodeManager {
       isBootnode: nodeInfo.isBootnode,
     };
 
-    // Retry mechanism for node status verification
-    const maxRetries = 5;
-    const retryDelay = 5000; // 5 seconds
-    let lastError: any = null;
+    // Solo intentar obtener información adicional si el contenedor está corriendo
+    if (containerInfo.state === 'running') {
+      // Retry mechanism for node status verification
+      const maxRetries = 5;
+      const retryDelay = 5000; // 5 seconds
+      let lastError: any = null;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const blockNumber = await this.getBlockNumber(rpcPort);
-        nodeStatus.blockNumber = blockNumber;
-
-        const peerCount = await this.getPeerCount(rpcPort);
-        nodeStatus.peerCount = peerCount;
-
-        nodeStatus.ipAddress = containerInfo.ipAddress;
-
-        // Try to get enode URL, but don't fail if P2P is not ready yet
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          const enodeUrl = await this.getEnodeUrl(besuNodeName, containerInfo);
-          nodeStatus.enodeUrl = enodeUrl;
-        } catch (enodeError) {
-          this.logger.warn(`Could not get enode URL for node ${besuNodeName}: ${enodeError}`);
-          nodeStatus.enodeUrl = 'P2P network initializing...';
-        }
-        
-        // If we reach here, the node status was successfully retrieved
-        break;
-      } catch (error) {
-        lastError = error;
-        this.logger.warn(`Attempt ${attempt}/${maxRetries} failed to get status for node ${besuNodeName}: ${error}`);
-        
-        if (attempt < maxRetries) {
-          this.logger.info(`Retrying in ${retryDelay / 1000} seconds...`);
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-        } else {
-          this.logger.error(`All ${maxRetries} attempts failed to get status for node ${besuNodeName}:`, lastError);
+          const blockNumber = await this.getBlockNumber(rpcPort);
+          nodeStatus.blockNumber = blockNumber;
+
+          const peerCount = await this.getPeerCount(rpcPort);
+          nodeStatus.peerCount = peerCount;
+
+          nodeStatus.ipAddress = containerInfo.ipAddress;
+
+          // Try to get enode URL, but don't fail if P2P is not ready yet
+          try {
+            const enodeUrl = await this.getEnodeUrl(besuNodeName, containerInfo);
+            nodeStatus.enodeUrl = enodeUrl;
+          } catch (enodeError) {
+            this.logger.warn(`Could not get enode URL for node ${besuNodeName}: ${enodeError}`);
+            nodeStatus.enodeUrl = 'P2P network initializing...';
+          }
+          
+          // If we reach here, the node status was successfully retrieved
+          break;
+        } catch (error) {
+          lastError = error;
+          this.logger.warn(`Attempt ${attempt}/${maxRetries} failed to get status for node ${besuNodeName}: ${error}`);
+          
+          if (attempt < maxRetries) {
+            this.logger.info(`Retrying in ${retryDelay / 1000} seconds...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          } else {
+            this.logger.error(`All ${maxRetries} attempts failed to get status for node ${besuNodeName}:`, lastError);
+          }
         }
       }
+    } else {
+      // Para contenedores que no están corriendo, establecer valores por defecto
+      this.logger.info(`Container ${besuNodeName} is not running (${containerInfo.state}), skipping RPC calls`);
+      nodeStatus.blockNumber = undefined;
+      nodeStatus.peerCount = undefined;
+      nodeStatus.enodeUrl = undefined;
+      nodeStatus.ipAddress = containerInfo.ipAddress;
     }
 
     return nodeStatus;

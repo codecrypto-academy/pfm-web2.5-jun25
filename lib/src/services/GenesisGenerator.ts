@@ -1,7 +1,24 @@
 import { FileSystem } from '../utils/FileSystem';
-import { GenesisOptions } from '../models/types';
 import { Logger } from '../utils/Logger';
 import { ethers } from 'ethers';
+
+/**
+ * Opciones para la creación de un bloque génesis
+ */
+interface GenesisOptions {
+  /** ID de la cadena */
+  chainId: number;
+  /** Protocolo de consenso */
+  consensusProtocol: 'clique' | 'ibft2' | 'qbft';
+  /** Tiempo de bloque en segundos */
+  blockPeriod: number;
+  /** Direcciones de los validadores */
+  validatorAddresses: string[];
+  /** Cuentas pre-financiadas */
+  alloc?: Record<string, { balance: string }>;
+  /** Opciones adicionales */
+  additionalOptions?: Record<string, any>;
+}
 
 /**
  * Servicio para generar archivos génesis para redes Besu
@@ -157,7 +174,7 @@ export class GenesisGenerator {
     const suffix = '0'.repeat(130);
     // Asegurar que las direcciones estén en minúsculas y sin prefijo 0x
     const validators = options.validatorAddresses
-      .map(addr => addr.toLowerCase().substring(2))
+      .map((addr: string) => addr.toLowerCase().substring(2))
       .join('');
     genesis.extraData = prefix + validators + suffix;
     

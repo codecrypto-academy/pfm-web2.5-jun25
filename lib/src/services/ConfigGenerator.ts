@@ -1,10 +1,14 @@
 import * as path from 'path';
 
-import { BesuNetworkConfig, BesuNodeConfig, BesuNodeType } from '../models/types';
+import { BesuNodeConfig, BesuNodeType } from '../models/types';
 
 import { FileSystem } from '../utils/FileSystem';
 import { Logger } from '../utils/Logger';
-import { NodeConfigFactory } from '../utils/NodeConfigFactory';
+
+// Interfaz para configuración de red (solo lo necesario)
+interface BesuNetworkConfig {
+  chainId: number;
+}
 
 /**
  * Generador de archivos de configuración TOML para nodos Besu
@@ -159,7 +163,7 @@ miner-coinbase="${nodeConfig.validatorAddress || ''}"`;
    * @param nodeConfig Configuración del nodo
    */
   private getNodeTypeSpecificConfig(nodeConfig: BesuNodeConfig): string {
-    const additionalOptions = NodeConfigFactory.getBesuCommandOptions(nodeConfig);
+    const additionalOptions = this.getBesuCommandOptions(nodeConfig);
     
     if (additionalOptions.length === 0) {
       return '';
@@ -170,6 +174,36 @@ miner-coinbase="${nodeConfig.validatorAddress || ''}"`;
              const [key, value] = option.replace('--', '').split('=');
              return value ? `${key}=${value}` : `${key}=true`;
            }).join('\n');
+  }
+
+  /**
+   * Obtiene las opciones de comando Besu según el tipo de nodo
+   */
+  private getBesuCommandOptions(nodeConfig: BesuNodeConfig): string[] {
+    const options: string[] = [];
+
+    switch (nodeConfig.nodeType) {
+      case BesuNodeType.SIGNER:
+        // En Clique, los nodos SIGNER validan automáticamente si tienen la clave privada
+        // No necesitan miner-enabled=true
+        break;
+
+      case BesuNodeType.MINER:
+        options.push('--miner-enabled=true');
+        // Para nodos MINER en Clique, el miner-coinbase debería ser una dirección de validador
+        // que esté en el extraData del genesis, no necesariamente la dirección del nodo
+        // Si no se especifica validatorAddress, se puede omitir miner-coinbase
+        if (nodeConfig.validatorAddress) {
+          options.push(`--miner-coinbase=${nodeConfig.validatorAddress}`);
+        }
+        break;
+
+      case BesuNodeType.NORMAL:
+        // Los nodos normales no tienen opciones especiales de minería
+        break;
+    }
+
+    return options;
   }
 
   /**

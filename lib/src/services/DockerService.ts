@@ -12,6 +12,7 @@ interface ContainerOptions {
   ports: Record<string, string>;
   command: string[];
   environment?: Record<string, string>;
+  staticIp?: string;
 }
 
 /**
@@ -46,6 +47,28 @@ export class DockerService {
   }
 
   /**
+   * Genera una subred única basada en el nombre de la red
+   * @param networkName Nombre de la red
+   */
+  private generateUniqueSubnet(networkName: string): { subnet: string; gateway: string } {
+    // Crear un hash simple del nombre de la red
+    let hash = 0;
+    for (let i = 0; i < networkName.length; i++) {
+      const char = networkName.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convertir a 32bit integer
+    }
+    
+    // Usar el hash para generar un rango único en 172.x.0.0/16
+    // Asegurar que x esté entre 16 y 31 para evitar conflictos con rangos comunes
+    const secondOctet = 16 + (Math.abs(hash) % 16);
+    const subnet = `172.${secondOctet}.0.0/16`;
+    const gateway = `172.${secondOctet}.0.1`;
+    
+    return { subnet, gateway };
+  }
+
+  /**
    * Crea una red Docker
    * @param name Nombre de la red
    */
@@ -60,14 +83,26 @@ export class DockerService {
         return networks[0].Id;
       }
 
-      // Crear la red
+      // Generar subred única para esta red
+      const { subnet, gateway } = this.generateUniqueSubnet(name);
+
+      // Crear la red con configuración IPAM para soportar IPs estáticas
       const network = await this.docker.createNetwork({
         Name: name,
         Driver: "bridge",
         CheckDuplicate: true,
+        IPAM: {
+          Driver: "default",
+          Config: [
+            {
+              Subnet: subnet,
+              Gateway: gateway
+            }
+          ]
+        }
       });
 
-      this.logger.info(`Red Docker creada: ${name}`);
+      this.logger.info(`Red Docker creada con IPAM: ${name} (${subnet})`);
       return network.id;
     } catch (error) {
       this.logger.error(`Error al crear la red Docker ${name}:`, error);
@@ -281,6 +316,16 @@ export class DockerService {
       
       this.logger.info(`Ejecutando comando Docker: ${dockerCommand}`);
 
+      // Preparar configuración de red
+      const networkingConfig: any = {};
+      if (options.staticIp) {
+        networkingConfig[options.network] = {
+          IPAMConfig: {
+            IPv4Address: options.staticIp
+          }
+        };
+      }
+
       // Crear el contenedor
       const container = await this.docker.createContainer({
         name: options.name,
@@ -291,6 +336,9 @@ export class DockerService {
           PortBindings: portBindings,
           Binds: binds,
           NetworkMode: options.network,
+        },
+        NetworkingConfig: {
+          EndpointsConfig: networkingConfig
         },
         Env: options.environment
           ? Object.entries(options.environment).map(
@@ -342,10 +390,7 @@ export class DockerService {
       // Detener el contenedor
       await container.stop({ t: 10 });
 
-      // Eliminar el contenedor
-      await container.remove();
-
-      this.logger.info(`Contenedor detenido y eliminado: ${name}`);
+      this.logger.info(`Contenedor detenido: ${name}`);
     } catch (error) {
       this.logger.error(`Error al detener el contenedor ${name}:`, error);
       throw error;
@@ -538,6 +583,43 @@ export class DockerService {
     } catch (error) {
       this.logger.error(
         `Error al inspeccionar el contenedor ${containerId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina un contenedor Docker
+   * @param containerId ID del contenedor
+   * @param force Forzar eliminación
+   */
+  public async removeContainer(containerId: string, force: boolean = false): Promise<void> {
+    try {
+      const container = this.docker.getContainer(containerId);
+      await container.remove({ force });
+      this.logger.info(`Contenedor eliminado: ${containerId}`);
+    } catch (error) {
+      this.logger.error(
+        `Error al eliminar el contenedor ${containerId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Inicia un contenedor Docker existente
+   * @param containerId ID del contenedor
+   */
+  public async startContainer(containerId: string): Promise<void> {
+    try {
+      const container = this.docker.getContainer(containerId);
+      await container.start();
+      this.logger.info(`Contenedor iniciado: ${containerId}`);
+    } catch (error) {
+      this.logger.error(
+        `Error al iniciar el contenedor ${containerId}:`,
         error
       );
       throw error;

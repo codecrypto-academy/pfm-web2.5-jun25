@@ -8,6 +8,8 @@ import DeleteNetworkModal from '../components/DeleteNetworkModal';
 import DeleteNodeModal from '../components/DeleteNodeModal';
 import MetaMaskConnectionModal from '../components/MetaMaskConnectionModal';
 
+import NodeControlButtons from '../components/NodeControlButtons';
+
 interface DockerNetwork {
   id: string;
   name: string;
@@ -265,6 +267,8 @@ export default function Home() {
                     </div>
                   </div>
                   
+
+                  
                   <div className="p-4">
                     {networkNodes.length === 0 ? (
                       <div className="text-center py-8 text-gray-400">
@@ -355,6 +359,17 @@ export default function Home() {
                                   )}
                                 </div>
                               )}
+                            </div>
+                            
+                            {/* Node Control Buttons */}
+                            <div className="mt-3 pt-3 border-t border-gray-600">
+                              <NodeControlButtons
+                                nodeId={node.name}
+                                nodeName={node.name}
+                                networkId={node.networkId}
+                                currentStatus={node.status}
+                                onStatusChange={fetchNetworksAndNodes}
+                              />
                             </div>
                           </div>
                         ))}

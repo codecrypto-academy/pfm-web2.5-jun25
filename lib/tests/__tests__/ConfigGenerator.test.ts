@@ -1,7 +1,19 @@
 import { ConfigGenerator } from '../../src/services/ConfigGenerator';
 import { Logger } from '../../src/utils/Logger';
 import { FileSystem } from '../../src/utils/FileSystem';
-import { BesuNodeConfig, BesuNetworkConfig, BesuNodeType } from '../../src/models/types';
+import { BesuNodeConfig, BesuNodeType } from '../../src/models/types';
+
+// Interfaz para configuración de red (solo para tests)
+interface BesuNetworkConfig {
+  name: string;
+  chainId: number;
+  consensusProtocol: string;
+  blockPeriod: number;
+  dataDir: string;
+  baseRpcPort: number;
+  baseP2pPort: number;
+  nodeCount: number;
+}
 
 describe('ConfigGenerator', () => {
   let logger: Logger;

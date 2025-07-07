@@ -28,60 +28,48 @@ export async function GET() {
           ports.push(`${node.ports.p2p}:30303`);
         }
         
-        // Usar DockerService para obtener información adicional del contenedor
+        // Usar DockerService para obtener información adicional del contenedor solo si está corriendo
         let containerInfo = null;
         let networkId = 'unknown'; // valor por defecto
         
-        try {
-          console.log(`Obteniendo info del contenedor: ${node.containerId}`);
-          containerInfo = await dockerService.getContainerInfo(node.containerId);
-          console.log('Info del contenedor obtenida exitosamente');
-          
-          // Extraer networkId del nombre del contenedor
-          // Patrón esperado: {networkId}-{type}-{name} o besu-{name} (para compatibilidad)
-          
-          // Primero intentar obtener de la red Docker del contenedor
-          if (containerInfo?.NetworkSettings?.Networks) {
-            const networks = Object.keys(containerInfo.NetworkSettings.Networks);
-            if (networks.length > 0) {
-              // Usar la primera red que no sea 'bridge' o 'host'
-              const dockerNetworkId = networks.find(net => net !== 'bridge' && net !== 'host') || networks[0];
-              if (dockerNetworkId && dockerNetworkId !== 'bridge' && dockerNetworkId !== 'host') {
-                networkId = dockerNetworkId;
-              }
-            }
-          }
-          
-          // Si no se pudo obtener de Docker, extraer del nombre del contenedor
-          if (networkId === 'unknown') {
-            const nameParts = node.name.split('-');
-            if (nameParts.length >= 2) {
-              if (nameParts[0] === 'besu') {
-                // Patrón: besu-{name} -> usar el segundo segmento
-                networkId = nameParts[1];
-              } else {
-                // Patrón: {networkId}-{type}-{name}
-                // Para nombres como 'another-red-bootnode-besu-alex', necesitamos encontrar el tipo
-                const typeIndex = nameParts.findIndex(part => ['bootnode', 'signer', 'miner', 'normal'].includes(part));
-                if (typeIndex > 0) {
-                  // El networkId es todo lo que está antes del tipo
-                  networkId = nameParts.slice(0, typeIndex).join('-');
-                } else {
-                  // Fallback: usar la primera parte
-                  networkId = nameParts[0];
+        // Solo obtener información adicional del contenedor si está corriendo
+        if (node.containerStatus === 'running') {
+          try {
+            console.log(`Obteniendo info del contenedor: ${node.containerId}`);
+            containerInfo = await dockerService.getContainerInfo(node.containerId);
+            console.log('Info del contenedor obtenida exitosamente');
+            
+            // Extraer networkId del nombre del contenedor
+            // Patrón esperado: {networkId}-{type}-{name} o besu-{name} (para compatibilidad)
+            
+            // Primero intentar obtener de la red Docker del contenedor
+            if (containerInfo?.NetworkSettings?.Networks) {
+              const networks = Object.keys(containerInfo.NetworkSettings.Networks);
+              if (networks.length > 0) {
+                // Usar la primera red que no sea 'bridge' o 'host'
+                const dockerNetworkId = networks.find(net => net !== 'bridge' && net !== 'host') || networks[0];
+                if (dockerNetworkId && dockerNetworkId !== 'bridge' && dockerNetworkId !== 'host') {
+                  networkId = dockerNetworkId;
                 }
               }
             }
+          } catch (dockerError) {
+            console.warn(`Could not get container info for ${node.name}:`, dockerError?.message || dockerError);
           }
-        } catch (dockerError) {
-          console.warn(`Could not get container info for ${node.name}:`, dockerError?.message || dockerError);
-          // Fallback: extraer networkId del nombre sin información de Docker
+        } else {
+          console.log(`Container ${node.name} is not running (${node.containerStatus}), skipping detailed container info`);
+        }
+        
+        // Extraer networkId del nombre del contenedor (funciona para contenedores corriendo y detenidos)
+        if (networkId === 'unknown') {
           const nameParts = node.name.split('-');
           if (nameParts.length >= 2) {
             if (nameParts[0] === 'besu') {
+              // Patrón: besu-{name} -> usar el segundo segmento
               networkId = nameParts[1];
             } else {
               // Patrón: {networkId}-{type}-{name}
+              // Para nombres como 'another-red-bootnode-besu-alex', necesitamos encontrar el tipo
               const typeIndex = nameParts.findIndex(part => ['bootnode', 'signer', 'miner', 'normal'].includes(part));
               if (typeIndex > 0) {
                 // El networkId es todo lo que está antes del tipo

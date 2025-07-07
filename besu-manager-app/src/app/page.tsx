@@ -365,7 +365,6 @@ export default function Home() {
                             <div className="mt-3 pt-3 border-t border-gray-600">
                               <NodeControlButtons
                                 nodeId={node.name}
-                                nodeName={node.name}
                                 networkId={node.networkId}
                                 currentStatus={node.status}
                                 onStatusChange={fetchNetworksAndNodes}
@@ -415,7 +414,6 @@ export default function Home() {
             onClose={() => setIsDeleteNodeModalOpen(false)}
             onDelete={handleNodeDeleted}
             nodeName={selectedNode.name}
-            nodeId={selectedNode.id}
             networkId={selectedNode.networkId}
             isBootnode={selectedNode.isBootnode || false}
           />

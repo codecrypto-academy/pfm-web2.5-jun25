@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 
 interface NodeControlButtonsProps {
   nodeId: string;
-  nodeName: string;
   networkId: string;
   currentStatus: string;
   onStatusChange: () => void;
@@ -12,7 +11,6 @@ interface NodeControlButtonsProps {
 
 const NodeControlButtons: React.FC<NodeControlButtonsProps> = ({
   nodeId,
-  nodeName,
   networkId,
   currentStatus,
   onStatusChange

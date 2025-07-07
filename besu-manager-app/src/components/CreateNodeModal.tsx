@@ -39,9 +39,6 @@ export default function CreateNodeModal({
   const [availableBootnodes, setAvailableBootnodes] = useState<BesuNode[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
-  const [isCheckingEnode, setIsCheckingEnode] = useState(false);
-  const [enodeRetryCount, setEnodeRetryCount] = useState(0);
-  const [enodeStatus, setEnodeStatus] = useState<string>('');
 
   // Cargar nodos disponibles cuando se abre el modal
   useEffect(() => {
@@ -57,10 +54,14 @@ export default function CreateNodeModal({
       if (response.ok) {
         const nodes = await response.json();
         // Filtrar solo los bootnodes que estén ejecutándose
-        const networkBootnodes = nodes.filter((node: any) => {
+        const networkBootnodes = nodes.filter((node: unknown) => {
           return (
-            node.status === 'running' && 
-            node.isBootnode === true
+            typeof node === 'object' &&
+            node !== null &&
+            'status' in node &&
+            'isBootnode' in node &&
+            (node as Record<string, unknown>).status === 'running' && 
+            (node as Record<string, unknown>).isBootnode === true
           );
         });
         setAvailableBootnodes(networkBootnodes);
@@ -102,8 +103,8 @@ export default function CreateNodeModal({
       setSelectedBootnode('');
       onNodeCreated();
       onClose();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsCreating(false);
     }

@@ -43,10 +43,10 @@ export async function DELETE(request: Request) {
       message: `Red '${network.Name}' eliminada exitosamente`
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error eliminando red:', error);
     
-    if (error.message?.includes('network has active endpoints')) {
+    if (error instanceof Error && error.message?.includes('network has active endpoints')) {
       return NextResponse.json(
         { error: 'No se puede eliminar la red porque tiene contenedores conectados' },
         { status: 409 }

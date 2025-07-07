@@ -9,6 +9,7 @@ import {
 } from 'besu-network-manager';
 
 import { NextResponse } from 'next/server';
+import path from 'path';
 
 export async function POST(request: Request) {
   try {
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
     // Iniciar el contenedor Docker del nodo
     // Usar un archivo genesis específico para esta red
     const networkName = network.Name || networkId;
-    const path = require('path');
+    // path ya está importado arriba
     const genesisPath = path.resolve(`./temp-nodes/genesis-${networkName}.json`);
     let bootnodes: string[] = [];
     
@@ -226,10 +227,10 @@ export async function POST(request: Request) {
       message: `Nodo '${besuNodeName}' creado e iniciado exitosamente en la red '${network.Name}'`
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creando nodo:', error);
     
-    if (error.message?.includes('port is already allocated')) {
+    if (error instanceof Error && error.message?.includes('port is already allocated')) {
       return NextResponse.json(
         { error: 'El puerto especificado ya está en uso' },
         { status: 409 }

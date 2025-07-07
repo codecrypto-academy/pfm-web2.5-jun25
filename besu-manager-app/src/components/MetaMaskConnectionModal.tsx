@@ -49,8 +49,8 @@ export default function MetaMaskConnectionModal({
           }]
         });
         alert('Red agregada exitosamente a MetaMask!');
-      } catch (error: any) {
-        if (error.code === 4902) {
+      } catch (error: unknown) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 4902) {
           alert('Por favor, agrega la red manualmente usando la información mostrada.');
         } else {
           console.error('Error agregando red a MetaMask:', error);
@@ -167,7 +167,7 @@ export default function MetaMaskConnectionModal({
             <ol className="text-blue-100 text-sm space-y-1 list-decimal list-inside">
               <li>Abre MetaMask en tu navegador</li>
               <li>Haz clic en el selector de red (arriba)</li>
-              <li>Selecciona "Agregar red" o "Add network"</li>
+              <li>Selecciona &quot;Agregar red&quot; o &quot;Add network&quot;</li>
               <li>Usa la información mostrada arriba</li>
               <li>Guarda la configuración</li>
             </ol>

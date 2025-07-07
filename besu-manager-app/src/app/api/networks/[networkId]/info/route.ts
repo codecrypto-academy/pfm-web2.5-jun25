@@ -20,7 +20,10 @@ export async function GET(
     
     // Obtener información de la red Docker
     const networks = await networkManager.getNetworks();
-    const network = networks.find((n: any) => n.Name === networkId);
+    const network = networks.find((n: unknown) => 
+      typeof n === 'object' && n !== null && 'Name' in n && 
+      (n as Record<string, unknown>).Name === networkId
+    );
     
     if (!network) {
       return NextResponse.json(

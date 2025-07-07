@@ -7,7 +7,6 @@ interface DeleteNodeModalProps {
   onClose: () => void;
   onDelete: () => void;
   nodeName: string;
-  nodeId: string;
   networkId: string;
   isBootnode: boolean;
 }
@@ -17,7 +16,6 @@ export default function DeleteNodeModal({
   onClose, 
   onDelete, 
   nodeName,
-  nodeId,
   networkId,
   isBootnode
 }: DeleteNodeModalProps) {
@@ -46,8 +44,8 @@ export default function DeleteNodeModal({
       
       onDelete();
       onClose();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setIsDeleting(false);
     }

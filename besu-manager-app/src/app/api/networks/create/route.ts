@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { name, driver = 'bridge' } = await request.json();
+    const { name } = await request.json();
     
     if (!name || typeof name !== 'string') {
       return NextResponse.json(

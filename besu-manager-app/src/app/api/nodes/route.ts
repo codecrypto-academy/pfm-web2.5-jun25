@@ -43,18 +43,29 @@ export async function GET() {
             // Patrón esperado: {networkId}-{type}-{name} o besu-{name} (para compatibilidad)
             
             // Primero intentar obtener de la red Docker del contenedor
-            if (containerInfo?.NetworkSettings?.Networks) {
-              const networks = Object.keys(containerInfo.NetworkSettings.Networks);
-              if (networks.length > 0) {
-                // Usar la primera red que no sea 'bridge' o 'host'
-                const dockerNetworkId = networks.find(net => net !== 'bridge' && net !== 'host') || networks[0];
-                if (dockerNetworkId && dockerNetworkId !== 'bridge' && dockerNetworkId !== 'host') {
-                  networkId = dockerNetworkId;
-                }
-              }
+            const containerInfoUnknown = containerInfo as unknown;
+            if (containerInfoUnknown && 
+                typeof containerInfoUnknown === 'object' && 
+                'NetworkSettings' in containerInfoUnknown) {
+              const networkSettings = (containerInfoUnknown as Record<string, unknown>).NetworkSettings;
+              if (networkSettings && 
+                  typeof networkSettings === 'object' && 
+                  'Networks' in networkSettings) {
+                const networksObj = (networkSettings as Record<string, unknown>).Networks;
+                 if (networksObj && typeof networksObj === 'object') {
+                   const networks = Object.keys(networksObj);
+                   if (networks.length > 0) {
+                     // Usar la primera red que no sea 'bridge' o 'host'
+                     const dockerNetworkId = networks.find(net => net !== 'bridge' && net !== 'host') || networks[0];
+                     if (dockerNetworkId && dockerNetworkId !== 'bridge' && dockerNetworkId !== 'host') {
+                       networkId = dockerNetworkId;
+                     }
+                   }
+                 }
+               }
             }
-          } catch (dockerError) {
-            console.warn(`Could not get container info for ${node.name}:`, dockerError?.message || dockerError);
+          } catch (dockerError: unknown) {
+            console.warn(`Could not get container info for ${node.name}:`, dockerError instanceof Error ? dockerError.message : dockerError);
           }
         } else {
           console.log(`Container ${node.name} is not running (${node.containerStatus}), skipping detailed container info`);
@@ -100,7 +111,7 @@ export async function GET() {
         formattedNodes.push(formattedNode);
         console.log(`Nodo procesado exitosamente: ${node.name}`);
         
-      } catch (nodeError) {
+      } catch (nodeError: unknown) {
         console.error(`Error procesando nodo ${node.name}:`, nodeError);
         // Continuar con el siguiente nodo en caso de error
       }
@@ -108,10 +119,10 @@ export async function GET() {
     
     console.log(`Retornando ${formattedNodes.length} nodos formateados`);
     return NextResponse.json(formattedNodes);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error al obtener nodos:', error);
     return NextResponse.json(
-      { error: 'Error al obtener los nodos Besu', details: error?.message || error },
+      { error: 'Error al obtener los nodos Besu', details: error instanceof Error ? error.message : 'Error desconocido' },
       { status: 500 }
     );
   }

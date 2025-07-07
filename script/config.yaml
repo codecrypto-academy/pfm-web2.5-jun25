@@ -34,6 +34,7 @@ nodes:
     ip: "172.24.0.11"
     roles: ["validator", "bootnode", "rpc"]
     rpc_mapping: "9999:8545"  # RPC port exposed for external interaction (curl, MetaMask, Next.js)
+    rpc_alias: "primary"  # Alias for this RPC endpoint
     prefunding: 2500  # ETH amount for this node's generated address
     
   # REMAINING NODES - Normal/Full Nodes

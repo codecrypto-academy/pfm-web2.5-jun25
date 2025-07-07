@@ -10,6 +10,9 @@ CONFIG_FILE="${SCRIPT_DIR}/config.yaml"
 DEBUG=${DEBUG:-0}
 NO_CLEANUP=${NO_CLEANUP:-0}
 
+# Global variable for primary RPC endpoint
+RPC_PRIMARY_ENDPOINT=""
+
 # Log file configuration
 LOG_FILE="${SCRIPT_DIR}/logs/besu-network-$(date +%Y%m%d-%H%M%S).log"
 LOG_DIR="$(dirname "$LOG_FILE")"
@@ -276,11 +279,12 @@ check_dependencies() {
     fi
     
     log_check "Verifying npm installation..."
-    if command -v npm >/dev/null 2>&1; then
-        # Don't try to get version, just confirm it exists
-        log_success "npm is installed and accessible"
+    NPM_VERSION=$(npm --version 2>/dev/null)
+    if [[ $? -eq 0 && -n "$NPM_VERSION" ]]; then
+        log_success "npm is installed (v$NPM_VERSION)"
     else
-        log_error "npm is not installed or not in PATH"
+        log_error "npm is not installed or failed to execute. Please check your Node.js installation."
+        log_tip "This can happen in WSL if the current directory was moved or deleted."
         missing_critical=1
     fi
     
@@ -380,12 +384,7 @@ load_config() {
     log_debug "Docker User Permissions: $DOCKER_USER_PERMISSIONS"
     
     # --- [ RPC Configuration ] ---
-    RPC_PRIMARY_ENDPOINT=$(yq eval '.rpc.primary // "http://localhost:9999"' "$CONFIG_FILE")
-    RPC_SECONDARY_ENDPOINT=$(yq eval '.rpc.secondary_endpoint // "http://localhost:9998"' "$CONFIG_FILE")
     RPC_TIMEOUT=$(yq eval '.rpc.timeout // 30000' "$CONFIG_FILE")
-    
-    log_debug "RPC Primary Endpoint: $RPC_PRIMARY_ENDPOINT"
-    log_debug "RPC Secondary Endpoint: $RPC_SECONDARY_ENDPOINT"
     log_debug "RPC Timeout: $RPC_TIMEOUT ms"
     
     # --- [ Transaction Signer Dependencies Directory ] ---
@@ -451,6 +450,48 @@ load_config() {
         
         log_debug "Node $i: ${NODE_NAMES[$i]} - IP: ${NODE_IPS[$i]} - Roles: ${NODE_ROLES[$i]} - RPC: ${NODE_RPC_MAPPINGS[$i]} - Prefunding: ${NODE_PREFUNDING[$i]} ETH"
     done
+    
+    # --- [ Build Dynamic RPC Endpoint Map ] ---
+    declare -g -A RPC_ENDPOINTS=() # -A for associative array
+    log_check "Building dynamic RPC endpoint map..."
+    
+    for i in $(seq 0 $((NODE_COUNT - 1))); do
+        local node_name="${NODE_NAMES[$i]}"
+        local rpc_alias
+        rpc_alias=$(yq eval ".nodes[$i].rpc_alias // \"\"" "$CONFIG_FILE")
+        local rpc_mapping="${NODE_RPC_MAPPINGS[$i]}"
+        
+        # If the node has both an alias and a mapping, add it to the map
+        if [[ -n "$rpc_alias" && -n "$rpc_mapping" ]]; then
+            # Extract the host port (e.g., "9999" from "9999:8545")
+            local host_port="${rpc_mapping%%:*}"
+            local endpoint_url="http://localhost:${host_port}"
+            
+            # Add the entry to the map
+            RPC_ENDPOINTS["$rpc_alias"]="$endpoint_url"
+            log_debug "Mapped RPC alias '$rpc_alias' to endpoint $endpoint_url (from node '$node_name')"
+        fi
+    done
+    
+    log_success "Dynamic RPC endpoint map created with ${#RPC_ENDPOINTS[@]} entries"
+    
+    # --- [ Set Primary RPC Endpoint ] ---
+    # Find the first available RPC endpoint to use as primary
+    RPC_PRIMARY_ENDPOINT=""
+    for i in "${!NODE_NAMES[@]}"; do
+        if [[ "${NODE_ROLES[$i]}" == *"rpc"* ]] && [[ -n "${NODE_RPC_MAPPINGS[$i]}" ]]; then
+            local port="${NODE_RPC_MAPPINGS[$i]%%:*}"
+            RPC_PRIMARY_ENDPOINT="http://localhost:$port"
+            log_debug "Primary RPC endpoint set to: $RPC_PRIMARY_ENDPOINT"
+            break
+        fi
+    done
+    
+    # If no RPC endpoint found, log warning
+    if [[ -z "$RPC_PRIMARY_ENDPOINT" ]]; then
+        log_warning "No RPC endpoint found in configuration"
+        RPC_PRIMARY_ENDPOINT="http://localhost:8545"  # Default fallback
+    fi
     
     # --- [ Load Alloc (Pre-funded Accounts) Array ] ---
     ALLOC_COUNT=$(yq eval '.alloc | length' "$CONFIG_FILE")
@@ -763,41 +804,15 @@ validate_config_level2() {
     # 5. Validate referenced RPC endpoints exist
     log_check "Validating RPC endpoints in test transactions..."
     for i in "${!TEST_TX_RPC_ENDPOINTS[@]}"; do
-        local endpoint="${TEST_TX_RPC_ENDPOINTS[$i]}"
+        local endpoint_alias="${TEST_TX_RPC_ENDPOINTS[$i]}"
         
-        # Check if it matches primary or secondary endpoint
-        if [[ "$endpoint" != "primary" && "$endpoint" != "secondary" ]]; then
-            log_error "Test transaction $i has invalid rpc_endpoint: $endpoint (must be 'primary' or 'secondary')"
+        # Check if the alias exists in our dynamic endpoint map
+        if [[ -z "${RPC_ENDPOINTS[$endpoint_alias]:-}" ]]; then
+            log_error "Test transaction $i uses an undefined rpc_endpoint alias: '$endpoint_alias'"
+            log_tip "Ensure a node in config.yaml has 'rpc_alias: \"$endpoint_alias\"'"
             ((errors++))
-        fi
-    done
-    
-    # Check that RPC endpoints have corresponding nodes
-    log_check "Checking RPC endpoint node mappings..."
-    local has_primary_rpc=0
-    local has_secondary_rpc=0
-    
-    for i in "${!NODE_RPC_MAPPINGS[@]}"; do
-        if [[ -n "${NODE_RPC_MAPPINGS[$i]}" ]]; then
-            # Check if this is primary port (9999) or secondary port (9998)
-            local port="${NODE_RPC_MAPPINGS[$i]%%:*}"
-            if [[ "$port" == "9999" ]]; then
-                has_primary_rpc=1
-            elif [[ "$port" == "9998" ]]; then
-                has_secondary_rpc=1
-            fi
-        fi
-    done
-    
-    # Validate that test transactions using primary/secondary have corresponding nodes
-    for i in "${!TEST_TX_RPC_ENDPOINTS[@]}"; do
-        local endpoint="${TEST_TX_RPC_ENDPOINTS[$i]}"
-        if [[ "$endpoint" == "primary" && $has_primary_rpc -eq 0 ]]; then
-            log_error "Test transaction $i uses 'primary' endpoint but no node is mapped to port 9999"
-            ((errors++))
-        elif [[ "$endpoint" == "secondary" && $has_secondary_rpc -eq 0 ]]; then
-            log_error "Test transaction $i uses 'secondary' endpoint but no node is mapped to port 9998"
-            ((errors++))
+        else
+            log_debug "Test transaction $i uses valid RPC endpoint alias: '$endpoint_alias' -> ${RPC_ENDPOINTS[$endpoint_alias]}"
         fi
     done
     
@@ -2166,7 +2181,13 @@ launch_nodes() {
     
     # Start block monitoring immediately after node launch
     sleep 5  # Brief pause for containers to initialize
-    start_block_monitor
+    
+    # Start monitor but don't fail if it doesn't work
+    if ! start_block_monitor; then
+        log_warning "Block monitor could not be started, but continuing anyway"
+    else
+        log_debug "Block monitor started with PID: ${BLOCK_MONITOR_PID:-unknown}"
+    fi
     
     return 0
 }
@@ -2664,14 +2685,12 @@ test_transaction() {
             continue
         fi
         
-        # Determine RPC URL based on endpoint type
-        local rpc_url=""
-        if [[ "$endpoint_type" == "primary" ]]; then
-            rpc_url="$RPC_PRIMARY_ENDPOINT"
-        elif [[ "$endpoint_type" == "secondary" ]]; then
-            rpc_url="$RPC_SECONDARY_ENDPOINT"
-        else
-            log_error "Invalid RPC endpoint type: $endpoint_type"
+        # Get RPC URL from dynamic endpoint map
+        local rpc_url="${RPC_ENDPOINTS[$endpoint_type]:-}"
+        
+        if [[ -z "$rpc_url" ]]; then
+            log_error "RPC endpoint alias not found in configuration: '$endpoint_type'"
+            log_tip "Ensure a node in config.yaml has 'rpc_alias: \"$endpoint_type\"'"
             ((errors++))
             continue
         fi
@@ -3398,6 +3417,9 @@ stop_block_monitor() {
 prompt_final_actions() {
     # Stop the temporary monitor that runs during tests
     stop_block_monitor
+    
+    # Add a small delay to ensure all background processes have stopped outputting
+    sleep 1
 
     # Use a single echo command with newlines (\n) to ensure the message
     # and the separator are printed together without a block message sneaking in.
@@ -3414,7 +3436,14 @@ prompt_final_actions() {
         echo -e "Choose an option:"
         echo -e "   ${COLOR_CYAN}[1]${COLOR_RESET} Continue and monitor blocks in real-time"
         echo -e "   ${COLOR_CYAN}[2]${COLOR_RESET} Stop the network now and exit"
-        read -p "Your choice [1-2]: " choice
+        
+        # Ensure we can read user input by redirecting from terminal
+        if [[ -t 0 ]]; then
+            read -p "Your choice [1-2]: " choice
+        else
+            # If stdin is not a terminal, try to read from /dev/tty
+            read -p "Your choice [1-2]: " choice < /dev/tty
+        fi
 
         case $choice in
             1)
@@ -3601,9 +3630,14 @@ main() {
     log_tip "Use 'docker ps' to view running containers"
     log_tip "Use 'docker logs <node-name>' to view node logs"
 
+    # Debug log to confirm we're reaching this point
+    log_debug "About to call prompt_final_actions..."
+    
     # Call the interactive prompt to let the user decide what to do next
     prompt_final_actions
 }
 
 # Execute main function with all arguments
+log_debug "Executing main function..."
 main "$@"
+log_debug "Main function completed"

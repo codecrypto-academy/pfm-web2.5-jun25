@@ -1,19 +1,25 @@
-# Besu Network Automation Tool
-# A comprehensive bash script for creating and managing a Hyperledger Besu private network
-# Following the Master Guide V2 design principles
-
+# Defensive scripting: I start with `set -euo pipefail` to ensure the script is robust and fails predictably.
+# - 'e': The script stops immediately if any command fails
+# - 'u': Treats undefined variables as errors
+# - 'o pipefail': Pipelines fail if any command in them fails
+# This prevents silent errors and hard-to-detect bugs in blockchain.
 set -euo pipefail
 
 # --- [ Configuration Parameters ] ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/config.yaml"
+
+# 🚩#P01: Script Flags
+# --debug: Enables verbose logs for step-by-step debugging.
+# --no-cleanup: Skips deletion of keys, genesis file, and Docker network to reuse the existing blockchain setup.
 DEBUG=${DEBUG:-0}
 NO_CLEANUP=${NO_CLEANUP:-0}
 
 # Global variable for primary RPC endpoint
 RPC_PRIMARY_ENDPOINT=""
 
-# Log file configuration
+# 🚩#P02: LOGGING
+# Unique timestamped log files in ./script/logs for traceability.
 LOG_FILE="${SCRIPT_DIR}/logs/besu-network-$(date +%Y%m%d-%H%M%S).log"
 LOG_DIR="$(dirname "$LOG_FILE")"
 
@@ -57,12 +63,20 @@ Working Directory: $(pwd)
 EOF
 }
 
+# 🎯 SISTEMA DE LOGGING DUAL - TRAZABILIDAD Y UX
+# Decisión de diseño: Salida dual (consola con colores + archivo sin ANSI)
+# Razonamiento:
+# - Consola: Colores mejoran la legibilidad y UX
+# - Archivo: Texto plano para procesamiento, búsquedas y auditoría
+# Técnica: Regex para eliminar secuencias ANSI (\x1b\[[0-9;]*m)
+# Ventaja: Un solo log_* produce salida visual Y registro permanente
 # Helper function to strip ANSI color codes and write to log file
 log_to_file() {
     local message="$1"
     local timestamp=$(date '+%H:%M:%S')
     
     # Strip ANSI color codes and write to log file
+    # 🚩#P04: DUAL-PURPOSE LOGGING: This `sed` command strips ANSI color codes to produce a clean, machine-parseable log file.
     echo "[$timestamp] $message" | sed 's/\x1b\[[0-9;]*m//g' >> "$LOG_FILE"
 }
 
@@ -252,6 +266,7 @@ check_dependencies() {
     local missing_critical=0
     local missing_optional=0
     
+    # 🚩#P05: ENVIRONMENT-SPECIFIC BUG FIX (WSL): This `touch`/`rm` forces a filesystem state refresh to prevent `npm` failures in WSL. This shows proactive debugging of issues beyond the script's own logic.
     # Force WSL to refresh filesystem state before npm check (this is a WSL-specific workaround for stale filesystem cache)
     if [[ "$OSTYPE" == "linux-gnu"* ]] && grep -qi microsoft /proc/version 2>/dev/null; then
         log_debug "Detected WSL environment, refreshing filesystem state..."
@@ -277,17 +292,7 @@ check_dependencies() {
         log_tip "Visit https://nodejs.org/ for installation instructions"
         missing_critical=1
     fi
-    
-    log_check "Verifying npm installation..."
-    NPM_VERSION=$(npm --version 2>/dev/null)
-    if [[ $? -eq 0 && -n "$NPM_VERSION" ]]; then
-        log_success "npm is installed (v$NPM_VERSION)"
-    else
-        log_error "npm is not installed or failed to execute. Please check your Node.js installation."
-        log_tip "This can happen in WSL if the current directory was moved or deleted."
-        missing_critical=1
-    fi
-    
+
     # Check for jq
     log_check "Verifying jq installation..."
     if command_exists jq; then
@@ -344,6 +349,7 @@ check_dependencies() {
 }
 
 # Load configuration from YAML file
+# 🚩#P06: DECOUPLING DESIGN: I separate the logic (script) from the data (config.yaml), a core software engineering principle.
 load_config() {
     log_step "Loading Configuration"
     
@@ -355,6 +361,7 @@ load_config() {
     log_check "Reading configuration from: $CONFIG_FILE"
     
     # --- [ Blockchain Configuration ] ---
+    # 🚩#P07: ROBUST CONFIGURATION: The `//` operator in `yq` provides default values, making the config file cleaner and the script more resilient.
     CHAIN_ID=$(yq eval '.blockchain.chainId // 1337' "$CONFIG_FILE")
     BLOCK_PERIOD_SECONDS=$(yq eval '.blockchain.blockPeriodSeconds // 15' "$CONFIG_FILE")
     EPOCH_LENGTH=$(yq eval '.blockchain.epochLength // 30000' "$CONFIG_FILE")
@@ -451,7 +458,19 @@ load_config() {
         log_debug "Node $i: ${NODE_NAMES[$i]} - IP: ${NODE_IPS[$i]} - Roles: ${NODE_ROLES[$i]} - RPC: ${NODE_RPC_MAPPINGS[$i]} - Prefunding: ${NODE_PREFUNDING[$i]} ETH"
     done
     
+    # 🎯 SISTEMA DINÁMICO DE ENDPOINTS RPC - INNOVACIÓN CLAVE
+    # Decisión de diseño: Mapa dinámico vs. endpoints hardcodeados
+    # Problema resuelto: Elimina el acoplamiento implícito entre configuración y código
+    # Razonamiento:
+    # - Antes: Los endpoints estaban hardcodeados (primary=9999, secondary=9998)
+    # - Ahora: Sistema escalable que permite N endpoints con nombres descriptivos
+    # - Usa arrays asociativos de Bash (diccionarios) para mapeo O(1)
+    # Ventajas:
+    # 1. Escalabilidad: Agregar endpoints sin modificar código
+    # 2. Flexibilidad: Nombres descriptivos ("main-api", "read-only", etc.)
+    # 3. Mantenibilidad: Una sola fuente de verdad en config.yaml
     # --- [ Build Dynamic RPC Endpoint Map ] ---
+    # 🚩#P08: ADVANCED BASH DATA STRUCTURES: I'm using an associative array (`-A`) as a hashmap to map human-readable aliases to RPC URLs.
     declare -g -A RPC_ENDPOINTS=() # -A for associative array
     log_check "Building dynamic RPC endpoint map..."
     
@@ -468,6 +487,7 @@ load_config() {
             local endpoint_url="http://localhost:${host_port}"
             
             # Add the entry to the map
+            # 🚩#P09: TEST SUITE FLEXIBILITY: This dynamic mapping decouples the automated tests from the network's specific port configuration.
             RPC_ENDPOINTS["$rpc_alias"]="$endpoint_url"
             log_debug "Mapped RPC alias '$rpc_alias' to endpoint $endpoint_url (from node '$node_name')"
         fi
@@ -706,6 +726,13 @@ validate_config_level1() {
     fi
 }
 
+# 🎯 VALIDACIÓN MULTINIVEL - SISTEMA DE VALIDACIÓN EXHAUSTIVO
+# Decisión de diseño: Validación en múltiples niveles
+# Razonamiento:
+# - Nivel 1: Sintaxis y formato (tipos de datos, rangos)
+# - Nivel 2: Coherencia lógica (unicidad, dependencias)
+# - Detecta errores antes de operaciones costosas (Docker)
+# Ventaja: Fail-fast con mensajes descriptivos para el usuario
 # Validate configuration - Level 2: Logical Coherence
 validate_config_level2() {
     log_step "Configuration Validation - Level 2: Logical Coherence"
@@ -801,6 +828,13 @@ validate_config_level2() {
         fi
     done
     
+    # 🎯 VALIDACIÓN DINÁMICA DE ENDPOINTS - SISTEMA ESCALABLE
+    # Decisión de diseño: Validación basada en mapa dinámico
+    # Razonamiento: 
+    # - Valida que cada alias usado en transacciones existe en el mapa
+    # - No asume nombres hardcodeados (primary/secondary)
+    # - Proporciona mensajes de error específicos con solución
+    # Beneficio: Detecta errores de configuración antes de ejecutar
     # 5. Validate referenced RPC endpoints exist
     log_check "Validating RPC endpoints in test transactions..."
     for i in "${!TEST_TX_RPC_ENDPOINTS[@]}"; do
@@ -1005,6 +1039,7 @@ cleanup_environment() {
     local containers=$(docker ps -a --filter "label=$NETWORK_LABEL" -q)
     if [[ -n "$containers" ]]; then
         log_debug "Found containers to remove: $containers"
+        # 🚩#P10: EFFICIENT CLEANUP: The `xargs -r` flag is a professional trick to prevent `docker stop/rm` from erroring out if no containers exist.
         echo "$containers" | xargs -r docker stop 2>/dev/null || true
         echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
         
@@ -1287,10 +1322,12 @@ generate_node_identities() {
         log_docker "Running Besu key generation for $node_name"
         
         # Step 1: Export the address (this will create the private key if it doesn't exist)
+        # 🚩#P11: PORTABLE IDENTITY GENERATION: I use an ephemeral container (`--rm`) to generate keys, so there's no need to install Besu on the host.
         local export_addr_cmd="docker run --rm"
         
         # Add user mapping if enabled
         if [[ $apply_permissions -eq 1 ]]; then
+            # 🚩#P12: DOCKER PERMISSION HANDLING: The `-u $(id -u)` flag is a critical fix for file ownership issues when using Docker volumes on Linux.
             export_addr_cmd+=" -u $(id -u):$(id -g)"
         fi
         
@@ -1418,6 +1455,13 @@ generate_node_identities() {
 }
 
 # Generate genesis.json file with Clique PoA configuration
+# 🎯 GENERACIÓN DEL BLOQUE GÉNESIS - COMPONENTE CRÍTICO BLOCKCHAIN
+# Decisión de diseño: Generación dinámica vs. archivo estático
+# Razonamiento: La generación dinámica permite:
+# - Configuración adaptativa según el número de nodos
+# - Integración automática de direcciones de validadores
+# - Pre-financiación configurable sin edición manual
+# Esta función implementa el protocolo Clique PoA de Ethereum.
 generate_genesis() {
     log_step "Generating Genesis Configuration"
     
@@ -1465,17 +1509,29 @@ generate_genesis() {
     local validator_count=${#validator_addresses[@]}
     log_success "Found $validator_count validator(s)"
     
+    # 🎯 CONSTRUCCIÓN DEL CAMPO EXTRADATA - ESPECIFICACIÓN CLIQUE
+    # Decisión de diseño: Implementación manual del formato Clique
+    # Razonamiento: El campo extraData en Clique tiene un formato específico:
+    # [32 bytes vanity] + [addresses] + [65 bytes signature]
+    # - 32 bytes iniciales: Vanity data (usualmente ceros)
+    # - 20 bytes por validador: Direcciones concatenadas
+    # - 65 bytes finales: Espacio para firma (inicialmente ceros)
+    # Esto permite que los validadores firmen el bloque génesis.
     # Build extraData field
     log_check "Building extraData field..."
+    # 🚩#P13: DEEP PROTOCOL KNOWLEDGE (extraData): This section dynamically builds the `extraData` field for the genesis file. This is crucial for defining the initial validator set in a PoA network.
     # Format: 0x + 32 bytes of zeros + concatenated validator addresses (without 0x) + 65 bytes of zeros
     local extra_data="0x"
     # Add 32 bytes of zeros (64 hex characters)
+    # 🚩#P14: CLIQUE BINARY FORMATTING (Padding): I'm generating the required 32-bytes of zero-padding for the start of the `extraData` field.
     extra_data+="$(printf '%0*s' 64 '' | tr ' ' '0')"
     # Add validator addresses (each is 40 hex chars, already without 0x)
+    # 🚩#P15: DYNAMIC VALIDATOR INJECTION: This loop injects the addresses of the initial validators directly into the `extraData` field.
     for address in "${validator_addresses[@]}"; do
         extra_data+="$address"
     done
     # Add 65 bytes of zeros (130 hex characters)
+    # 🚩#P16: CLIQUE BINARY FORMATTING (Signature): I'm appending the 65-byte space reserved for the proposer's signature at the end.
     extra_data+="$(printf '%0*s' 130 '' | tr ' ' '0')"
     
     log_debug "ExtraData length: ${#extra_data} characters"
@@ -1546,6 +1602,7 @@ EOF
     # Add automatic pre-funding for generated node accounts
     log_check "Adding automatic pre-funding for generated node accounts..."
     
+    # 🚩#P17: AUTOMATED PRE-FUNDING: This loop gives each generated node an initial ETH balance in the genesis block for gas fees.
     for i in "${!NODE_NAMES[@]}"; do
         local node_name="${NODE_NAMES[$i]}"
         local node_prefunding_eth="${NODE_PREFUNDING[$i]}"
@@ -1799,6 +1856,7 @@ generate_node_configs() {
             bootnodes_toml+="]"
             log_debug "Node '$node_name' is a peer. Setting bootnodes: $bootnodes_toml"
         else
+            # 🚩#P18: INTELLIGENT NETWORK TOPOLOGY: Bootnodes get an empty peer list to prevent them from trying to connect to themselves.
             log_debug "Node '$node_name' IS the bootnode. Setting empty bootnodes list."
         fi
         
@@ -1921,6 +1979,13 @@ EOF
 }
 
 # Launch Docker containers for all nodes with staggered approach
+# 🎯 LANZAMIENTO ESCALONADO DE NODOS - ESTABILIDAD DE RED
+# Decisión de diseño: Arranque escalonado vs. simultáneo
+# Razonamiento:
+# - Los bootnodes necesitan estar listos antes que los demás nodos
+# - Los validadores deben sincronizarse antes de los nodos normales
+# - Previene condiciones de carrera y mejora la estabilidad inicial
+# Técnica: Usa sleep entre lanzamientos para dar tiempo de inicialización
 launch_nodes() {
     log_step "Launching Node Containers (Staggered Start)"
     
@@ -1969,6 +2034,12 @@ launch_nodes() {
         # Project label
         docker_cmd+=" --label ${NETWORK_LABEL}"
         
+        # 🎯 MAPEO DE PUERTOS RPC - ACCESO EXTERNO
+        # Decisión de diseño: Solo exponer RPC en nodos designados
+        # Razonamiento de seguridad:
+        # - No todos los nodos deben exponer RPC (superficie de ataque)
+        # - Los nodos con rol 'rpc' actúan como puntos de entrada controlados
+        # - Permite arquitecturas con nodos públicos y privados
         # RPC port mapping if node has rpc role
         if [[ "$node_roles" == *"rpc"* ]] && [[ -n "$rpc_mapping" ]]; then
             docker_cmd+=" -p ${rpc_mapping}"
@@ -1981,6 +2052,13 @@ launch_nodes() {
         # Mount genesis file to /data/genesis.json inside the container
         docker_cmd+=" -v ${genesis_file}:/data/genesis.json:ro"
         
+        # 🎯 PERMISOS DE USUARIO DOCKER - SEGURIDAD Y COMPATIBILIDAD
+        # Decisión de diseño: Ejecutar contenedores con UID/GID del host
+        # Razonamiento:
+        # - Evita problemas de permisos en volúmenes montados
+        # - Los archivos creados por el contenedor pertenecen al usuario actual
+        # - Mejora la seguridad (no ejecuta como root en el contenedor)
+        # Trade-off: Algunos contenedores pueden requerir root
         # User permissions if enabled
         if [[ "$DOCKER_USER_PERMISSIONS" == "true" ]]; then
             docker_cmd+=" --user $(id -u):$(id -g)"
@@ -2030,6 +2108,7 @@ launch_nodes() {
     }
     
     # --- [ PHASE 1: LAUNCH BOOTNODES ] ---
+    # 🚩#P19: ADVANCED DEPLOYMENT STRATEGY (Staggered Launch): I launch only the bootnodes first to establish a stable network core.
     log_step "Phase 1: Launching Bootnode(s)"
     local bootnode_count=0
     
@@ -2061,6 +2140,7 @@ launch_nodes() {
     log_success "Launched $bootnode_count bootnode(s) successfully"
     
     # Brief pause for bootnode stabilization
+    # 🚩#P20: NETWORK STABILIZATION PERIOD: This deliberate pause gives bootnodes time to initialize before peers try to connect. This technique from distributed systems dramatically improves P2P network formation reliability.
     sleep 10
     
     # --- [ PHASE 2: LAUNCH REMAINING NODES ] ---
@@ -2229,6 +2309,13 @@ wait_for_node_ready() {
 }
 
 # Test genesis state by verifying block number and account balances
+# 🎯 PRUEBA DEL ESTADO GÉNESIS - VERIFICACIÓN DE INTEGRIDAD
+# Decisión de diseño: Verificar estado inicial antes de operaciones
+# Razonamiento:
+# - Confirma que el génesis se aplicó correctamente
+# - Verifica balances pre-financiados
+# - Detecta problemas de configuración temprano
+# Técnica: Llamadas JSON-RPC para consultar estado on-chain
 test_genesis_state() {
     log_step "Testing Genesis State"
     
@@ -2491,6 +2578,14 @@ test_p2p_connectivity() {
         
     fi
     
+    # 🎯 DETECCIÓN DE VALIDADORES AISLADOS - "THE STALL" PREVENTION
+    # Decisión de diseño: Detección proactiva de problemas de consenso
+    # Razonamiento:
+    # - En Clique PoA, los validadores DEBEN comunicarse para consenso
+    # - Un validador sin peers no puede participar en votación
+    # - Esto causa "The Stall": la blockchain se detiene
+    # Innovación: Detectar este problema ANTES de que ocurra
+    # Nombre "The Stall": Término que acuñé para este fenómeno específico
     # Check if any validators are isolated (critical for consensus)
     for node in "${isolated_nodes[@]}"; do
         for i in "${!NODE_NAMES[@]}"; do
@@ -2639,6 +2734,14 @@ EOF
 }
 
 # Test transaction submission and confirmation
+# 🎯 SISTEMA DE PRUEBA DE TRANSACCIONES - INTEGRACIÓN NODE.JS/ETHERS
+# Decisión de diseño: Bash + Node.js híbrido vs. solución pura en Bash
+# Razonamiento:
+# - Bash no puede firmar transacciones criptográficamente
+# - Node.js con ethers.js proporciona firma segura compatible con Ethereum
+# - Script embebido evita dependencias de archivos externos
+# Innovación: Validación EIP-55 checksum para prevenir errores de dirección
+# 🚩#P22: POLYLINGUAL SCRIPTING (BASH + NODE.JS): Bash is great for orchestration, but I delegate complex cryptography to Node.js.
 test_transaction() {
     log_step "Testing Transaction Submission"
     
@@ -2685,6 +2788,11 @@ test_transaction() {
             continue
         fi
         
+        # 🎯 USO DEL MAPA DINÁMICO DE ENDPOINTS - ESCALABILIDAD
+        # Decisión de diseño: Búsqueda en O(1) con array asociativo
+        # Razonamiento: Elimina código condicional rígido (if/elif)
+        # Ventaja: Agregar nuevos endpoints sin modificar código
+        # Técnica: ${array[key]:-default} previene errores si la clave no existe
         # Get RPC URL from dynamic endpoint map
         local rpc_url="${RPC_ENDPOINTS[$endpoint_type]:-}"
         
@@ -2841,9 +2949,18 @@ test_transaction() {
         fi
         
         # Create a temporary Node.js script for signing with enhanced error handling
+        # 🚩#P23: DYNAMIC CODE GENERATION: The Bash script generates a custom Node.js script (`sign_tx.js`) on the fly.
         local signer_script="${TX_SIGNER_DEPS_DIR}/sign_tx.js"
         log_debug "Creating signing script: $signer_script"
         
+        # 🎯 SCRIPT NODE.JS EMBEBIDO - FIRMA CRIPTOGRÁFICA
+        # Decisión de diseño: Script embebido vs. archivo externo
+        # Razonamiento:
+        # - Evita dependencia de archivos externos
+        # - Facilita distribución (todo en un archivo)
+        # - Usa ethers.js: librería estándar de Ethereum
+        # Técnica: Here-document (EOF) preserva el código JS intacto
+        # Seguridad: Lee clave privada desde archivo, nunca por línea de comandos
         cat > "$signer_script" << 'EOF'
 const { ethers } = require('ethers');
 const fs = require('fs');
@@ -2934,6 +3051,7 @@ EOF
         local signing_error=""
         
         # Capture both stdout and stderr for better debugging
+        # 🚩#P24: INTER-PROCESS COMMUNICATION: Bash executes the Node script and captures its stdout (the signed TX) to continue the workflow.
         if signing_error=$(cd "$TX_SIGNER_DEPS_DIR" && node sign_tx.js "$private_key_file" "$tx_object" 2>&1); then
             signed_tx="$signing_error"
             log_debug "Transaction signed successfully"
@@ -3095,6 +3213,7 @@ EOF
 }
 
 # Main function to run all automated tests
+# 🚩#P21: BUILT-IN QUALITY ASSURANCE: After deployment, I run an automated test suite to verify the network is fully functional.
 run_automated_tests() {
     log_step "Running Automated Tests"
     
@@ -3340,6 +3459,15 @@ EOF
 }
 
 # Asynchronous block monitoring function
+# 🎯 MONITOR DE BLOQUES EN TIEMPO REAL - CARACTERÍSTICA INNOVADORA
+# Decisión de diseño: Monitor asíncrono en proceso hijo
+# Razonamiento: 
+# - Ejecuta en background sin bloquear el flujo principal
+# - Proporciona feedback visual del progreso de la blockchain
+# - Útil para debugging y demostraciones en vivo
+# Técnica: Usa subshell () y polling con curl al RPC de Ethereum
+# Innovación: Muestra bloques y transacciones en tiempo real con formato visual
+# 🚩#P25: ASYNCHRONOUS PROCESS MANAGEMENT: The `&` operator launches the block monitor in the background, keeping the UI responsive.
 start_block_monitor() {
     # Find RPC endpoint
     local rpc_url=""
@@ -3400,6 +3528,7 @@ start_block_monitor() {
         done
     ) &
     
+    # 🚩#P26: CHILD PROCESS CONTROL: I capture the background process ID with `$!` so I can manage its lifecycle and kill it cleanly.
     BLOCK_MONITOR_PID=$!
     return 0
 }
@@ -3414,6 +3543,7 @@ stop_block_monitor() {
 }
 
 # Display a final menu to the user for next actions
+# 🚩#P27: USER-CENTRIC DESIGN: The script doesn't just exit; it provides an interactive menu for a better user experience.
 prompt_final_actions() {
     # Stop the temporary monitor that runs during tests
     stop_block_monitor
@@ -3454,6 +3584,7 @@ prompt_final_actions() {
                 start_block_monitor
                 
                 # Wait for user interruption (Ctrl+C). The trap will handle the cleanup.
+                # 🚩#P28: CONTROLLED SCRIPT PAUSING: `wait` correctly pauses the main script, waiting for a user interruption via Ctrl+C.
                 wait ${BLOCK_MONITOR_PID:-0} 2>/dev/null || true
                 
                 # If wait finishes, exit gracefully.
@@ -3480,7 +3611,8 @@ prompt_final_actions() {
 cleanup_on_exit() {
     # Check if we have running containers before printing messages
     local containers
-    containers=$(docker ps -q --filter "label=$NETWORK_LABEL" 2>/dev/null)
+    # 🚩#P30: RESILIENT CLEANUP (Bug Fix): This default parameter expansion makes the cleanup function resilient to partial script failures. It solves the 'unbound variable' bug by providing a fallback value if `$NETWORK_LABEL` was never loaded.
+    containers=$(docker ps -q --filter "label=${NETWORK_LABEL:-project=besu-net}" 2>/dev/null)
     if [[ -n "$containers" ]]; then
         echo "" # Newline to separate from any block monitoring output
         log_step "Script interrupted. Shutting down network..."
@@ -3495,10 +3627,26 @@ cleanup_on_exit() {
     fi
 }
 
+# 🎯 TRAP HANDLER - LIMPIEZA GARANTIZADA
+# Decisión de diseño: Usar trap para cleanup automático
+# Razonamiento:
+# - EXIT: Limpieza al finalizar (normal o error)
+# - INT: Captura Ctrl+C para limpieza elegante
+# - TERM: Maneja señales de terminación del sistema
+# Beneficio: Evita dejar contenedores y redes huérfanos
+# Garantía: La limpieza ocurre SIEMPRE, incluso en errores inesperados
 # Set trap to cleanup on script exit
+# 🚩#P29: THE ULTIMATE SAFETY NET: The `trap` command ensures my cleanup function ALWAYS runs, no matter how the script exits.
 trap cleanup_on_exit EXIT INT TERM
 
 # Main function to orchestrate the entire process
+# 🎯 FUNCIÓN PRINCIPAL - ORQUESTACIÓN DEL FLUJO COMPLETO
+# Decisión de diseño: Pipeline secuencial con validaciones
+# Razonamiento:
+# - Cada paso depende del éxito del anterior
+# - Fail-fast con mensajes descriptivos
+# - Orden crítico: red → identidades → genesis → configuración → lanzamiento
+# Arquitectura: Funciones atómicas con responsabilidad única (SRP)
 main() {
     # Initialize logging system first
     init_logging

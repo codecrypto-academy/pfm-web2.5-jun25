@@ -1,4 +1,5 @@
 export const PROJECT_LABEL = 'besu-blockchain';
+export const CHAIN_ID = 20190606;
 export const NETWORK_NAME = "besu-network";
 export const NETWORK_SUBNET = "172.25.0.0/16";
 export const NETWORK_GATEWAY = "172.25.0.1";

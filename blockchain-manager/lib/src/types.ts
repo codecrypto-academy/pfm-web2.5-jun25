@@ -13,3 +13,4 @@ export interface NodeIdentityFiles {
     addressFile: string;
     enodeFile: string;
 }
+

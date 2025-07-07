@@ -1,12 +1,9 @@
 import Docker from "dockerode";
-// import fs from "fs";
 import { PROJECT_LABEL } from "../constants";
-import { createBesuNode } from "../services/createNode";
-// import { generateNodeIdentity } from "../services/generateNodeIdentity";
+import { createBesuNode } from "../services/createBesuNode";
 import { BesuNodeConfig } from "../types";
 
 const CONTAINER_ID = "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567";
-// jest.mock("../services/generateNodeIdentity");
 
 describe('createNode', () => {
     beforeEach(() => {
@@ -38,23 +35,9 @@ describe('createNode', () => {
         } as Partial<Docker.Container> as Docker.Container;
         jest.spyOn(docker, 'createContainer').mockResolvedValue(mockContainer);
 
-        // const mockPrivateKey = "mock-private-key";
-        // (generateNodeIdentity as jest.Mock).mockReturnValue({
-        //     privateKey: mockPrivateKey,
-        // });
-        // fs.existsSync = jest.fn();
-        // fs.mkdirSync = jest.fn();
-        // fs.writeFileSync = jest.fn();
-
-
-
         const containerId = await createBesuNode(docker, nodeConfigStub, nodeIdentityFilesStub);
 
         expect(containerId).toBe(CONTAINER_ID);
-        // expect(generateNodeIdentity).toHaveBeenCalledWith(nodeConfigStub.network.ip);
-        // expect(fs.existsSync).toHaveBeenCalledWith(`${nodeIdentityPath}/${nodeConfigStub.name}`);
-        // expect(fs.mkdirSync).toHaveBeenCalledWith(`${nodeIdentityPath}/${nodeConfigStub.name}`, { recursive: true });
-        // expect(fs.writeFileSync).toHaveBeenCalledWith(`${nodeIdentityPath}/${nodeConfigStub.name}/key.priv`, mockPrivateKey);
         expect(docker.createContainer).toHaveBeenCalledWith({
             Image: "hyperledger/besu:latest",
             name: nodeConfigStub.name,

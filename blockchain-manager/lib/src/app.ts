@@ -1,4 +1,5 @@
 import Docker from "dockerode";
+import fs from "fs";
 import {
     BOOTNODE_IP,
     BOOTNODE_NAME,
@@ -8,12 +9,15 @@ import {
     MINERNODE_PORT,
     NETWORK_GATEWAY,
     NETWORK_NAME,
-    NETWORK_SUBNET
+    NETWORK_SUBNET,
+    CHAIN_ID
 } from "./constants";
-import { createBesuNode } from "./services/createNode";
+import { createBesuNode } from "./services/createBesuNode";
 import { ensureNetworkExists } from "./services/ensureNetworkExists";
 import { BesuNodeConfig } from "./types";
 import { createNodeIdentityFiles } from "./services/createNodeIdentityFiles";
+import { createCliqueGenesisFile } from "./services/cliqueGenesisFile";
+import { fstat } from "fs";
 
 const docker = new Docker();
 
@@ -39,6 +43,15 @@ const docker = new Docker();
         hostPort: MINERNODE_PORT,
     };
     const minernodeIdentityFiles = createNodeIdentityFiles(minernodeConfig);
+
+    const validatorAddress = fs.readFileSync(minernodeIdentityFiles.addressFile, { encoding: 'utf-8' });
+    createCliqueGenesisFile({
+        chainId: CHAIN_ID,
+        network: NETWORK_NAME,
+        initialValidators: [`0x${validatorAddress}`]
+    });
+
+    // create config.toml
 
     const containerId = await createBesuNode(docker, bootnodeConfig, bootnodeIdentityFiles);
 

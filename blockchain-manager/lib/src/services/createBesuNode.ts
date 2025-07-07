@@ -1,18 +1,10 @@
 import Docker from "dockerode";
-import fs from "fs";
 import { PROJECT_LABEL } from "../constants";
 import { BesuNodeConfig, NodeIdentityFiles } from "../types";
-import { generateNodeIdentity } from "./generateNodeIdentity";
 
 export async function createBesuNode(docker: Docker, nodeConfig: BesuNodeConfig, nodeIdentityFiles: NodeIdentityFiles): Promise<string> {
-    // const { address, enode, privateKey, publicKey } = generateNodeIdentity(nodeConfig.network.ip);
 
     const nodeIdentityPath = `${process.cwd()}/${nodeConfig.network.name}`;
-    // if (!fs.existsSync(`${nodeIdentityPath}/${nodeConfig.name}`)) {
-    //     fs.mkdirSync(`${nodeIdentityPath}/${nodeConfig.name}`, { recursive: true });
-    // }
-
-    // fs.writeFileSync(`${nodeIdentityPath}/${nodeConfig.name}/key.priv`, privateKey);
 
     const containerConfig: Docker.ContainerCreateOptions = {
         Image: "hyperledger/besu:latest",

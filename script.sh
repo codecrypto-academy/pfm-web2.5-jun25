@@ -1,87 +1,155 @@
-# borrar todo
-rm -rf networks
-docker rm -f $(docker ps -aq --filter "label=network=besu-network") 2>/dev/null || true
-docker network rm besu-network 2>/dev/null || true
+#!/bin/bash
 
-# Set network configuration
-NETWORK="172.24.0.0/16"
-BOOTNODE_IP="172.24.0.20"
+# Usage: ./deploy.sh <NUM_NODES>
+# Example: ./deploy.sh 3
 
-# crear directorio
-mkdir -p networks/besu-network
+set -e
 
-# crear network in docker 
-docker network create besu-network \
-  --subnet $NETWORK \
-  --label network=besu-network \
-  --label type=besu
+NODES=${1:-2}
+NETWORK_NAME="besu-network"
+NETWORK_DIR="networks/$NETWORK_NAME"
+SUBNET="172.25.0.0/16"
+BOOTNODE_IP="172.25.0.10"
 
-# crear clave privada bootnode
-# Generate private key public key and address and 
-cd networks/besu-network
-mkdir -p bootnode
-cd bootnode
-node ../../../index.mjs create-keys 172.24.0.21 
-cd ../../..
+echo "Limpiando red Docker y cualquier base de datos previa..."
+docker ps -aq --filter "label=network=$NETWORK_NAME" | xargs docker rm -f 2>/dev/null || true
+docker network rm $NETWORK_NAME 2>/dev/null || true
+rm -rf $NETWORK_DIR
+find . -type d -name "data" -exec rm -rf {} + 2>/dev/null || true
+
+echo "Creando estructura del proyecto y red Docker..."
+mkdir -p $NETWORK_DIR
+docker network create --subnet=$SUBNET --label network=$NETWORK_NAME --label type=besu $NETWORK_NAME
+
+echo "Verificando Node.js y dependencias..."
+if ! command -v node &> /dev/null; then
+  echo "❌ Node.js no está instalado. Instálalo antes de continuar."
+  exit 1
+fi
+if [ ! -d node_modules ]; then
+  npm install elliptic ethers keccak256
+fi
+
+# Crear directorio para la red (En directorio actual)
+mkdir ./besu-network
+
+# Crear directorio para cada nodo.
+mkdir ./besu-network/miner-node
+mkdir ./besu-network/rpc-node
+mkdir ./besu-network/bootnode
+
+# Crear par de llaves para cada nodo
+node ./index.mjs createKeys "./besu-network/miner-node"
+node ./index.mjs createKeys "./besu-network/rpc-node"
+
+# Crear llaves y enode para el bootnode
+node ./createPrivatePublicKeys.mjs createKeysAndEnode "172.25.0.10" "30303" "./besu-network/bootnode"
 
 
 
-# Create genesis.json with Clique PoA configuration
-cat > networks/besu-network/genesis.json << EOF
-{
-  "config": {
-    "chainId": 13371337,
-    "londonBlock": 0,
-    "clique": {
-              "blockperiodseconds": 4,
-              "epochlength": 30000,
-              "createemptyblocks": true
+# Crear archivo génesis
+touch ./besu-network/genesis.json
+echo '{
+    "config": {
+        "chainId": 246700,
+        "londonBlock": 0,
+        "clique": {
+            "blockperiodseconds": 4,
+            "epochlenght": 30000,
+            "createemptyblocks": true  
+        }
+    },
+    "extraData": "'"0x0000000000000000000000000000000000000000000000000000000000000000$(cat ./besu-network/miner-node/address)0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"'",
+    "gasLimit": "0x1fffffffffffff",
+    "difficulty": "0x1",
+    "alloc": {
+        "'"0x$(cat ./besu-network/miner-node/address)"'": {
+            "balance": "0x20000000000000000000000000000000000000000000000000000000000"
+        }
     }
-  },
-  "extraData": "0x0000000000000000000000000000000000000000000000000000000000000000$(cat networks/besu-network/bootnode/address)0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-  "gasLimit": "0x1fffffffffffff",
-  "difficulty": "0x1",
-  "alloc": {
-    "$(cat networks/besu-network/bootnode/address)": {
-      "balance": "0x200000000000000000000000000000000000000000000000000000000000000"
-    }
-  }
-}
-EOF
+}' > ./besu-network/genesis.json
 
-# Create config.toml for Besu node configuration
-cat > networks/besu-network/config.toml << EOF
+# Crear archivo config.toml
+touch ./besu-network/config.toml
+echo '
 genesis-file="/data/genesis.json"
-# Networking
+
 p2p-host="0.0.0.0"
-p2p-port=30303
+p2p-port="30303"
 p2p-enabled=true
-# JSON-RPC
+
+bootnodes=[
+"'"$(cat ./besu-network/bootnode/enode)"'"
+]
+
+discovery-enabled=true
 
 rpc-http-enabled=true
 rpc-http-host="0.0.0.0"
 rpc-http-port=8545
 rpc-http-cors-origins=["*"]
-rpc-http-api=["ETH","NET","CLIQUE","ADMIN", "TRACE", "DEBUG", "TXPOOL", "PERM"]
-host-allowlist=["*"]            
-EOF
+rpc-http-api=["ADMIN","ETH", "CLIQUE", "NET", "TRACE", "DEBUG", "TXPOOL", "PERM"]
+host-allowlist=["*"]
 
+' > ./besu-network/config.toml
 
-docker run -d \
-  --name besu-network-bootnode \
-  --label nodo=bootnode \
-  --label network=besu-network \
-  --ip ${BOOTNODE_IP} \
-  --network besu-network \
-  -p 8888:8545 \
-  -v $(pwd)/networks/besu-network:/data \
-  hyperledger/besu:latest \
-  --config-file=/data/config.toml \
-  --data-path=/data/bootnode/data \
-  --node-private-key-file=/data/bootnode/key.priv \
-  --genesis-file=/data/genesis.json
+# Crear archivo bootnode-config.toml
+touch ./besu-network/bootnode-config.toml
 
-# DST=$(cat address)
-# PRIVATE_KEY=$(cat networks/besu-network/bootnode/key.priv)
+echo '
+genesis-file="/data/genesis.json"
 
-node ./index.mjs create-keys 192.168.1.100
+p2p-host="0.0.0.0"
+p2p-port="30303"
+p2p-enabled=true
+
+discovery-enabled=true
+
+rpc-http-enabled=true
+rpc-http-host="0.0.0.0"
+rpc-http-port=8545
+rpc-http-cors-origins=["*"]
+rpc-http-api=["ADMIN","ETH", "CLIQUE", "NET", "TRACE", "DEBUG", "TXPOOL", "PERM"]
+host-allowlist=["*"]
+
+' > ./besu-network/bootnode-config.toml
+
+# Levantar contenedor de nodo minero
+docker run -d --name miner-node --label besu-network --network besu-network --ip 172.25.0.3 \
+-v ./besu-network:/data hyperledger/besu:latest \
+--config-file=/data/config.toml \
+--data-path=/data/miner-node/data \
+--node-private-key-file=/data/miner-node/key
+
+sleep 5
+
+# Levantar contenedor de bootnode
+docker run -d --name bootnode --label besu-network --network besu-network --ip 172.25.0.10 \
+-v ./besu-network/:/data hyperledger/besu:latest \
+--config-file=/data/bootnode-config.toml \
+--data-path=/data/bootnode/data \
+--node-private-key-file=/data/bootnode/key
+
+# Levantar contenedor para nodo RPC
+docker run -d --name rpc-node --label besu-network --network besu-network --ip 172.25.0.4 \
+-p 1002:8545 \
+-v ./besu-network/:/data hyperledger/besu:latest \
+--config-file=/data/config.toml \
+--data-path=/data/rpc-node/data \
+--node-private-key-file=/data/rpc-node/key
+
+echo "Esperando que nodo1 esté listo..."
+until curl -s http://localhost:1002 > /dev/null; do
+  echo "⌛ Esperando a que rpc exponga el RPC en 1002..."
+  sleep 2
+done
+
+FROM_PRIV_KEY=$(cat ./besu-network/miner-node/key)
+TO_ADDRESS="0x$(cat ./besu-network/bootnode/address)"
+
+echo "💸 Enviando 0.01 ETH desde nodo1 a la cuenta dummy..."
+node index.mjs transfer $FROM_PRIV_KEY $TO_ADDRESS 0.01 http://localhost:1002
+sleep 2
+
+echo "💰 Verificando balance..."
+node index.mjs balance $TO_ADDRESS http://localhost:1002

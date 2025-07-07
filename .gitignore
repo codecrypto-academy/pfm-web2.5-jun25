@@ -1,11 +1,25 @@
-# Ignore everything inside wisdom
-wisdom/*
+# Ignore everything inside etc/wisdom
+etc/wisdom/*
 
-# But don't ignore the gemini folder inside wisdom
-!wisdom/gemini/
-!wisdom/gemini/**
+# But don't ignore the gemini folder inside etc/wisdom
+!etc/wisdom/gemini/
+!etc/wisdom/gemini/**
+
+# Ignore env_forwarding script
+script/env_forwarding
+
+# Ignore node_modules in frontback
+frontback/node_modules/
 
 # (Optional) Ignore common temporary files
 *.log
 *.tmp
 .DS_Store
+
+# Environment variables - contains sensitive information
+.env
+.env.local
+.env.*.local
+
+# Claude settings
+.claude/settings.local.json

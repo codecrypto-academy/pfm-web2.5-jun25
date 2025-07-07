@@ -1,0 +1,103 @@
+# ======================================================
+# 🌐 HYPERLEDGER BESU - CONFIGURACIÓN DE RED PRIVADA 🌐
+# ======================================================
+
+#    Topología y parámetros para una red Ethereum privada
+#    utilizando el cliente Hyperledger Besu y consenso Clique
+
+blockchain:
+  chainId: 123999
+  blockPeriodSeconds: 15
+  epochLength: 30000
+
+consensus:
+  type: "clique"
+
+network:
+  name: "besu-network"
+  subnet: "172.24.0.0/16"
+  label: "project=besu-net"
+
+docker:
+  image: "hyperledger/besu:latest"
+  user_permissions: true  # Use --user $(id -u):$(id -g)
+
+nodes:
+  # ⚠️ Be careful: using a validator can work. A high N, if tolerated by the machine, actually contributes to robustness — but setting it to 2 makes synchronization extremely difficult. The nodes have trouble agreeing on block timing down to the millisecond, which can lead to unstable behavior in edge cases.
+
+  # MULTI-ROLE NODE: Bootnode + Validator/Signer + RPC
+    # - Bootnode: P2P meeting point for discovery (enode URL)
+    # - Validator/Signer: Authorized account in Clique PoA (100% initial votes)
+    # - RPC: Interface for external applications via Docker port mapping
+  # This consolidation pattern is successful for simplifying automation and testing
+  - name: "rpc-validator-bootnode-0"
+    ip: "172.24.0.11"
+    roles: ["validator", "bootnode", "rpc"]
+    rpc_mapping: "9999:8545"  # RPC port exposed for external interaction (curl, MetaMask, Next.js)
+    prefunding: 2500  # ETH amount for this node's generated address
+    
+  # REMAINING NODES - Normal/Full Nodes
+  # Function: Join via bootnode, replicate blockchain, synchronize with peers
+  # No exposed RPC: Improves security and role clarity
+  - name: "data-replica-1"
+    ip: "172.24.0.12"
+    roles: []  # Normal node - replication and synchronization of entire blockchain history
+    prefunding: 300 
+    
+  - name: "data-replica-2"
+    ip: "172.24.0.13"
+    roles: []  # Normal node - replication and synchronization of entire blockchain history
+    prefunding: 200
+    
+  - name: "data-replica-3"
+    ip: "172.24.0.14"
+    roles: []  # Normal node - replication and synchronization of entire blockchain history
+    prefunding: 150
+
+# Pre-funded accounts (alloc in genesis)
+alloc:
+  - address: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B"  # Vitalik's test address
+    prefunding: "1000000000000000000000"  # 1000 ETH
+
+# RPC Configuration: Now automatically built from nodes with "rpc" role
+# No manual configuration needed - the script will find all RPC endpoints dynamically
+rpc:
+  timeout: 30000  # milliseconds
+
+# Path to the directory containing transaction signing dependencies (Node.js)
+# Path relative to config.yaml directory, resolved as absolute path by script.sh
+tx_signer_deps_dir: "../frontback/"
+
+# Test transactions to verify the network
+# The script will convert 'value_ether' to Wei
+testTransactions:
+  - from_node: "rpc-validator-bootnode-0"
+    to: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B"
+    value_ether: 1.5  
+    gas: "21000"
+    rpc_endpoint: "primary"
+    
+  - from_node: "rpc-validator-bootnode-0"
+    to: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"
+    value_ether: 0.5
+    gas: "21000"
+    rpc_endpoint: "primary"
+    
+  - from_node: "rpc-validator-bootnode-0"
+    to: "0x71c7656ec7ab88b098defb751b7401b5f6d8976f"
+    value_ether: 2.0
+    gas: "21000"
+    rpc_endpoint: "primary"
+
+# Additional configuration for automated tests
+automatedTests:
+  enabled: true
+  waitTimeout: 60  # seconds to wait for node availability
+  blockProductionTimeout: 30  # seconds to wait for block production
+  transactionTimeout: 60  # seconds to wait for transaction confirmation
+
+# Environment file generation
+envFile:
+  generate: true
+  path: "./env_forwarding/.env"
+  includeWarning: true

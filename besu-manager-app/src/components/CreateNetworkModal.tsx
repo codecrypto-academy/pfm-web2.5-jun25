@@ -62,15 +62,15 @@ export default function CreateNetworkModal({ isOpen, onClose, onNetworkCreated }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">
+          <h2 className="text-xl font-semibold text-white">
             Crear Nueva Red Docker
           </h2>
           <button
             onClick={handleClose}
             disabled={isCreating}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            className="text-gray-400 hover:text-gray-300 disabled:opacity-50"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -80,7 +80,7 @@ export default function CreateNetworkModal({ isOpen, onClose, onNetworkCreated }
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="networkName" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="networkName" className="block text-sm font-medium text-gray-300 mb-1">
               Nombre de la Red *
             </label>
             <input
@@ -91,15 +91,15 @@ export default function CreateNetworkModal({ isOpen, onClose, onNetworkCreated }
               placeholder="mi-red-besu"
               required
               disabled={isCreating}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:opacity-50"
+              className="w-full px-3 py-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-600 disabled:opacity-50 placeholder-gray-400"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-400 mt-1">
               Solo letras, números, guiones y guiones bajos
             </p>
           </div>
 
           <div>
-            <label htmlFor="driver" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="driver" className="block text-sm font-medium text-gray-300 mb-1">
               Driver de Red
             </label>
             <select
@@ -107,20 +107,20 @@ export default function CreateNetworkModal({ isOpen, onClose, onNetworkCreated }
               value={driver}
               onChange={(e) => setDriver(e.target.value)}
               disabled={isCreating}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:opacity-50"
+              className="w-full px-3 py-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-600 disabled:opacity-50"
             >
               <option value="bridge">Bridge (Recomendado)</option>
               <option value="host">Host</option>
               <option value="overlay">Overlay</option>
               <option value="macvlan">Macvlan</option>
             </select>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-400 mt-1">
               Bridge es el driver más común para redes locales
             </p>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-3">
+            <div className="bg-red-900 border border-red-700 rounded-md p-3">
               <div className="flex">
                 <div className="text-red-400">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -128,7 +128,7 @@ export default function CreateNetworkModal({ isOpen, onClose, onNetworkCreated }
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-red-800">{error}</p>
+                  <p className="text-sm text-red-300">{error}</p>
                 </div>
               </div>
             </div>
@@ -139,14 +139,14 @@ export default function CreateNetworkModal({ isOpen, onClose, onNetworkCreated }
               type="button"
               onClick={handleClose}
               disabled={isCreating}
-              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-600 border border-gray-500 rounded-md hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isCreating || !networkName.trim()}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {isCreating ? (
                 <>

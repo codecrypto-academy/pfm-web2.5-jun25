@@ -193,8 +193,9 @@ export async function POST(request: Request) {
         try {
           // Crear un nodeManager temporal para obtener el estado del bootnode
           const tempNodeManager = createBesuNodeManager('./temp-nodes');
-          // Extraer el nombre del nodo del contenedor (formato: {network}-{type}-besu-{name})
-          const nodeName = selectedBootnode.split('-besu-')[1];
+          // El selectedBootnode ya viene como el nombre del nodo (ej: "alex-miner")
+          // pero necesitamos el nombre sin el prefijo "besu-" para getNodeStatus
+          const nodeName = selectedBootnode.startsWith('besu-') ? selectedBootnode.substring(5) : selectedBootnode;
           const selectedNodeStatus = await tempNodeManager.getNodeStatus(nodeName);
           
           if (selectedNodeStatus && selectedNodeStatus.enodeUrl && selectedNodeStatus.enodeUrl !== 'P2P network initializing...') {

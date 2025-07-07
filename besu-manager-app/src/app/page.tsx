@@ -6,6 +6,7 @@ import CreateNetworkModal from '../components/CreateNetworkModal';
 import CreateNodeModal from '../components/CreateNodeModal';
 import DeleteNetworkModal from '../components/DeleteNetworkModal';
 import DeleteNodeModal from '../components/DeleteNodeModal';
+import MetaMaskConnectionModal from '../components/MetaMaskConnectionModal';
 
 interface DockerNetwork {
   id: string;
@@ -37,8 +38,10 @@ export default function Home() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isCreateNodeModalOpen, setIsCreateNodeModalOpen] = useState(false);
   const [isDeleteNodeModalOpen, setIsDeleteNodeModalOpen] = useState(false);
+  const [isMetaMaskModalOpen, setIsMetaMaskModalOpen] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState<DockerNetwork | null>(null);
   const [selectedNode, setSelectedNode] = useState<BesuNode | null>(null);
+  const [selectedNetworkForMetaMask, setSelectedNetworkForMetaMask] = useState<{network: DockerNetwork, rpcUrl: string, chainId: string} | null>(null);
 
   useEffect(() => {
     fetchNetworksAndNodes();
@@ -111,6 +114,40 @@ export default function Home() {
 
   const handleNodeDeleted = () => {
     fetchNetworksAndNodes();
+  };
+
+  const handleConnectToMetaMask = async (network: DockerNetwork) => {
+    const networkNodes = getNodesForNetwork(network.name);
+    const runningNode = networkNodes.find(node => node.status === 'running' && node.ports.length > 0);
+    
+    if (!runningNode) {
+      alert('No hay nodos ejecutándose en esta red para conectar con MetaMask');
+      return;
+    }
+    
+    // Extraer el puerto RPC del primer puerto disponible
+    const rpcPort = runningNode.ports.find(port => port.includes(':8545'))?.split(':')[0] || '8545';
+    const rpcUrl = `http://localhost:${rpcPort}`;
+    
+    try {
+      // Obtener información de la red incluyendo el chainId correcto
+      const response = await fetch(`/api/networks/${network.name}/info`);
+      if (!response.ok) {
+        throw new Error('Error obteniendo información de la red');
+      }
+      
+      const networkInfo = await response.json();
+      
+      setSelectedNetworkForMetaMask({
+        network,
+        rpcUrl,
+        chainId: networkInfo.chainId.toString()
+      });
+      setIsMetaMaskModalOpen(true);
+    } catch (error) {
+      console.error('Error obteniendo información de la red:', error);
+      alert('Error obteniendo información de la red para MetaMask');
+    }
   };
 
   if (loading) {
@@ -205,6 +242,15 @@ export default function Home() {
                           >
                             + Nodo
                           </button>
+                          {!['bridge', 'host', 'none'].includes(network.name) && (
+                            <button
+                              onClick={() => handleConnectToMetaMask(network)}
+                              className="px-3 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700"
+                              title="Conectar con MetaMask"
+                            >
+                              🦊 MetaMask
+                            </button>
+                          )}
                           {!['bridge', 'host', 'none'].includes(network.name) && (
                             <button
                               onClick={() => handleDeleteNetwork(network)}
@@ -357,6 +403,19 @@ export default function Home() {
             nodeId={selectedNode.id}
             networkId={selectedNode.networkId}
             isBootnode={selectedNode.isBootnode || false}
+          />
+        )}
+        
+        {selectedNetworkForMetaMask && (
+          <MetaMaskConnectionModal
+            isOpen={isMetaMaskModalOpen}
+            onClose={() => {
+              setIsMetaMaskModalOpen(false);
+              setSelectedNetworkForMetaMask(null);
+            }}
+            networkName={selectedNetworkForMetaMask.network.name}
+            chainId={selectedNetworkForMetaMask.chainId}
+            rpcUrl={selectedNetworkForMetaMask.rpcUrl}
           />
         )}
      </div>

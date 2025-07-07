@@ -562,3 +562,127 @@ npm test -- --testNamePattern="Account Management Tests"
 # Ejecutar tests específicos de validación
 npm test -- --testNamePattern="Should validate updateNetworkAccountsByName"
 ```
+
+## 🧪 Ejecución de Tests
+
+### ⚠️ **Importante: Tests Individuales Obligatorios**
+
+**Todos los tests de esta librería deben ejecutarse de forma individual, nunca en paralelo.** Esto es necesario porque:
+
+- Los tests crean y destruyen redes Docker reales
+- Requieren puertos específicos y recursos exclusivos
+- Pueden generar conflictos de red si se ejecutan simultáneamente
+- Necesitan tiempo para limpiar contenedores Docker entre ejecuciones
+
+### Comandos para Ejecutar Tests Individuales
+
+```bash
+# ❌ NO ejecutar todos los tests juntos (puede causar conflictos)
+npm test
+
+# ✅ Ejecutar tests específicos individualmente
+npm test -- --testNamePattern="Basic Network Creation"
+npm test -- --testNamePattern="should create a simple Besu network"
+npm test -- --testNamePattern="Node Update and Synchronization"
+npm test -- --testNamePattern="Account Management Tests"
+npm test -- --testNamePattern="Multi-Miner Network Expansion"
+
+# ✅ Ejecutar por archivo de test específico
+npm test _test_/besu.test.ts
+npm test _test_/signer-update-new.test.ts
+npm test _test_/multi-miner-expansion.test.ts
+
+# ✅ Ejecutar un test específico por nombre completo
+npm test -- --testNamePattern="should add nodes to existing network and validate integration"
+npm test -- --testNamePattern="should fail validation when adding second miner with its own signerAccount"
+npm test -- --testNamePattern="should successfully add two new miners with their respective signerAccounts"
+```
+
+### Tests Disponibles
+
+Esta librería incluye tests comprehensivos que validan diferentes aspectos de la funcionalidad de redes Besu:
+
+#### Tests Principales (`_test_/besu.test.ts`)
+
+**Propósito**: Validar funciones básicas de creación de redes y gestión de cuentas.
+
+```bash
+# Test básico de creación de red
+npm test -- --testNamePattern="should create a simple Besu network"
+
+# Test de gestión de cuentas
+npm test -- --testNamePattern="Account Management Tests"
+
+# Test de validaciones
+npm test -- --testNamePattern="Should validate updateNetworkAccountsByName"
+```
+
+#### Tests de Actualización de Nodos (`_test_/signer-update-new.test.ts`)
+
+**Propósito**: Validar la capacidad de agregar nuevos nodos a redes existentes y las validaciones de consenso Clique.
+
+```bash
+# Test de integración de nodos (agregar bootnode, miner y rpc)
+npm test -- --testNamePattern="should successfully add nodes to existing network"
+
+# Test de validación de consenso (debe fallar al agregar segundo miner con signerAccount propio)
+npm test -- --testNamePattern="should fail validation when adding second miner with its own signerAccount"
+```
+
+**¿Qué valida?**
+
+- ✅ Agregar nodos bootnode, miner y RPC a una red existente
+- ✅ Verificar que la red se mantiene estable después de agregar nodos
+- ❌ Detectar y fallar correctamente cuando se intenta agregar un segundo miner con su propio signerAccount (violación de consenso Clique)
+
+#### Tests de Expansión Multi-Miner (`_test_/multi-miner-expansion.test.ts`)
+
+**Propósito**: Validar que se puede expandir exitosamente una red con múltiples miners cuando se configuran correctamente.
+
+```bash
+# Test de expansión exitosa con múltiples miners (3 miners, cada uno con su signerAccount)
+npm test -- --testNamePattern="Multi-Miner Network Expansion"
+
+# Ejecutar el archivo completo de tests de expansión multi-miner
+npm test _test_/multi-miner-expansion.test.ts
+```
+
+**¿Qué valida?**
+
+- ✅ Crear una red inicial con 1 miner
+- ✅ Expandir la red a 3 miners con signerAccounts únicos
+- ✅ Verificar que todos los miners tienen asociaciones correctas miner-signerAccount
+- ✅ Confirmar que el consenso Clique funciona correctamente con múltiples miners
+- ✅ Validar la sincronización y estabilidad de la red expandida
+
+### Resumen de Validaciones
+
+| Test                           | Tipo       | Resultado Esperado | Tiempo Aprox. |
+| ------------------------------ | ---------- | ------------------ | ------------- |
+| Basic Network Creation         | Funcional  | ✅ PASS            | 30-60s        |
+| Account Management             | Validación | ✅ PASS            | 15-30s        |
+| Node Integration               | Funcional  | ✅ PASS            | 90-120s       |
+| Consensus Validation (Failure) | Validación | ❌ FAIL (esperado) | 90-120s       |
+| Multi-Miner Expansion          | Funcional  | ✅ PASS            | 120-180s      |
+
+### Tiempos de Ejecución Esperados
+
+- **Tests básicos**: 30-60 segundos
+- **Tests de actualización de nodos**: 1.5-2.5 minutos
+- **Tests de integración completa**: 2-3 minutos
+
+### Troubleshooting
+
+Si encuentras errores al ejecutar tests:
+
+```bash
+# Limpiar contenedores Docker antes de ejecutar tests
+docker container prune -f
+docker network prune -f
+
+# Verificar que Docker esté ejecutándose
+docker ps
+
+# Ejecutar test específico con más información de debug
+npm test -- --testNamePattern="nombre-del-test" --verbose
+```

@@ -1,4 +1,5 @@
 import { CryptoLib, FileService, BesuNode, BesuNetwork, BesuNetworkConfig, BesuNodeDefinition, isSubnetAvailable, ethers } from '../src/create-besu-networks';
+import { BesuNetworkUpdater } from '../src/update-besu-networks';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -905,7 +906,7 @@ describe('Account Management Tests', () => {
             console.log('✅ Red destruida y recursos liberados');
 
         } catch (error) {
-            console.error('❌ Error creating network:', error);
+            console.error('❌ Error creando red:', error);
             
             // Intentar limpiar en caso de error
             try {

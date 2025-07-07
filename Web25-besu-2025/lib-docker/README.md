@@ -107,10 +107,12 @@ networks/
 └── mi-red/
     ├── config.toml     # Configuración Besu
     ├── genesis.json    # Bloque génesis
-    └── nodes/
-        ├── bootnode/
-        ├── miner/
-        └── rpc/
+    └── nodos (bootnode / miner / rpc / fullnode)
+      ├── data (base de datos de la blockchain)
+      ├── address
+      ├── key
+      ├── publicKey
+      └── enode (si es bootnode)
 ```
 
 ### Ejemplo de config.toml
@@ -194,6 +196,42 @@ getNodeMetrics(network: string, node: string): Promise<Metrics>
 4. Push a la rama
 5. Crear Pull Request
 
-## Licencia
+## Tests Unitarios
 
-[Especificar la licencia]
+La biblioteca incluye una suite completa de tests unitarios para verificar su funcionamiento correcto. Los tests están implementados utilizando Jest, el framework de testing de NodeJS.
+
+### Script de Prueba
+
+El archivo principal de tests `CryptoLib.test.ts` se encuentra en la carpeta `__tests__`. Este script verifica el funcionamiento correcto de la librería y es especialmente útil cuando se realizan modificaciones para asegurar que todo sigue funcionando como se espera.
+
+### Ejecución de Tests
+
+Para ejecutar los tests, use el siguiente comando en la terminal:
+
+```bash
+npm test
+```
+
+También puede ejecutar los tests en modo watch (útil durante el desarrollo) con:
+
+```bash
+npm run test:watch
+```
+
+O generar un informe de cobertura de código con:
+
+```bash
+npm run test:coverage
+```
+
+### Prueba efectuada con éxito
+Si todos las pruebas pasan, estaran en verde :
+
+![pruebas jest efectuada con éxito](src/__tests__/pruebas.png)
+
+### Modificación en la librería
+
+Si realiza cambios en la librería, asegúrese de:
+1. Actualizar los tests correspondientes en `CryptoLib.test.ts`
+2. Ejecutar la suite completa de tests antes de confirmar los cambios
+3. Verificar que la cobertura de código se mantiene en niveles aceptables

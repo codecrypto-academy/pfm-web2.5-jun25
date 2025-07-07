@@ -5,7 +5,7 @@ import keccak256 from 'keccak256';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-const __dirname = path.resolve();
+const rootDir = path.resolve();
 
 export function executeCommand(command: string): string {
     try {
@@ -46,7 +46,7 @@ export interface KeyPair {
 }
 
 export class DockerNetwork {
-    private static readonly BASE_PATH = path.resolve(__dirname, "networks");
+    private static readonly BASE_PATH = path.resolve(rootDir, "networks");
     private _networkData: any;
     private _name: string;
     private _fileService: FileService;
@@ -61,8 +61,8 @@ export class DockerNetwork {
         try {
             // Get network metadata from docker inspect
             const networkData = JSON.parse(executeCommand(`docker network inspect ${name}`));
-            console.log("\x1b[33m%s\x1b[0m", `Network data:`);
-            console.log(networkData);
+            //console.log("\x1b[33m%s\x1b[0m", `Network data:`);
+            //console.log(networkData);
             this._networkData = networkData;
 
             // Read chain ID from genesis file if it exists
@@ -71,7 +71,7 @@ export class DockerNetwork {
                 const genesis = JSON.parse(genesisContent);
                 this._chainId = genesis.config.chainId;
             } catch (error) {
-                console.log(`Could not read genesis file: ${error}`);
+                //console.log(`Could not read genesis file: ${error}`);
                 this._chainId = 1337; // default
             }
 
@@ -86,7 +86,15 @@ export class DockerNetwork {
 
     private _populateExistingNodes() {
         try {
-            const containersJson = executeCommand(`docker inspect $(docker ps -aq --filter "network=${this._name}")`);
+            // Get container IDs first
+            const containerIds = executeCommand(`docker ps -aq --filter "network=${this._name}"`).trim();
+            
+            // Only proceed if there are containers
+            if (!containerIds) {
+                return;
+            }
+            
+            const containersJson = executeCommand(`docker inspect ${containerIds}`);
             const containers = JSON.parse(containersJson);
             
             for (const container of containers) {
@@ -285,15 +293,18 @@ bootnodes=["${bootnode}"]
 
         // remove containers from docker network
         try {
-            executeCommand(`docker rm -f $(docker ps -aq --filter "network=${name}")`);
+            executeCommand(`docker rm -f $(docker ps -aq --filter "network=${name}") 2>/dev/null || true`);
+            // Wait for containers to be removed
+            await new Promise(resolve => setTimeout(resolve, 3000));
         } catch (error) {
             console.log(`Error removing containers from network: ${error}`);
         }
-        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // remove docker network
         try {
-            executeCommand(`docker network rm ${name}`);
+            executeCommand(`docker network rm ${name} 2>/dev/null || true`);
+            // Wait for network to be removed
+            await new Promise(resolve => setTimeout(resolve, 3000));
         } catch (error) {
             console.log(`Error removing network: ${error}`);
         }
@@ -307,7 +318,7 @@ bootnodes=["${bootnode}"]
     ): Promise<void> {
         // Remove existing container if it exists
         try {
-            executeCommand(`docker rm -f ${this._name}-${nodeName}`);
+            executeCommand(`docker rm -f ${this._name}-${nodeName} 2>/dev/null || true`);
         } catch (error) {
             console.log(`Container ${this._name}-${nodeName} doesn't exist or couldn't be removed: ${error}`);
         }
@@ -364,7 +375,7 @@ bootnodes=["${bootnode}"]
                     --genesis-file=/data/genesis.json`;
             } else if (nodeType === "miner") {
                 // Read miner address for coinbase
-                const minerAddress = await this._fileService.readFile(this._name, "miner/address");
+                const minerAddress = await this._fileService.readFile(this._name, `${nodeName}/address`);
                 
                 dockerCommand = `docker run -d \
                     --name ${this._name}-${nodeName} \
@@ -439,28 +450,83 @@ bootnodes=["${bootnode}"]
     async addMiner(name: string, port: string, ip?: string): Promise<void> {
         await this.addNode(name, 'miner', port, ip);
         
-        // Wait for miner to be ready
-        await this._sleep(2500);
+        // Wait longer for miner to be ready and synced
+        await this._sleep(7500);
         
-        // Add the miner as a signatory in Clique consensus via bootnode
+        // Add miner as a signatory in Clique consensus
         try {
-            const bootnodePort = this._besuNodes.find(node => node.type === 'bootnode')?.port;
-            if (!bootnodePort) {
-                throw new Error('Bootnode not found - cannot propose miner');
+            // Get existing miner nodes (excluding the new one)
+            const existingMiners = this._besuNodes.filter(node => 
+                node.type === 'miner' && node.port !== port
+            );
+
+            // If there are no existing miners, the new miner is automatically a signer (from genesis)
+            if (existingMiners.length === 0) {
+                console.log('First miner - no proposals needed');
+                return;
             }
 
-            const provider = new ethers.JsonRpcProvider(`http://localhost:${bootnodePort}`);
+            // Get the address of the new miner
+            let newMinerAddress = await this._fileService.readFile(this._name, `${name}/address`);
+            newMinerAddress = newMinerAddress.trim();
+            if (!newMinerAddress.startsWith("0x")) {
+                newMinerAddress = "0x" + newMinerAddress;
+            }
+
+            // Check current signers before proposals
+            const provider = new ethers.JsonRpcProvider(`http://localhost:${existingMiners[0].port}`);
+            const currentSigners = await provider.send("clique_getSigners", []);
+            console.log('Current signers before proposals:', currentSigners);
+
+            // Each existing miner needs to propose the new miner
+            for (const existingMiner of existingMiners) {
+                try {
+                    const minerProvider = new ethers.JsonRpcProvider(`http://localhost:${existingMiner.port}`);
+                    
+                    // Get the existing miner's address
+                    // If the node has the lowest port, it's the first miner (folder "miner")
+                    const allMinerPorts = existingMiners.map(m => parseInt(m.port));
+                    const lowestPort = Math.min(...allMinerPorts);
+                    const minerDirName = parseInt(existingMiner.port) === lowestPort ? "miner" : `miner${existingMiner.port}`;
+                    
+                    let proposerAddress = await this._fileService.readFile(this._name, `${minerDirName}/address`);
+                    proposerAddress = proposerAddress.trim();
+                    if (!proposerAddress.startsWith("0x")) {
+                        proposerAddress = "0x" + proposerAddress;
+                    }
+
+                    // Check if the proposer is actually a signer
+                    const isSigner = await minerProvider.send("clique_getSigners", [])
+                        .then(signers => signers.includes(proposerAddress.toLowerCase()));
+                    
+                    if (!isSigner) {
+                        console.log(`Warning: ${proposerAddress} (${minerDirName}) is not a signer, skipping proposal`);
+                        continue;
+                    }
+
+                    // Propose the new miner as a signatory
+                    const result = await minerProvider.send("clique_propose", [newMinerAddress, true]);
+                    console.log(`Miner ${proposerAddress} (${minerDirName}) proposed new miner ${newMinerAddress}:`, result);
+                    
+                    // Wait between proposals
+                    await this._sleep(2000);
+                } catch (error) {
+                    console.error(`Error with miner ${existingMiner.port} proposing new miner:`, error);
+                }
+            }
+
+            // Wait for proposals to be processed
+            await this._sleep(5000);
+
+            // Check if the new miner was added successfully
+            const updatedSigners = await provider.send("clique_getSigners", []);
+            console.log('Current signers after proposals:', updatedSigners);
             
-            // Get miner address
-            let minerAddress = await this._fileService.readFile(this._name, "miner/address");
-            minerAddress = minerAddress.trim();
-            if (!minerAddress.startsWith("0x")) {
-                minerAddress = "0x" + minerAddress;
+            if (updatedSigners.includes(newMinerAddress.toLowerCase())) {
+                console.log(`Success: ${newMinerAddress} is now a signer`);
+            } else {
+                console.log(`Warning: ${newMinerAddress} is not yet a signer. May need more votes.`);
             }
-
-            // Propose the miner as a signatory
-            const result = await provider.send("clique_propose", [minerAddress, true]);
-            console.log(`Miner ${minerAddress} proposed as signatory:`, result);
             
         } catch (error) {
             console.error("Error adding miner to Clique consensus:", error);
@@ -480,7 +546,7 @@ bootnodes=["${bootnode}"]
         const containerName = `${this._name}-${nodeName}`;
         
         try {
-            executeCommand(`docker rm -f ${containerName}`);
+            executeCommand(`docker rm -f ${containerName} 2>/dev/null || true`);
             console.log(`Node ${nodeName} removed from network ${this._name}`);
             
             // Remove node from nodes list
@@ -517,7 +583,6 @@ bootnodes=["${bootnode}"]
     }
 
     async getBalance(address: string): Promise<bigint> {
-        //const rpcNode = this._besuNodes.find(node => node.type === 'bootnode' || node.type === 'rpc');
         const bootnodePort = this._besuNodes.find(node => node.type === 'bootnode')?.port;
         if (!bootnodePort) {
             throw new Error('Bootnode not found');
@@ -529,7 +594,6 @@ bootnodes=["${bootnode}"]
     }
 
     async test(): Promise<boolean> {
-        //const rpcNode = this._besuNodes.find(node => node.type === 'bootnode' || node.type === 'rpc');
         const bootnodePort = this._besuNodes.find(node => node.type === 'bootnode')?.port;
         if (!bootnodePort) {
             throw new Error('Bootnode not found');

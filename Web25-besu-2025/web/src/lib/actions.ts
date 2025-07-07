@@ -231,3 +231,30 @@ export async function stopBesuNetwork(name: string) {
 export async function getBesuBalance(networkName: string, address: string) {
   return besuManager.getBesuBalance(networkName, address);
 }
+
+export async function getNetworksForLocalStorage() {
+  try {
+    const networks = await getNetworks();
+    return networks.map(network => ({
+      id: network.id,
+      network: network.name,
+      cidr: "192.168.0.0/24", // Default value as it's required by the UI but not stored in DB
+      ip: network.nodes[0]?.ip || "192.168.0.10", // Use first node's IP or default
+      chainId: network.chainId,
+      signerAccount: network.signerAddress,
+      prefundedAccounts: network.accounts.map(acc => ({
+        address: acc.address,
+        amount: acc.balance
+      })),
+      nodes: network.nodes.map(node => ({
+        type: node.type.toLowerCase() as 'rpc' | 'miner' | 'node',
+        ip: node.ip,
+        name: node.name,
+        port: node.port
+      }))
+    }));
+  } catch (error) {
+    console.error('Error fetching networks:', error);
+    return [];
+  }
+}

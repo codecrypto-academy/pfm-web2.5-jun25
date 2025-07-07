@@ -55,9 +55,9 @@ async function proposeSigner(newAddress, add = true) {
   const result = await provider.send('clique_propose', [newAddress, add]);
   console.log('RPC Response:', result);
 
-  console.log('Sending empty tx to force a block');
-  const tx = await wallet.sendTransaction({ to: wallet.address, value: 0 });
-  console.log(`Trigger transaction created: ${tx.hash}`);
+  //console.log('Sending empty tx to force a block');
+  //const tx = await wallet.sendTransaction({ to: wallet.address, value: 0 });
+  //console.log(`Trigger transaction created: ${tx.hash}`);
 
   // Watch next block to verify the addition
   provider.once('block', async (blockNumber) => {

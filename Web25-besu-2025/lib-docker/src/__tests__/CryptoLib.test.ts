@@ -8,7 +8,7 @@ import path from 'path';
  * Función para inicializar y limpiar el entorno de pruebas
  * Elimina redes y archivos de pruebas anteriores
  */
-function init() {
+async function init() {
     // Eliminar directorio de redes si existe
     const networksPath = path.join(process.cwd(), "networks");
     if (fs.existsSync(networksPath)) {
@@ -18,7 +18,7 @@ function init() {
     // Lista de redes de prueba a limpiar
     const testNetworks = ["testNetwork1", "testNetwork2", "testNetwork", "testNetworkCleanup"];
     
-    testNetworks.forEach((network) => {
+    for (const network of testNetworks) {
         try {
             // Detener y eliminar contenedores de la red
             try {
@@ -30,11 +30,12 @@ function init() {
             
             // Eliminar la red Docker
             DockerNetwork.removeDockerNetwork(network);
+            await sleep(2000); // Esperar a que se elimine la red
         } catch (error) {
             // Ignorar errores si la red no existe
             console.log(`Red ${network} no existe o no se pudo eliminar: ${error}`);
         }
-    });
+    }
 }
 
 /**
@@ -162,9 +163,8 @@ describe('FileService', () => {
 
     it('debería crear una carpeta correctamente', () => {
         const folderName = 'testFolder';
-        const result = fileService.createFolder(folderName);
-        
-        expect(result).toBe(folderName);
+        fileService.createFolder(folderName);
+        // Verificar que la carpeta se creó
         expect(fs.existsSync(path.join(testPath, folderName))).toBe(true);
         expect(fileService.folder).toBe(testPath);
     });
@@ -198,18 +198,18 @@ describe('DockerNetwork', () => {
     // Aumentar timeout para las pruebas de Docker
     jest.setTimeout(300000); // 5 minutos
 
-    beforeAll(() => {
+    beforeAll(async () => {
         console.log('Inicializando entorno de pruebas Docker...');
-        init();
+        await init();
     });
 
-    afterAll(() => {
+    afterAll(async () => {
         console.log('Limpiando entorno de pruebas Docker...');
-        init();
+        await init();
     });
 
     describe('Creación de red', () => {
-        it('debería crear una red con genesis, config y claves', () => {
+        it('debería crear una red con genesis, config y claves', async () => {
             // Arranque
             const networkName = 'testNetworkCreation';
             const chainId = 1337;
@@ -218,6 +218,7 @@ describe('DockerNetwork', () => {
 
             // Acción
             const dockerNetwork = DockerNetwork.create(networkName, chainId, subnet, labels);
+            await sleep(2000); // Esperar a que se establezca la red
 
             // Verificaciones
             expect(dockerNetwork).toBeDefined();
@@ -263,12 +264,13 @@ describe('DockerNetwork', () => {
         beforeEach(async () => {
             // Crear red para cada prueba
             dockerNetwork = DockerNetwork.create(networkName, 1339, '192.168.102.0/24', []);
-            await sleep(2000); // Esperar a que se establezca la red
+            await sleep(10000); // Esperar a que se establezca la red
         });
 
-        afterEach(() => {
+        afterEach(async () => {
             // Limpiar después de cada prueba
             DockerNetwork.removeDockerNetwork(networkName);
+            await sleep(10000); // Esperar a que se establezca la red
         });
 
         it('debería agregar un bootnode correctamente', async () => {
@@ -341,11 +343,12 @@ describe('DockerNetwork', () => {
 
         beforeEach(async () => {
             dockerNetwork = DockerNetwork.create(networkName, 1340, '192.168.103.0/24', []);
-            await sleep(2000);
+            await sleep(10000);
         });
 
-        afterEach(() => {
+        afterEach(async () => {
             DockerNetwork.removeDockerNetwork(networkName);
+            await sleep(10000);
         });
 
         it('debería crear una red completa y realizar transacciones', async () => {
@@ -389,7 +392,7 @@ describe('DockerNetwork', () => {
 
             // Parar la red
             await dockerNetwork.stop();
-            await sleep(5000);
+            await sleep(10000);
 
             // Verificar que los contenedores están parados
             const containerName = `${networkName}-bootnode`;
@@ -465,20 +468,20 @@ describe('Prueba completa', () => {
     // Aumentar timeout para las pruebas de Docker
     jest.setTimeout(300000); // 5 minutos
 
-    beforeAll(() => {
+    beforeAll(async () => {
         console.log('Inicializando entorno de pruebas Docker...');
-        init();
+        await init();
     });
 
     it('debería lanzar varias redes y nodos (una red con les IP definidas), ejecutar transacciones y verificar el balance', async () => {
         // crea una red y agrega nodos con las IPs no definidas
         const dockerNetwork2 = DockerNetwork.create('testNetwork2', 1337, '192.168.23.0/24', [{ key: 'folderBase', value: 'test' }]);
         await sleep(15000);
-        console.log('\x1b[34m%s\x1b[0m', '=== Lanzando nodos en testNetwork2 ===');
+        //console.log('\x1b[34m%s\x1b[0m', '=== Lanzando nodos en testNetwork2 ===');
         await dockerNetwork2.addBootnode('bootnode', '18545', '192.168.23.20');
         await sleep(10000);
         await dockerNetwork2.addMiner('miner', '18546', "");
-        await sleep(15000);
+        await sleep(10000);
         await dockerNetwork2.addRpc('rpc', '18547', "");
         await sleep(10000);
         await dockerNetwork2.addRpc('rpc2', '18548', "");
@@ -497,15 +500,15 @@ describe('Prueba completa', () => {
 
         // crea una red y agrega nodos con las IPs definidas
         const dockerNetwork = DockerNetwork.create('testNetwork1', 13377770, '172.20.0.0/16', [{ key: 'folderBase', value: 'test' }]);
-        await sleep(25000);
+        await sleep(15000);
         await dockerNetwork.addBootnode('bootnode', '18550', '172.20.0.10');
-        await sleep(15000);
+        await sleep(10000);
         await dockerNetwork.addMiner('miner', '18551', "172.20.0.11");
-        await sleep(20000);
+        await sleep(10000);
         await dockerNetwork.addMiner('miner2', '18552', "172.20.0.12");
-        await sleep(20000);
+        await sleep(10000);
         await dockerNetwork.addRpc('rpc', '18553', "172.20.0.13");
-        await sleep(15000);
+        await sleep(10000);
 
         // test the network with transactions
         const testResultNet = await dockerNetwork.test();

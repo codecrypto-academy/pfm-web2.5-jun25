@@ -46,7 +46,7 @@ Interfaz gráfica desarrollada con Next.js 13 que incluye:
 - Incluye la librería lib-docker compilada en `lib-besu`
 
 #### Datos de Red (`/web/networks/Keypair`)
-- Contine las cuentas de los firmantes
+- Contine las cuentas usadas para el primer firmante
 - Almacena pares de claves predefinidos
 - Claves públicas y privadas para validadores
 - Direcciones Ethereum asociadas
@@ -70,6 +70,8 @@ Scripts para la creación de una red Besu de prueba:
 #### Gestión de MongoDB
 - `mongodb-docker-setup.sh`: Configura la base de datos en Docker
 - `mongodb-compass-connection.md`: Instrucciones de conexión para MongoDB Compass
+
+![ejemplo de datos de red Besu en mongodb](web/data/ejemplo.redbesu.mongodb.png)
 
 #### Herramientas Ethereum
 - `besu-ethers-toolkit.js`: Utilidades para interactuar con la red Besu
@@ -128,19 +130,44 @@ graph LR
    git clone [URL_REPO]
    
    # Instalar dependencias
-   cd web && npm install
-   cd ../lib-docker && npm install
-   cd ../scripts && npm install
+   cd web 
+   npm install
+   cd ../lib-docker 
+   npm install
+   cd ../scripts 
+   npm install
    ```
 
-3. **Iniciar Servicios**
+3. **Compilación y Despliegue de lib-docker**
+   
+   Cuando se realizan cambios en la librería lib-docker, es necesario recompilarla y actualizar su versión en la aplicación web:
+   ```bash
+   # Entrar al directorio lib-docker
+   cd lib-docker
+
+   # Compilar la librería
+   npm run build
+
+   # Copiar los archivos compilados a la aplicación web
+   # En Windows
+   xcopy /E /I /Y dist ..\web\src\lib\lib-besu
+
+   # En Linux/Mac
+   cp -r dist/* ../web/src/lib/lib-besu/
+   ```
+   Este proceso actualiza la librería en la aplicación web con los últimos cambios realizados.
+
+4. **Iniciar Servicios**
    ```bash
    # Iniciar aplicación web
    cd web
    npm run dev
    ```
 
-4. **Gestión de Firmantes con besu-ethers-toolkit.js**
+5. **Gestión de Firmantes con besu-ethers-toolkit.js**
+
+   Los nodos validadores que son creados al mismo tiempo que la red son firmantes por defecto. Para añadir o eliminar firmantes, se utiliza el script `besu-ethers-toolkit.js` que interactúa con la red Besu a través de JSON-RPC.
+   
    ```bash
    # Mostrar los firmantes actuales
    node besu-ethers-toolkit.js list-signers
@@ -218,17 +245,16 @@ graph LR
    - Comprobar configuración bootnode
    - Revisar reglas de firewall
 
-## Seguridad
+## Mejoras Potenciales
 
-1. **Gestión de Claves**
-   - Almacenamiento seguro de claves privadas
-   - Rotación de claves
-   - Control de acceso
-
-2. **Red**
-   - Firewall y reglas de acceso
-   - TLS para API RPC
-   - Autenticación de nodos
+1. **Publicación de lib-docker en NPM**
+   - Publicar la librería lib-docker como un paquete npm público
+   - Esto permitiría:
+     - Instalación directa con `npm install @besu/lib-docker`
+     - Gestión de versiones más eficiente
+     - Actualizaciones automáticas con `npm update`
+     - Eliminación de la necesidad de copiar manualmente los archivos compilados
+     - Mejor integración con otros proyectos
 
 ## Referencias
 
@@ -239,4 +265,6 @@ graph LR
 
 ## Licencia
 
-[Especificar la licencia del proyecto]
+Este proyecto está licenciado bajo la Licencia MIT - vea el archivo [LICENSE](./LICENSE) para más detalles.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

@@ -7,7 +7,10 @@ describe('GenesisGenerator', () => {
   let fs: FileSystem;
   beforeEach(() => {
     logger = { info: jest.fn(), error: jest.fn(), debug: jest.fn() } as any;
-    fs = { writeFile: jest.fn().mockResolvedValue(undefined) } as any;
+    fs = { 
+      writeFile: jest.fn().mockResolvedValue(undefined),
+      ensureDir: jest.fn().mockResolvedValue(undefined)
+    } as any;
   });
 
   it('should construct GenesisGenerator', () => {
@@ -16,7 +19,10 @@ describe('GenesisGenerator', () => {
   });
 
   it('should generate genesis file for Clique protocol', async () => {
-    const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
+    const fs = { 
+      writeFile: jest.fn().mockResolvedValue(undefined),
+      ensureDir: jest.fn().mockResolvedValue(undefined)
+    };
     const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
@@ -30,7 +36,10 @@ describe('GenesisGenerator', () => {
   });
 
   it('should generate genesis file for IBFT2 protocol', async () => {
-    const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
+    const fs = { 
+      writeFile: jest.fn().mockResolvedValue(undefined),
+      ensureDir: jest.fn().mockResolvedValue(undefined)
+    };
     const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
@@ -44,7 +53,10 @@ describe('GenesisGenerator', () => {
   });
 
   it('should generate genesis file for QBFT protocol', async () => {
-    const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
+    const fs = { 
+      writeFile: jest.fn().mockResolvedValue(undefined),
+      ensureDir: jest.fn().mockResolvedValue(undefined)
+    };
     const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
@@ -58,7 +70,10 @@ describe('GenesisGenerator', () => {
   });
 
   it('should add additionalOptions to genesis', async () => {
-    const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
+    const fs = { 
+      writeFile: jest.fn().mockResolvedValue(undefined),
+      ensureDir: jest.fn().mockResolvedValue(undefined)
+    };
     const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {
@@ -72,7 +87,10 @@ describe('GenesisGenerator', () => {
   });
 
   it('should use custom alloc if provided', async () => {
-    const fs = { writeFile: jest.fn().mockResolvedValue(undefined) };
+    const fs = { 
+      writeFile: jest.fn().mockResolvedValue(undefined),
+      ensureDir: jest.fn().mockResolvedValue(undefined)
+    };
     const logger = { info: jest.fn(), debug: jest.fn() };
     const generator = new GenesisGenerator(logger as any, fs as any);
     const options = {

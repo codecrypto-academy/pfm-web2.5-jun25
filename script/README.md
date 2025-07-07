@@ -29,7 +29,7 @@
 
 This directory contains a bash script (`script.sh`) that deploys a private Hyperledger Besu network from scratch using Docker. It automates the creation of containers, the startup of multiple Besu nodes, and the execution of test transactions to validate the network’s operation, all based on the configuration defined in `config.yaml`, without needing to directly edit the script code.
 
-> **Note:** While this script is relatively large and includes considerable overhead for logging and debugging purposes, it is highly useful for execution and monitoring through color-coded logs—particularly when using the `--debug` mode. However, for production environments, improved operational clarity, modular usage, and better maintainability, it is recommended to use the module located in the `lib` directory (if it exists).
+> **Note:** While this script is relatively large and includes considerable overhead for logging and debugging purposes, it is highly useful for execution and monitoring through color-coded logs—particularly when using the `--debug` mode. The script provides real-time async feedback as nodes are generated, displaying live status messages like "(🔷 $1)" that show each node's progression through the setup process. However, for production environments, improved operational clarity, modular usage, and better maintainability, it is recommended to use the module located in the `lib` directory (if it exists).
 >
 > **The primary goal of this script is not for you to understand its internal logic line-by-line, but rather to execute it and observe its output. This provides a detailed, real-time understanding of what happens "under the hood" when setting up a PoA blockchain.**
 
@@ -102,7 +102,7 @@ The script follows a well-defined operational flow to ensure a clean and predict
 
 2.  **Phase 2: Creation and Configuration**
     *   **Docker Network**: Creates a new `bridge` Docker network with the IP subnet defined in `config.yaml`.
-    *   **Node Identities**: For each node defined in `config.yaml`, it runs an ephemeral Besu container to generate its key pair (private and public) and Ethereum address. These files are stored in `nodes/<node-name>/`.
+    *   **Node Identities**: For each node defined in `config.yaml`, it runs an ephemeral Besu container to generate its key pair (private and public) and Ethereum address. These files are stored in `nodes/<node-name>/`. During this process, you'll see async status messages like "(🔷 $1)" showing each node's generation progress in real-time.
     *   **Genesis File**: Constructs the `genesis.json` file. It reads the `chainId`, validators (nodes with the `validator` role), and pre-funded accounts (`alloc`) from `config.yaml` to create the blockchain's initial state.
     *   **Node Configuration**: Generates a `config.toml` file for each node. This file tells the node how to start, which bootnodes to connect to, whether to enable RPC, whether to mine blocks, etc.
 

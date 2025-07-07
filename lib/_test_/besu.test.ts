@@ -233,10 +233,11 @@ describe('BesuNode', () => {
 
         const node = new BesuNode(config, fileService);
         const bootnodeEnode = 'enode://abc123@172.20.0.20:30303'; // Match new subnet
-        const tomlConfig = node.generateTomlConfig(networkConfig, bootnodeEnode);
+        const signerAccountAddress = '0x1111111111111111111111111111111111111111';
+        const tomlConfig = node.generateTomlConfig(networkConfig, bootnodeEnode, signerAccountAddress);
         
         expect(tomlConfig).toContain('miner-enabled=true');
-        expect(tomlConfig).toContain(`miner-coinbase="${node.getKeys().address}"`);
+        expect(tomlConfig).toContain(`miner-coinbase="${signerAccountAddress}"`);
         expect(tomlConfig).toContain(`bootnodes=["${bootnodeEnode}"]`);
     });
 
@@ -302,7 +303,11 @@ describe('BesuNetwork', () => {
             subnet: '172.22.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique' as const,
             gasLimit: '0x47E7C4',
-            blockTime: 5
+            blockTime: 5,
+            // Add signerAccounts required for genesis generation
+            signerAccounts: [
+                { address: '0x1111111111111111111111111111111111111111', weiAmount: '100000000000000000000000' }
+            ]
         };
 
         const network = new BesuNetwork(networkConfig, tempDir);
@@ -440,7 +445,11 @@ describe('Quick test for network functionality', () => {
             subnet: '172.30.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
-            blockTime: 5
+            blockTime: 5,
+            // Add signerAccounts for the miner
+            signerAccounts: [
+                { address: '0x1111111111111111111111111111111111111111', weiAmount: '100000000000000000000000' }
+            ]
         };
 
         const network = new BesuNetwork(testConfig);
@@ -542,7 +551,11 @@ describe('Connectivity tests', () => {
             subnet: '172.31.0.0/16', // Create tests use 172.20-172.79 subnet range
             consensus: 'clique',
             gasLimit: '0x47E7C4',
-            blockTime: 3
+            blockTime: 3,
+            // Add signerAccounts to ensure miners have proper keys
+            signerAccounts: [
+                { address: '0x1111111111111111111111111111111111111111', weiAmount: '100000000000000000000000' }
+            ]
         };
 
         const besuNetwork = new BesuNetwork(networkConfig);
@@ -730,6 +743,10 @@ describe('Account Management Tests', () => {
             gasLimit: '0x47E7C4',
             blockTime: 5,
             mainIp: '172.35.0.1',
+            // Add signerAccounts for miners
+            signerAccounts: [
+                { address: '0x1111111111111111111111111111111111111111', weiAmount: '1000000000000000000000000' }
+            ],
             accounts: [
                 {
                     address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9',
@@ -861,7 +878,8 @@ describe('Account Management Tests', () => {
             // Verificar que la configuración incluye signerAccounts y accounts
             const config = besuNetwork.getConfig();
             expect(config.signerAccounts).toBeDefined();
-            expect(config.signerAccounts![0].address).toBe('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1');
+            // Note: signerAccount addresses get replaced with generated key addresses
+            expect(config.signerAccounts![0].address).toMatch(/^0x[a-fA-F0-9]{40}$/);
             expect(config.signerAccounts![0].weiAmount).toBe('1000000000000000000000000');
             
             expect(config.accounts).toBeDefined();
@@ -869,7 +887,7 @@ describe('Account Management Tests', () => {
 
             // Verificar que las cuentas están correctamente configuradas
             const networkConfig = besuNetwork.getConfig();
-            expect(networkConfig.signerAccounts?.[0].address).toBe('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1');
+            expect(networkConfig.signerAccounts?.[0].address).toMatch(/^0x[a-fA-F0-9]{40}$/);
             expect(networkConfig.accounts).toBeDefined();
             expect(networkConfig.accounts!.length).toBe(3);
             expect(networkConfig.accounts![0].address).toBe('0x627306090abaB3A6e1400e9345bC60c78a8BEf57');

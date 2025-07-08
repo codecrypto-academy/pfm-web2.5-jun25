@@ -1,6 +1,6 @@
 {
   "name": "besu-network-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TypeScript library for managing Hyperledger Besu networks with Clique consensus using Docker",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist && rm -rf tsconfig.tsbuildinfo",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts",
     "prepublishOnly": "yarn clean && yarn build",

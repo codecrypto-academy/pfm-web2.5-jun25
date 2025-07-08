@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { DockerManager } from 'besu-network-manager';
-import { NetworkStorage } from '@/lib/storage';
+import { NetworkStorage } from '@/lib/databaseStorage';
 import { FILE_NAMING } from '@/lib/config';
 import * as fs from 'fs';
 
@@ -22,7 +22,7 @@ export async function GET(
   try {
     const { id: networkId, nodeId } = await params;
     
-    const networkData = NetworkStorage.loadNetwork(networkId);
+    const networkData = await NetworkStorage.loadNetwork(networkId);
     if (!networkData) {
       return NextResponse.json(
         { success: false, error: 'Network not found' },
@@ -103,7 +103,7 @@ export async function DELETE(
   try {
     const { id: networkId, nodeId } = await params;
     
-    const networkData = NetworkStorage.loadNetwork(networkId);
+    const networkData = await NetworkStorage.loadNetwork(networkId);
     if (!networkData) {
       return NextResponse.json(
         { success: false, error: 'Network not found' },
@@ -138,7 +138,7 @@ export async function DELETE(
     }
 
     // Update network metadata
-    NetworkStorage.removeNodeFromNetwork(networkId, nodeId);
+    await NetworkStorage.removeNodeFromNetwork(networkId, nodeId);
 
     return NextResponse.json({
       success: true,

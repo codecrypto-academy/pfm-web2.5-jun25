@@ -10,8 +10,11 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@types/pg": "^8.15.4",
     "besu-network-manager": "1.0.1",
+    "dotenv": "^17.1.0",
     "next": "^15.3.4",
+    "pg": "^8.16.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

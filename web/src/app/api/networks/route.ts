@@ -41,7 +41,7 @@ import {
   NetworkConfig,
   BesuNodeConfig 
 } from 'besu-network-manager';
-import { NetworkStorage, StoredNetworkData } from '@/lib/storage';
+import { NetworkStorage, StoredNetworkData } from '@/lib/databaseStorage';
 import { 
   generateNodeIPs, 
   generateNodePorts, 
@@ -51,18 +51,11 @@ import {
 } from '@/lib/networkUtils';
 import { 
   NETWORK_DEFAULTS, 
-  PORT_DEFAULTS, 
-  getBesuImage,
+  PORT_DEFAULTS,
   DOCKER_DEFAULTS,
   NODE_ID_GENERATION,
   FILE_NAMING
 } from '@/lib/config';
-import type { 
-  CreateNetworkRequest, 
-  CreateNetworkResponse,
-  ListNetworksResponse,
-  NetworkListQuery
-} from '@/lib/types';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -76,9 +69,9 @@ const keyGenerator = new KeyGenerator();
  */
 export async function GET() {
   try {
-    const networkIds = NetworkStorage.listNetworks();
-    const networks = networkIds.map(id => {
-      const data = NetworkStorage.loadNetwork(id);
+    const networkIds = await NetworkStorage.listNetworks();
+    const networkPromises = networkIds.map(async id => {
+      const data = await NetworkStorage.loadNetwork(id);
       if (!data) return null;
       
       return {
@@ -89,7 +82,9 @@ export async function GET() {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt
       };
-    }).filter(Boolean);
+    });
+    
+    const networks = (await Promise.all(networkPromises)).filter(Boolean);
 
     return NextResponse.json({
       success: true,
@@ -160,7 +155,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if network already exists
-    if (NetworkStorage.loadNetwork(networkId)) {
+    const existingNetwork = await NetworkStorage.loadNetwork(networkId);
+    if (existingNetwork) {
       return NextResponse.json(
         { success: false, error: 'Network already exists' },
         { status: 409 }
@@ -247,7 +243,8 @@ export async function POST(request: NextRequest) {
       // Create node directory
       const nodePath = await NetworkStorage.createNodeDirectory(networkId, node.id);
       
-      // Save node files
+      // Ensure node directory exists before writing files
+      await fs.promises.mkdir(nodePath, { recursive: true });
       await fs.promises.writeFile(
         path.join(nodePath, FILE_NAMING.NODE_FILES.PRIVATE_KEY), 
         credentials.privateKey.slice(2)
@@ -290,7 +287,7 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date().toISOString()
     };
 
-    NetworkStorage.saveNetwork(networkId, networkData);
+    await NetworkStorage.saveNetwork(networkId, networkData);
 
     return NextResponse.json({
       success: true,

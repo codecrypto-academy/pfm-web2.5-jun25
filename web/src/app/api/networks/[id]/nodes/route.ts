@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { DockerManager, KeyGenerator, BesuNodeConfig } from 'besu-network-manager';
-import { NetworkStorage } from '@/lib/storage';
+import { NetworkStorage } from '@/lib/databaseStorage';
 import { generateNodeIPs } from '@/lib/networkUtils';
 import { PORT_DEFAULTS, NODE_ID_GENERATION, FILE_NAMING } from '@/lib/config';
 import type { AddNodeRequest } from '@/lib/types';
@@ -26,7 +26,7 @@ export async function GET(
   try {
     const { id: networkId } = await params;
     
-    const networkData = NetworkStorage.loadNetwork(networkId);
+    const networkData = await NetworkStorage.loadNetwork(networkId);
     if (!networkData) {
       return NextResponse.json(
         { success: false, error: 'Network not found' },
@@ -96,7 +96,7 @@ export async function POST(
     const { id: networkId } = await params;
     const body: AddNodeRequest = await request.json();
     
-    const networkData = NetworkStorage.loadNetwork(networkId);
+    const networkData = await NetworkStorage.loadNetwork(networkId);
     if (!networkData) {
       return NextResponse.json(
         { success: false, error: 'Network not found' },
@@ -230,7 +230,7 @@ export async function POST(
     );
 
     // Update network metadata
-    NetworkStorage.addNodeToNetwork(networkId, nodeConfig);
+    await NetworkStorage.addNodeToNetwork(networkId, nodeConfig);
 
     return NextResponse.json({
       success: true,

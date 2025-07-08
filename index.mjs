@@ -18,24 +18,14 @@ async function callApi(url, method, params) {
 }
 
 function createKeysAndEnode(ip, port) {
-  // Crear llaves
   // Crear curva elíptica sep256k1 (la que usa Ethereum y por lo tanto también la que usa Besu por que Besu se construye sobre Ethereum)
   const ec = new EC("secp256k1");
-  // Crear pares de llaves
   const keyPair = ec.genKeyPair();
-  // Obtener llave privada
   const privateKey = keyPair.getPrivate("hex");
-  // Obtener llave pública
   const publicKey = keyPair.getPublic("hex");
-
-  // Otener address
   const publicKeyBuffer = keccak256(Buffer.from(publicKey.slice(2), "hex"));
-  // Obtener los últimos 20 bytes
-  // 40 caracteres hexadecimales son equibalentes a 20 bytes
-  // Cuando utilizamos slice con un start negativo se comienza a contar de derecha a izquierda y el finl default es el último caracter de la cadena
   const address = publicKeyBuffer.toString("hex").slice(-40);
-
-  // Contruimos el enode
+    // Crear enode
   const enode = `enode://${publicKey.slice(2)}@${ip}:${port}`;
 
   return {

@@ -1,5 +1,5 @@
 import fs from "fs";
-import { BesuNodeConfig } from "../types";
+import { BesuNodeConfig, BesuNodeType } from "../types";
 import { createNodeIdentityFiles } from "../services/createNodeIdentityFiles";
 jest.mock("fs");
 
@@ -11,6 +11,7 @@ describe('createNodeIdentityFiles', () => {
             ip: "127.0.0.1"
         },
         hostPort: 8888,
+        type: BesuNodeType.RPC
     };
     const nodeIdentityPath = `${process.cwd()}/${nodeConfigStub.network.name}`;
 
@@ -40,7 +41,7 @@ describe('createNodeIdentityFiles', () => {
     it('should create the node identity files', () => {
 
         createNodeIdentityFiles(nodeConfigStub);
-        
+
         expect(fs.existsSync).toHaveBeenCalledWith(`${nodeIdentityPath}/${nodeConfigStub.name}`);
         expect(fs.mkdirSync).toHaveBeenCalledWith(`${nodeIdentityPath}/${nodeConfigStub.name}`, { recursive: true });
         expect(fs.writeFileSync).toHaveBeenCalledWith(`${nodeIdentityPath}/${nodeConfigStub.name}/key.priv`, mockIdentityData.privateKey);
@@ -51,9 +52,9 @@ describe('createNodeIdentityFiles', () => {
 
     it('should not create directory if it already exists', () => {
         (fs.existsSync as jest.Mock).mockReturnValue(true);
-        
+
         createNodeIdentityFiles(nodeConfigStub);
-        
+
         expect(fs.existsSync).toHaveBeenCalledWith(`${nodeIdentityPath}/${nodeConfigStub.name}`);
         expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
@@ -62,18 +63,18 @@ describe('createNodeIdentityFiles', () => {
         (fs.mkdirSync as jest.Mock).mockImplementation(() => {
             throw new Error('mkdir failed');
         });
-        
+
         expect(() => createNodeIdentityFiles(nodeConfigStub)).toThrow('mkdir failed');
     });
 
     it('should return correct file paths', () => {
         const result = createNodeIdentityFiles(nodeConfigStub);
-        
+
         expect(result).toEqual({
-            privateKeyFile: `${nodeIdentityPath}/${nodeConfigStub.name}/key.priv`,
-            publicKeyFile: `${nodeIdentityPath}/${nodeConfigStub.name}/key.pub`,
-            addressFile: `${nodeIdentityPath}/${nodeConfigStub.name}/address`,
-            enodeFile: `${nodeIdentityPath}/${nodeConfigStub.name}/enode`,
+            privateKeyFile: `${nodeConfigStub.name}/key.priv`,
+            publicKeyFile: `${nodeConfigStub.name}/key.pub`,
+            addressFile: `${nodeConfigStub.name}/address`,
+            enodeFile: `${nodeConfigStub.name}/enode`,
         });
     });
 
@@ -81,7 +82,7 @@ describe('createNodeIdentityFiles', () => {
         (fs.writeFileSync as jest.Mock).mockImplementation(() => {
             throw new Error('Permission denied');
         });
-        
+
         expect(() => createNodeIdentityFiles(nodeConfigStub)).toThrow('Permission denied');
     });
 
@@ -91,14 +92,14 @@ describe('createNodeIdentityFiles', () => {
             network: { name: "different-network", ip: "192.168.1.1" }
         };
         const nodeIdentityPath = `${process.cwd()}/${differentConfig.network.name}`;
-        
+
         const result = createNodeIdentityFiles(differentConfig);
-        
+
         expect(result).toEqual({
-            privateKeyFile: `${nodeIdentityPath}/${differentConfig.name}/key.priv`,
-            publicKeyFile: `${nodeIdentityPath}/${differentConfig.name}/key.pub`,
-            addressFile: `${nodeIdentityPath}/${differentConfig.name}/address`,
-            enodeFile: `${nodeIdentityPath}/${differentConfig.name}/enode`,
+            privateKeyFile: `${differentConfig.name}/key.priv`,
+            publicKeyFile: `${differentConfig.name}/key.pub`,
+            addressFile: `${differentConfig.name}/address`,
+            enodeFile: `${differentConfig.name}/enode`,
         });
     });
 });

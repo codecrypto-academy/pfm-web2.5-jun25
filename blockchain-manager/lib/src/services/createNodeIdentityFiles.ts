@@ -20,9 +20,9 @@ export function createNodeIdentityFiles(nodeConfig: BesuNodeConfig) {
     fs.writeFileSync(`${nodeIdentityPath}/${nodeConfig.name}/enode`, enode);
 
     return {
-        privateKeyFile: `${nodeIdentityPath}/${nodeConfig.name}/key.priv`,
-        publicKeyFile: `${nodeIdentityPath}/${nodeConfig.name}/key.pub`,
-        addressFile: `${nodeIdentityPath}/${nodeConfig.name}/address`,
-        enodeFile: `${nodeIdentityPath}/${nodeConfig.name}/enode`,
+        privateKeyFile: `${nodeConfig.name}/key.priv`,
+        publicKeyFile: `${nodeConfig.name}/key.pub`,
+        addressFile: `${nodeConfig.name}/address`,
+        enodeFile: `${nodeConfig.name}/enode`,
     }
 }

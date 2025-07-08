@@ -1,3 +1,10 @@
+export enum BesuNodeType {
+    MINER = "MINER",
+    RPC = "RPC",
+    BOOTNODE = "BOOTNODE"
+}
+
+
 export interface BesuNodeConfig {
     name: string;
     network: {
@@ -5,6 +12,14 @@ export interface BesuNodeConfig {
         ip: string;
     }
     hostPort: number;
+    type: BesuNodeType;
+    options?: {
+        minerEnabled?: boolean;
+        minerCoinbase?: string;
+        minGasPrice?: number;
+        bootnodes?: string;
+    }
+
 }
 
 export interface NodeIdentityFiles {

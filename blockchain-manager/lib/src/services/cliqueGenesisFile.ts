@@ -3,7 +3,6 @@ import path from "path";
 
 export interface CliqueGenesisConfig {
     chainId: number;
-    network: string;
     initialValidators: string[];
     preAllocatedAccounts?: PreAllocatedAccount[];
     blockPeriodSeconds?: number;
@@ -31,19 +30,20 @@ const DEFAULT_DIFFICULTY = "0x1";
 const VANITY_DATA_LENGTH = 64;
 const SIGNATURE_LENGTH = 130;
 
-export function createCliqueGenesisFile(config: CliqueGenesisConfig) {
+export function createCliqueGenesisFile(dataPath: string, config: CliqueGenesisConfig): string {
 
     validateConfig(config);
 
-
-    const genesisFile = generateCliqueGenesisFile(config);
-    const blockchainDataPath = path.join(process.cwd(), config.network);
+    const genesisDataObject = generateCliqueGenesisFile(config);
 
     try {
-        if (!fs.existsSync(blockchainDataPath)) {
-            fs.mkdirSync(blockchainDataPath, { recursive: true });
+        if (!fs.existsSync(dataPath)) {
+            fs.mkdirSync(dataPath, { recursive: true });
         }
-        fs.writeFileSync(path.join(blockchainDataPath, "genesis.json"), JSON.stringify(genesisFile));
+        const genesisFilePath = path.join(dataPath, "genesis.json");
+        fs.writeFileSync(genesisFilePath, JSON.stringify(genesisDataObject));
+
+        return genesisFilePath;
     } catch (error) {
         if (error instanceof Error) {
             throw new Error(`Failed to create genesis file: ${error.message}`);
@@ -55,14 +55,6 @@ export function createCliqueGenesisFile(config: CliqueGenesisConfig) {
 function validateConfig(config: CliqueGenesisConfig): void {
     if (!config.chainId || config.chainId <= 0) {
         throw new Error('Chain ID must be a positive integer');
-    }
-
-    if (!config.network || config.network.trim() === '') {
-        throw new Error('Network name cannot be empty');
-    }
-
-    if (!/^[a-zA-Z0-9_-]+$/.test(config.network)) {
-        throw new Error('Network name contains invalid characters');
     }
 
     if (!config.initialValidators || config.initialValidators.length === 0) {
@@ -93,7 +85,7 @@ export function generateCliqueGenesisFile(config: CliqueGenesisConfig) {
             londonBlock: 0,
         };
 
-        const genesisFile = {
+        const genesisDataObject = {
             config: {
                 chainId: config.chainId,
                 ...forkConfig,
@@ -109,7 +101,7 @@ export function generateCliqueGenesisFile(config: CliqueGenesisConfig) {
             alloc: preAllocatedAccountsObject
         };
 
-        return genesisFile;
+        return genesisDataObject;
     } catch (error) {
         if (error instanceof Error) {
             throw new Error(`Failed to generate genesis json object: ${error.message}`);

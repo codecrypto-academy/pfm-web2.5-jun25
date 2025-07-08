@@ -1,5 +1,5 @@
 import Docker from "dockerode";
-import { PROJECT_LABEL } from "../constants";
+import { PROJECT_LABEL, RPC_PORT } from "../constants";
 import { BesuNodeConfig, NodeIdentityFiles } from "../types";
 
 export async function createBesuNode(docker: Docker, nodeConfig: BesuNodeConfig, nodeIdentityFiles: NodeIdentityFiles): Promise<string> {
@@ -11,9 +11,13 @@ export async function createBesuNode(docker: Docker, nodeConfig: BesuNodeConfig,
         name: nodeConfig.name,
         Cmd: [
             `--config-file=/data/config.toml`,
-            `--data-path=${nodeIdentityPath}`,
-            `--node-private-key-file=${nodeIdentityFiles.privateKeyFile}`,
-            `--genesis-file=/data/genesis.json`
+            `--data-path=/data/${nodeConfig.name}/data`,
+            `--node-private-key-file=/data/${nodeIdentityFiles.privateKeyFile}`,
+            `--genesis-file=/data/genesis.json`,
+            ...(nodeConfig.options?.minerEnabled ? ['--miner-enabled=true'] : []),
+            ...(nodeConfig.options?.minerCoinbase ? [`--miner-coinbase="${nodeConfig.options.minerCoinbase}"`] : []),
+            ...(nodeConfig.options?.minGasPrice !== undefined ? [`--min-gas-price=${nodeConfig.options.minGasPrice}`] : []),
+            ...(nodeConfig.options?.bootnodes ? [`--bootnodes="${nodeConfig.options.bootnodes}"`] : []),
         ],
         Labels: {
             "node": nodeConfig.name,
@@ -22,7 +26,7 @@ export async function createBesuNode(docker: Docker, nodeConfig: BesuNodeConfig,
         },
         HostConfig: {
             PortBindings: {
-                ['8545/tcp']: [{ HostPort: nodeConfig.hostPort.toString() }]
+                [`${RPC_PORT}/tcp`]: [{ HostPort: nodeConfig.hostPort.toString() }]
             },
             Binds: [`${nodeIdentityPath}:/data`]
         },

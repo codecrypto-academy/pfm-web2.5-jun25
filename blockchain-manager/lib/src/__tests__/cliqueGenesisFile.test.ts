@@ -6,7 +6,7 @@ jest.mock("fs");
 const mockedFs = fs as jest.Mocked<typeof fs>;
 
 
-describe('createCliqueGenesisFile', () => {
+describe('cliqueGenesisFile', () => {
     beforeEach(() => {
         jest.clearAllMocks();
 
@@ -18,15 +18,15 @@ describe('createCliqueGenesisFile', () => {
     it('should create directory and write genesis file', () => {
         const config = {
             chainId: 123,
-            network: 'test-network',
             initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0']
         };
 
-        createCliqueGenesisFile(config);
+        const mockNetworkPath = path.join(process.cwd(), 'mock-network');
 
-        const expectedPath = path.join(process.cwd(), 'test-network');
+        createCliqueGenesisFile(mockNetworkPath, config);
+
         expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
-            path.join(expectedPath, 'genesis.json'),
+            path.join(mockNetworkPath, 'genesis.json'),
             expect.any(String)
         );
     });
@@ -36,24 +36,25 @@ describe('createCliqueGenesisFile', () => {
 
         const config = {
             chainId: 123,
-            network: 'test-network',
             initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0']
         };
 
-        createCliqueGenesisFile(config);
+        const mockNetworkPath = path.join(process.cwd(), 'mock-network');
 
-        const expectedPath = path.join(process.cwd(), 'test-network');
-        expect(mockedFs.mkdirSync).toHaveBeenCalledWith(expectedPath, { recursive: true });
+        createCliqueGenesisFile(mockNetworkPath, config);
+
+        expect(mockedFs.mkdirSync).toHaveBeenCalledWith(mockNetworkPath, { recursive: true });
     });
 
     it('should write correct genesis content', () => {
         const config = {
             chainId: 123,
-            network: 'test-network',
             initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0']
         };
 
-        createCliqueGenesisFile(config);
+        const mockNetworkPath = path.join(process.cwd(), 'mock-network');
+
+        createCliqueGenesisFile(mockNetworkPath, config);
 
         const expectedGenesisContent = generateCliqueGenesisFile(config);
         expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
@@ -65,44 +66,26 @@ describe('createCliqueGenesisFile', () => {
     it('should validate config and throw error for invalid chainId', () => {
         const invalidConfig = {
             chainId: 0,
-            network: 'test',
             initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0']
         };
 
-        expect(() => createCliqueGenesisFile(invalidConfig))
+        const mockNetworkPath = path.join(process.cwd(), 'mock-network');
+
+
+        expect(() => createCliqueGenesisFile(mockNetworkPath, invalidConfig))
             .toThrow('Chain ID must be a positive integer');
     });
 
-    it('should validate config and throw error for empty network', () => {
-        const invalidConfig = {
-            chainId: 123,
-            network: '',
-            initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0']
-        };
-
-        expect(() => createCliqueGenesisFile(invalidConfig))
-            .toThrow('Network name cannot be empty');
-    });
-
-    it('should validate config and throw error for invalid network characters', () => {
-        const invalidConfig = {
-            chainId: 123,
-            network: 'test@network',
-            initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0']
-        };
-
-        expect(() => createCliqueGenesisFile(invalidConfig))
-            .toThrow('Network name contains invalid characters');
-    });
 
     it('should validate config and throw error for empty validators', () => {
         const invalidConfig = {
             chainId: 123,
-            network: 'test',
             initialValidators: []
         };
 
-        expect(() => createCliqueGenesisFile(invalidConfig))
+        const mockNetworkPath = path.join(process.cwd(), 'mock-network');
+
+        expect(() => createCliqueGenesisFile(mockNetworkPath, invalidConfig))
             .toThrow('At least one initial validator is required');
     });
 });
@@ -126,7 +109,6 @@ describe('generateCliqueGenesisFile', () => {
             chainId: 201906,
             initialValidators: initialValidators,
             preAllocatedAccounts: allocatedAccounts,
-            network: ""
         });
 
         expect(genesisFile).toEqual({
@@ -160,7 +142,6 @@ describe('generateCliqueGenesisFile', () => {
             chainId: 201906,
             initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0'],
             preAllocatedAccounts: [],
-            network: "test"
         };
 
         const result = generateCliqueGenesisFile(config);
@@ -171,7 +152,6 @@ describe('generateCliqueGenesisFile', () => {
         const config = {
             chainId: 201906,
             initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0'],
-            network: "test"
         };
 
         const result = generateCliqueGenesisFile(config);
@@ -182,7 +162,6 @@ describe('generateCliqueGenesisFile', () => {
         const config = {
             chainId: 201906,
             initialValidators: ['0xdd8655f39bee863dba4c5210cf6e4a02e76173e0'],
-            network: "test",
             blockPeriodSeconds: 10,
             epochLength: 50000,
             createEmptyBlocks: false,

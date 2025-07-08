@@ -9,3 +9,5 @@ export const BOOTNODE_PORT = 8580;
 export const MINERNODE_NAME = "miner";
 export const MINERNODE_IP = "172.25.0.20";
 export const MINERNODE_PORT = 8581;
+export const P2P_PORT = 30303;
+export const RPC_PORT = 8545;

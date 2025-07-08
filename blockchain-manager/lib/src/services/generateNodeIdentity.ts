@@ -2,6 +2,7 @@ import pkg from 'elliptic';
 const { ec: EC } = pkg;
 import { Buffer } from 'buffer';
 import keccak256 from 'keccak256';
+import { P2P_PORT } from '../constants';
 
 export function generateNodeIdentity(ip: string) {
     // curva eth, btc
@@ -15,7 +16,7 @@ export function generateNodeIdentity(ip: string) {
     // get last 20 bytes or  last 40 chars.
     const address = pubKeyBuffer.toString("hex").slice(-40)
     // get enode
-    const enode = `enode://${publicKey.slice(2)}@${ip}:30303`
+    const enode = `enode://${publicKey.slice(2)}@${ip}:${P2P_PORT}`
 
     return {
         privateKey,

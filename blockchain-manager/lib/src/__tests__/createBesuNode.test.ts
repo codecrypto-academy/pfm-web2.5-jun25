@@ -1,7 +1,8 @@
 import Docker from "dockerode";
+import path from "path";
 import { PROJECT_LABEL } from "../constants";
 import { createBesuNode } from "../services/createBesuNode";
-import { BesuNodeConfig } from "../types";
+import { BesuNodeConfig, BesuNodeType } from "../types";
 
 const CONTAINER_ID = "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567";
 
@@ -17,6 +18,7 @@ describe('createNode', () => {
             ip: "127.0.0.1"
         },
         hostPort: 8888,
+        type: BesuNodeType.RPC
     };
     const nodeIdentityPath = `${process.cwd()}/${nodeConfigStub.network.name}`;
     const nodeIdentityFilesStub = {
@@ -25,7 +27,7 @@ describe('createNode', () => {
         addressFile: `${nodeIdentityPath}/address`,
         enodeFile: `${nodeIdentityPath}/enode`,
     }
-    
+
 
     it('should create a node container successfully', async () => {
         const docker = new Docker();
@@ -43,8 +45,8 @@ describe('createNode', () => {
             name: nodeConfigStub.name,
             Cmd: [
                 `--config-file=/data/config.toml`,
-                `--data-path=${nodeIdentityPath}`,
-                `--node-private-key-file=${nodeIdentityFilesStub.privateKeyFile}`,
+                `--data-path=/data/${nodeConfigStub.name}/data`,
+                `--node-private-key-file=/data/${nodeIdentityFilesStub.privateKeyFile}`,
                 `--genesis-file=/data/genesis.json`
             ],
             Labels: {
@@ -70,6 +72,63 @@ describe('createNode', () => {
         });
         expect(mockContainer.start).toHaveBeenCalled();
     });
+
+    it('should create a miner node container successfully', async () => {
+        const docker = new Docker();
+        const mockContainer = {
+            id: CONTAINER_ID,
+            start: jest.fn().mockResolvedValue(undefined)
+        } as Partial<Docker.Container> as Docker.Container;
+        jest.spyOn(docker, 'createContainer').mockResolvedValue(mockContainer);
+
+        const containerId = await createBesuNode(docker, {
+            ...nodeConfigStub,
+            options: {
+                minerEnabled: true,
+                minerCoinbase: nodeIdentityFilesStub.addressFile,
+                minGasPrice: 0,
+                bootnodes: nodeIdentityFilesStub.enodeFile
+            }
+        }, nodeIdentityFilesStub);
+
+        expect(containerId).toBe(CONTAINER_ID);
+        expect(docker.createContainer).toHaveBeenCalledWith({
+            Image: "hyperledger/besu:latest",
+            name: nodeConfigStub.name,
+            Cmd: [
+                `--config-file=/data/config.toml`,
+                `--data-path=/data/${nodeConfigStub.name}/data`,
+                `--node-private-key-file=/data/${nodeIdentityFilesStub.privateKeyFile}`,
+                `--genesis-file=/data/genesis.json`,
+                `--miner-enabled=true`,
+                `--miner-coinbase="${nodeIdentityFilesStub.addressFile}"`,
+                `--min-gas-price=0`,
+                `--bootnodes="${nodeIdentityFilesStub.enodeFile}"`
+            ],
+            Labels: {
+                "node": nodeConfigStub.name,
+                "network": nodeConfigStub.network.name,
+                "project": PROJECT_LABEL,
+            },
+            HostConfig: {
+                PortBindings: {
+                    ['8545/tcp']: [{ HostPort: nodeConfigStub.hostPort.toString() }]
+                },
+                Binds: [`${nodeIdentityPath}:/data`]
+            },
+            NetworkingConfig: {
+                EndpointsConfig: {
+                    [nodeConfigStub.network.name]: {
+                        IPAMConfig: {
+                            IPv4Address: nodeConfigStub.network.ip
+                        }
+                    }
+                }
+            }
+        });
+        expect(mockContainer.start).toHaveBeenCalled();
+    });
+
 
     it('should remove the container if already exists before create a new one', async () => {
         const docker = new Docker();

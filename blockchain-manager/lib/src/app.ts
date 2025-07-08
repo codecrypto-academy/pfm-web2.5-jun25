@@ -1,60 +1,85 @@
 import Docker from "dockerode";
 import fs from "fs";
+import path from "path";
 import {
     BOOTNODE_IP,
     BOOTNODE_NAME,
     BOOTNODE_PORT,
+    CHAIN_ID,
     MINERNODE_IP,
     MINERNODE_NAME,
     MINERNODE_PORT,
     NETWORK_GATEWAY,
     NETWORK_NAME,
     NETWORK_SUBNET,
-    CHAIN_ID
 } from "./constants";
-import { createBesuNode } from "./services/createBesuNode";
-import { ensureNetworkExists } from "./services/ensureNetworkExists";
-import { BesuNodeConfig } from "./types";
-import { createNodeIdentityFiles } from "./services/createNodeIdentityFiles";
+import { createBesuNodeConfigFile } from "./services/besuNodeConfigFile";
 import { createCliqueGenesisFile } from "./services/cliqueGenesisFile";
-import { fstat } from "fs";
+import { createBesuNode } from "./services/createBesuNode";
+import { createNodeIdentityFiles } from "./services/createNodeIdentityFiles";
+import { ensureNetworkExists } from "./services/ensureNetworkExists";
+import { BesuNodeConfig, BesuNodeType } from "./types";
 
 const docker = new Docker();
 
 (async () => {
-    const networkId = await ensureNetworkExists(docker, { name: NETWORK_NAME, subnet: NETWORK_SUBNET, gateway: NETWORK_GATEWAY });
+    try {
+        await ensureNetworkExists(docker, { name: NETWORK_NAME, subnet: NETWORK_SUBNET, gateway: NETWORK_GATEWAY });
 
-    const bootnodeConfig: BesuNodeConfig = {
-        name: BOOTNODE_NAME,
-        network: {
-            name: NETWORK_NAME,
-            ip: BOOTNODE_IP
-        },
-        hostPort: BOOTNODE_PORT,
-    };
-    const bootnodeIdentityFiles = createNodeIdentityFiles(bootnodeConfig);
+        const blockchainDataPath = path.join(process.cwd(), NETWORK_NAME);
 
-    const minernodeConfig: BesuNodeConfig = {
-        name: MINERNODE_NAME,
-        network: {
-            name: NETWORK_NAME,
-            ip: MINERNODE_IP
-        },
-        hostPort: MINERNODE_PORT,
-    };
-    const minernodeIdentityFiles = createNodeIdentityFiles(minernodeConfig);
+        if (fs.existsSync(blockchainDataPath)) {
+            console.log(`Removing existing blockchain data at: ${blockchainDataPath}`);
+            fs.rmSync(blockchainDataPath, { recursive: true, force: true });
+        }
 
-    const validatorAddress = fs.readFileSync(minernodeIdentityFiles.addressFile, { encoding: 'utf-8' });
-    createCliqueGenesisFile({
-        chainId: CHAIN_ID,
-        network: NETWORK_NAME,
-        initialValidators: [`0x${validatorAddress}`]
-    });
+        const bootnodeConfig: BesuNodeConfig = {
+            name: BOOTNODE_NAME,
+            network: {
+                name: NETWORK_NAME,
+                ip: BOOTNODE_IP
+            },
+            hostPort: BOOTNODE_PORT,
+            type: BesuNodeType.BOOTNODE,
 
-    // create config.toml
+        };
+        const bootnodeIdentityFiles = createNodeIdentityFiles(bootnodeConfig);
 
-    const containerId = await createBesuNode(docker, bootnodeConfig, bootnodeIdentityFiles);
+        const minernodeConfig: BesuNodeConfig = {
+            name: MINERNODE_NAME,
+            network: {
+                name: NETWORK_NAME,
+                ip: MINERNODE_IP
+            },
+            hostPort: MINERNODE_PORT,
+            type: BesuNodeType.MINER,
+        };
+        const minernodeIdentityFiles = createNodeIdentityFiles(minernodeConfig);
 
+        const validatorAddress = fs.readFileSync(path.join(blockchainDataPath, minernodeIdentityFiles.addressFile), { encoding: 'utf-8' });
+        createCliqueGenesisFile(blockchainDataPath, {
+            chainId: CHAIN_ID,
+            initialValidators: [`0x${validatorAddress}`]
+        });
+
+        createBesuNodeConfigFile(blockchainDataPath);
+
+        await createBesuNode(docker, bootnodeConfig, bootnodeIdentityFiles);
+
+        const bootnodeEnode = fs.readFileSync(path.join(blockchainDataPath, bootnodeIdentityFiles.enodeFile), { encoding: 'utf-8' });
+        await createBesuNode(docker, {
+            ...minernodeConfig,
+            options: {
+                minerEnabled: true,
+                minerCoinbase: validatorAddress,
+                minGasPrice: 0,
+                bootnodes: bootnodeEnode
+            }
+        }, minernodeIdentityFiles);
+
+    } catch (error) {
+        throw error;
+    }
 })();
 
 

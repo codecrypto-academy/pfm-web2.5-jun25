@@ -50,14 +50,14 @@ During its testing phase, the script uses Node.js libraries (`ethers.js`) to sig
 
 ```bash
 # From the project root
-cd frontback
-npm install ethers
-cd ../script
+cd lib/shared
+npm install ethers  # to avoid installing other libs (used for next blocks) via `npm install`
+cd ../../script
 ```
 
-> **Why `frontback/`?** This folder already contains a separate Next.js app, but it's **not** used in these tests. We just reuse its `node_modules` to avoid duplicate installs. If you're only running the Bash script, you can ignore all Next.js files—both parts of the repo are independent.
+> **Why `lib/shared/`?** This folder already contains a separate Next.js app, but it's **not** used in these tests. We just reuse its `node_modules` to avoid duplicate installs. If you're only running the Bash script, you can ignore all Next.js files—both parts of the repo are independent.
 >
-> The script reads the path to these dependencies from **`config.yaml`** (`tx_signer_deps_dir`). The default is `../frontback`, but you can change it if your directory layout differs. See the next section for details.
+> The script reads the path to these dependencies from **`config.yaml`** (`tx_signer_deps_dir`). The default is `../lib/shared`, but you can change it if your directory layout differs. See the next section for details.
 
 #### Using in Other Environments
 

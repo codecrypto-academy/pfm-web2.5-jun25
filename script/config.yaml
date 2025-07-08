@@ -67,7 +67,7 @@ rpc:
 
 # Path to the directory containing transaction signing dependencies (Node.js)
 # Path relative to config.yaml directory, resolved as absolute path by script.sh
-tx_signer_deps_dir: "../frontback/"
+tx_signer_deps_dir: "../lib/shared"
 
 # Test transactions to verify the network
 # The script will convert 'value_ether' to Wei

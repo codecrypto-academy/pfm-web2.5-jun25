@@ -30,7 +30,7 @@ metrics-enabled=false
 
 # Mining configuration
 miner-enabled=true
-miner-coinbase="0x3922b3fffbca37df93d8029667b69c74e4c5316a"
+miner-coinbase="0x1d10e7a701f1cc65793d3bb879b55754c8ea6a87"
 
 # Node identity
 node-private-key-file="/data/key"

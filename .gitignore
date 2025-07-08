@@ -7,9 +7,24 @@ etc/wisdom/*
 
 # Ignore env_forwarding script
 script/env_forwarding
+script/nodes
 
-# Ignore node_modules in frontback
-frontback/node_modules/
+# Node dependencies
+node_modules/
+lib/node_modules/
+
+# Compilados de TypeScript
+dist/
+build/
+*.tsbuildinfo
+
+# Cachés de Jest
+coverage/
+jest-cache/
+jest-transform-cache/
+
+# Archivos temporales del editor
+.vscode/
 
 # (Optional) Ignore common temporary files
 *.log

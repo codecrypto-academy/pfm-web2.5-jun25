@@ -2561,16 +2561,16 @@ test_p2p_connectivity() {
     log_success "  - Expected peers per node: $((NODE_COUNT - 1))"
     
     if [[ ${#isolated_nodes[@]} -eq 0 ]]; then
-        log_success "✓ All tested nodes appear to be connected to the network"
+        log_success "All tested nodes appear to be connected to the network"
         
         # Check if we have good network density
         if [[ $avg_peers -ge $((NODE_COUNT / 2)) ]]; then
-            log_success "✓ Good network density - sufficient peer connections"
+            log_success "Good network density - sufficient peer connections"
         else
-            log_warning "⚠ Low network density - consider checking node configurations"
+            log_warning "Low network density - consider checking node configurations"
         fi
     else
-        log_warning "✗ ${#isolated_nodes[@]} node(s) may be isolated: ${isolated_nodes[*]}"
+        log_warning "${#isolated_nodes[@]} node(s) may be isolated: ${isolated_nodes[*]}"
         
     fi
     
@@ -3162,9 +3162,9 @@ EOF
         
         if [[ $errors -eq 0 ]]; then
             log_success "All transaction tests passed"
-            log_success "✓ Transaction signing working correctly"
-            log_success "✓ Transaction submission successful"
-            log_success "✓ Transaction confirmation verified"
+            log_success "Transaction signing working correctly"
+            log_success "Transaction submission successful"
+            log_success "Transaction confirmation verified"
         else
             log_warning "$errors transaction(s) failed during processing"
         fi

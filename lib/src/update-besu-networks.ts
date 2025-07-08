@@ -640,6 +640,7 @@ export class BesuNetworkUpdater {
   }): Promise<void> {
     let needsRestart = false;
     const errors: ValidationError[] = [];
+    let nodesPropertiesUpdated = false;
 
     const config = this.besuNetwork.getConfig();
     const nodes = this.besuNetwork.getNodes();
@@ -712,6 +713,7 @@ export class BesuNetworkUpdater {
             // Directly update the configuration since updateRpcPort method doesn't exist
             (node as any).config.rpcPort = nodeUpdate.rpcPort;
             nodeChanged = true;
+            nodesPropertiesUpdated = true;
           }
         }
 
@@ -1396,8 +1398,8 @@ export async function updateNodeConfigurations(network: BesuNetwork): Promise<vo
       tomlConfig = node.generateTomlConfig(config, bootnodeEnodes);
     }
     
-    // Guardar nueva configuración
-    fileService.createFile(nodeConfig.name, 'config.toml', tomlConfig);
+    // Guardar nueva configuración con el mismo patrón de nombre que en la creación inicial
+    fileService.createFile('', `${nodeConfig.name}_config.toml`, tomlConfig);
   }
 }
 
@@ -1519,6 +1521,12 @@ export async function updateNetworkNodesByName(
       name: string,
       updates: Partial<BesuNodeDefinition>
     }>,
+    nodes?: Array<{
+      name: string;
+      ip?: string;
+      rpcPort?: number;
+      p2pPort?: number;
+    }>,
     remove?: Array<string>
   },
   options: {
@@ -1549,6 +1557,7 @@ export async function updateNetworkNodesByName(
   let rawConfig: any = {};
   
   if (fs.existsSync(configPath)) {
+    console.log(`📂 Loading existing network configuration from: ${configPath}`);
     const configData = fs.readFileSync(configPath, 'utf-8');
     rawConfig = JSON.parse(configData);
     config = {
@@ -1562,6 +1571,16 @@ export async function updateNetworkNodesByName(
       signerAccounts: rawConfig.signerAccounts,
       accounts: rawConfig.accounts
     };
+    
+    // Log the nodes found in the config file
+    if (rawConfig.nodes && Array.isArray(rawConfig.nodes)) {
+      console.log(`📊 Found ${rawConfig.nodes.length} nodes in config file:`);
+      rawConfig.nodes.forEach((node: any) => {
+        console.log(`   - ${node.name} (${node.type}) at ${node.ip}:${node.rpcPort || 'N/A'}`);
+      });
+    } else {
+      console.log(`⚠️ No nodes found in config file`);
+    }
   } else {
     // Si no existe archivo de configuración, crear una configuración básica
     console.log(`⚠️  Network configuration file not found: ${configPath}`);
@@ -1593,21 +1612,70 @@ export async function updateNetworkNodesByName(
 
   try {
     // Obtener conjunto actual de nodos
-    const currentNodes = network.getNodes();
-    const currentNodeDefinitions: BesuNodeDefinition[] = [];
-    for (const [nodeName, node] of currentNodes) {
-      const nodeConfig = node.getConfig();
-      currentNodeDefinitions.push({
-        name: nodeName,
-        ip: nodeConfig.ip,
-        rpcPort: nodeConfig.rpcPort,
-        type: nodeConfig.type as 'bootnode' | 'miner' | 'rpc' | 'node',
-        p2pPort: nodeConfig.port
-      });
+    // Primero intentar cargar nodos desde la configuración
+    let currentNodeDefinitions: BesuNodeDefinition[] = [];
+    
+    if (fs.existsSync(configPath)) {
+      try {
+        const configData = fs.readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configData);
+        
+        // Obtener los nodos desde la configuración guardada
+        if (config.nodes && Array.isArray(config.nodes)) {
+          console.log(`🔍 Loading ${config.nodes.length} nodes from config file`);
+          currentNodeDefinitions = config.nodes.map((node: any) => ({
+            name: node.name,
+            ip: node.ip,
+            rpcPort: node.rpcPort,
+            type: node.type as 'bootnode' | 'miner' | 'rpc' | 'node',
+            p2pPort: node.p2pPort || node.port || 30303
+          }));
+        }
+      } catch (error) {
+        console.error(`⚠️  Error loading nodes from config: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    // Si no hay nodos en la configuración, intentar obtenerlos del objeto network
+    if (currentNodeDefinitions.length === 0) {
+      console.log('⚠️  No nodes found in config file, using in-memory network nodes');
+      const currentNodes = network.getNodes();
+      for (const [nodeName, node] of currentNodes) {
+        const nodeConfig = node.getConfig();
+        currentNodeDefinitions.push({
+          name: nodeName,
+          ip: nodeConfig.ip,
+          rpcPort: nodeConfig.rpcPort,
+          type: nodeConfig.type as 'bootnode' | 'miner' | 'rpc' | 'node',
+          p2pPort: nodeConfig.port
+        });
+      }
     }
 
     // Simular las operaciones para calcular el conjunto final de nodos
-    let finalNodeDefinitions = [...currentNodeDefinitions];
+    let finalNodeDefinitions: BesuNodeDefinition[] = [];
+    
+    // Use the nodes from the config file if available, otherwise use the ones from currentNodeDefinitions
+    if (rawConfig.nodes && Array.isArray(rawConfig.nodes)) {
+      // Convert the raw nodes to BesuNodeDefinition format
+      finalNodeDefinitions = rawConfig.nodes.map((node: any) => ({
+        name: node.name,
+        ip: node.ip,
+        rpcPort: node.rpcPort,
+        type: node.type as 'bootnode' | 'miner' | 'rpc' | 'node',
+        p2pPort: node.p2pPort || node.port || 30303
+      }));
+      console.log(`🔍 Using ${finalNodeDefinitions.length} nodes from config file`);
+    } else {
+      finalNodeDefinitions = [...currentNodeDefinitions];
+      console.log(`🔍 Using ${finalNodeDefinitions.length} nodes from network instance`);
+    }
+    
+    // Debug what nodes were found
+    console.log(`🔍 Nodes to work with:`);
+    finalNodeDefinitions.forEach(node => {
+      console.log(`   - ${node.name} (${node.type}) at ${node.ip}:${node.rpcPort}`);
+    });
 
     // 1. Procesar eliminaciones
     if (nodeUpdates.remove && nodeUpdates.remove.length > 0) {
@@ -1622,15 +1690,23 @@ export async function updateNetworkNodesByName(
     if (nodeUpdates.update && nodeUpdates.update.length > 0) {
       console.log(`🔍 Simulating update of ${nodeUpdates.update.length} nodes...`);
       for (const updateInfo of nodeUpdates.update) {
+        console.log(`   Looking for node ${updateInfo.name} to update...`);
         const nodeIndex = finalNodeDefinitions.findIndex(n => n.name === updateInfo.name);
         if (nodeIndex >= 0) {
           // Aplicar actualizaciones
+          console.log(`   Found node ${updateInfo.name} at index ${nodeIndex}`);
+          const originalNode = finalNodeDefinitions[nodeIndex];
           finalNodeDefinitions[nodeIndex] = {
-            ...finalNodeDefinitions[nodeIndex],
+            ...originalNode,
             ...updateInfo.updates
           };
           console.log(`   Node to update: ${updateInfo.name}`);
+          console.log(`   Original properties: ${JSON.stringify(originalNode)}`);
+          console.log(`   Updated properties: ${JSON.stringify(updateInfo.updates)}`);
+          console.log(`   Final node: ${JSON.stringify(finalNodeDefinitions[nodeIndex])}`);
         } else {
+          console.log(`   ❌ Node ${updateInfo.name} not found in finalNodeDefinitions`);
+          console.log(`   Available nodes: ${finalNodeDefinitions.map(n => n.name).join(', ')}`);
           throw new Error(`Node '${updateInfo.name}' not found for update`);
         }
       }
@@ -1724,6 +1800,15 @@ export async function updateNetworkNodesByName(
     if (nodeUpdates.update && nodeUpdates.update.length > 0) {
       console.log(`🔄 Updating ${nodeUpdates.update.length} existing nodes...`);
       
+      // Primero, guardar las actualizaciones en la configuración del network
+      let networkConfig = rawConfig;
+      if (!networkConfig.nodes) {
+        networkConfig.nodes = [];
+        currentNodeDefinitions.forEach(nodeDef => {
+          networkConfig.nodes.push(nodeDef);
+        });
+      }
+      
       for (const updateInfo of nodeUpdates.update) {
         const node = network.getNodeByName(updateInfo.name);
         if (!node) {
@@ -1732,17 +1817,51 @@ export async function updateNetworkNodesByName(
         }
         
         try {
-          // Aplicar actualizaciones al nodo
+          // Update node configuration in the network instance
+          console.log(`   🔧 Updating node: ${updateInfo.name}`);
+          
+          // Update IP if provided
           if (updateInfo.updates.ip && updateInfo.updates.ip !== node.getConfig().ip) {
+            console.log(`   🌐 Updating IP from ${node.getConfig().ip} to ${updateInfo.updates.ip}`);
             node.updateIp(updateInfo.updates.ip);
           }
           
+          // Update RPC port if provided
           if (updateInfo.updates.rpcPort && updateInfo.updates.rpcPort !== node.getConfig().rpcPort) {
+            console.log(`   🔌 Updating RPC port from ${node.getConfig().rpcPort} to ${updateInfo.updates.rpcPort}`);
             (node as any).config.rpcPort = updateInfo.updates.rpcPort;
           }
           
-          if (updateInfo.updates.p2pPort && updateInfo.updates.p2pPort !== 30303) {
+          // Update P2P port if provided
+          if (updateInfo.updates.p2pPort && updateInfo.updates.p2pPort !== (node.getConfig().port || 30303)) {
+            console.log(`   🔌 Updating P2P port from ${node.getConfig().port || 30303} to ${updateInfo.updates.p2pPort}`);
             (node as any).config.port = updateInfo.updates.p2pPort;
+          }
+          
+          // Update node in the configuration file
+          const nodeIndex = networkConfig.nodes.findIndex((n: any) => n.name === updateInfo.name);
+          if (nodeIndex >= 0) {
+            // Update the node properties in the config
+            console.log(`   📝 Updating node in configuration file`);
+            const nodeConfig = networkConfig.nodes[nodeIndex];
+            
+            if (updateInfo.updates.ip) {
+              nodeConfig.ip = updateInfo.updates.ip;
+            }
+            
+            if (updateInfo.updates.rpcPort) {
+              nodeConfig.rpcPort = updateInfo.updates.rpcPort;
+            }
+            
+            if (updateInfo.updates.p2pPort) {
+              nodeConfig.p2pPort = updateInfo.updates.p2pPort;
+            }
+            
+            if (updateInfo.updates.type) {
+              nodeConfig.type = updateInfo.updates.type;
+            }
+          } else {
+            console.warn(`   ⚠️ Node ${updateInfo.name} not found in configuration file`);
           }
           
           result.nodesUpdated.push(updateInfo.name);
@@ -1752,8 +1871,120 @@ export async function updateNetworkNodesByName(
         }
       }
       
-      // Actualizar archivos de configuración para los nodos
-      await updateNodeConfigurations(network);
+      // Save the updated configuration
+      const configFilePath = path.join(networkPath, 'network-config.json');
+      fs.writeFileSync(configFilePath, JSON.stringify(networkConfig, null, 2));
+      console.log(`💾 Updated configuration saved to: ${configFilePath}`);
+      
+      // Reload the network with the updated configuration
+      console.log(`🔄 Reloading network with updated configuration...`);
+      const updatedConfigData = fs.readFileSync(configFilePath, 'utf-8');
+      const updatedConfig = JSON.parse(updatedConfigData);
+      const refreshedNetwork = new BesuNetwork(updatedConfig, baseDir);
+      
+      // Manually add nodes to the refreshed network using the updated configuration
+      console.log(`🔧 Adding nodes to refreshed network from updated config...`);
+      if (updatedConfig.nodes && Array.isArray(updatedConfig.nodes)) {
+        for (const nodeConfigData of updatedConfig.nodes) {
+          const nodeConfig = {
+            name: nodeConfigData.name,
+            ip: nodeConfigData.ip,
+            port: nodeConfigData.p2pPort || nodeConfigData.port || 30303,
+            rpcPort: nodeConfigData.rpcPort,
+            type: nodeConfigData.type
+          };
+          
+          console.log(`   📝 Creating node ${nodeConfig.name} with config: IP=${nodeConfig.ip}, RPC=${nodeConfig.rpcPort}, P2P=${nodeConfig.port}`);
+          const node = new BesuNode(nodeConfig, refreshedNetwork.getFileService());
+          (refreshedNetwork as any).nodes.set(nodeConfig.name, node);
+        }
+        console.log(`✅ Added ${updatedConfig.nodes.length} nodes to refreshed network`);
+      }
+      
+      // Regenerate TOML configuration files for all nodes
+      console.log(`📝 Regenerating TOML configuration files...`);        // Generate TOML files within the nodes' directories
+      for (const [nodeName, node] of refreshedNetwork.getNodes()) {
+        try {
+          const nodeConfig = node.getConfig();
+          
+          // Create the TOML content for each node
+          let tomlContent = "";
+          const bootnodeNodes = refreshedNetwork.getNodesByType('bootnode');
+          const bootnodeEnodes = bootnodeNodes.map(bootnode => bootnode.getKeys().enode);
+          
+          // Check if this node is one we're updating with new properties
+          let updatedConfig = null;
+          if (nodeUpdates.update) {
+            const updateInfo = nodeUpdates.update.find(update => update.name === nodeName);
+            if (updateInfo) {
+              console.log(`   🔄 Applying updates directly to node ${nodeName} before generating TOML`);
+              
+              // Create a copy of the node config with the updates
+              updatedConfig = { ...nodeConfig };
+              
+              if (updateInfo.updates.rpcPort) {
+                console.log(`   📝 Setting rpcPort to ${updateInfo.updates.rpcPort} for ${nodeName}`);
+                updatedConfig.rpcPort = updateInfo.updates.rpcPort;
+              }
+              
+              if (updateInfo.updates.ip) {
+                console.log(`   📝 Setting IP to ${updateInfo.updates.ip} for ${nodeName}`);
+                updatedConfig.ip = updateInfo.updates.ip;
+              }
+              
+              if (updateInfo.updates.p2pPort) {
+                console.log(`   📝 Setting p2pPort to ${updateInfo.updates.p2pPort} for ${nodeName}`);
+                updatedConfig.port = updateInfo.updates.p2pPort;
+              }
+              
+              // Apply the updated config back to the node
+              (node as any).config = updatedConfig;
+            }
+          }
+          
+          if (nodeConfig.type === 'bootnode') {
+            tomlContent = node.generateTomlConfig(refreshedNetwork.getConfig());
+          } else if (nodeConfig.type === 'miner') {
+            const minerSignerAssociations = refreshedNetwork.getMinerSignerAssociations();
+            const association = minerSignerAssociations.find(a => a.minerName === nodeName);
+            if (association) {
+              tomlContent = node.generateTomlConfig(refreshedNetwork.getConfig(), bootnodeEnodes, association.signerAccount.address);
+            } else {
+              tomlContent = node.generateTomlConfig(refreshedNetwork.getConfig(), bootnodeEnodes);
+            }
+          } else {
+            tomlContent = node.generateTomlConfig(refreshedNetwork.getConfig(), bootnodeEnodes);
+          }
+          
+          // Write the TOML file both to the node directory and to the network directory (for Docker mounts)
+          const nodeTomlPath = path.join(networkPath, nodeName, 'config.toml');
+          const networkTomlPath = path.join(networkPath, `${nodeName}_config.toml`);
+          
+          fs.writeFileSync(nodeTomlPath, tomlContent);
+          fs.writeFileSync(networkTomlPath, tomlContent);
+          
+          console.log(`   ✅ Generated TOML config for ${nodeName}`);
+          
+          // For updated nodes, check if the port was properly updated
+          if (nodeUpdates.update) {
+            const nodeUpdate = nodeUpdates.update.find(update => update.name === nodeName);
+            if (nodeUpdate && nodeUpdate.updates.rpcPort) {
+              const portString = `rpc-http-port=${nodeUpdate.updates.rpcPort}`;
+              console.log(`   🔍 Checking if ${nodeName} TOML contains port ${nodeUpdate.updates.rpcPort}`);
+              if (tomlContent.includes(portString)) {
+                console.log(`   ✅ TOML for ${nodeName} correctly contains port ${nodeUpdate.updates.rpcPort}`);
+              } else {
+                console.log(`   ❌ TOML for ${nodeName} does NOT contain port ${nodeUpdate.updates.rpcPort}`);
+                console.log(`   🔍 Port line in TOML: ${tomlContent.match(/rpc-http-port=\d+/)?.[0] || 'not found'}`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`   ❌ Error generating TOML for ${nodeName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      console.log(`✅ TOML configuration files updated for all nodes`);
     }
 
     // Añadir nuevos nodos
@@ -1783,6 +2014,22 @@ export async function updateNetworkNodesByName(
         
         console.log(`   ✅ Created node files for: ${nodeDefinition.name}`);
       }
+      
+      // Reload the network configuration from file to include new nodes
+      console.log(`🔄 Reloading network configuration with new nodes...`);
+      const configFilePath = path.join(networkPath, 'network-config.json');
+      if (fs.existsSync(configFilePath)) {
+        const updatedConfigData = fs.readFileSync(configFilePath, 'utf-8');
+        const updatedConfig = JSON.parse(updatedConfigData);
+        
+        // Create new network instance with updated configuration
+        const refreshedNetwork = new BesuNetwork(updatedConfig, baseDir);
+        
+        // Generate TOML configuration files for all nodes including new ones
+        console.log(`📝 Generating TOML configuration files for all nodes...`);
+        await updateNodeConfigurations(refreshedNetwork);
+        console.log(`✅ TOML configuration files updated for all nodes`);
+      }
     }
 
     // Guardar la configuración actualizada
@@ -1794,6 +2041,19 @@ export async function updateNetworkNodesByName(
       try {
         const existingConfigData = fs.readFileSync(currentConfigPath, 'utf-8');
         const existingConfig = JSON.parse(existingConfigData);
+        
+        // Make sure the existing config's nodes include any updates we've made
+        if (existingConfig.nodes && nodeUpdates.update) {
+          console.log(`   📝 Updating node properties in final configuration...`);
+          nodeUpdates.update.forEach(updateInfo => {
+            const nodeToUpdate = existingConfig.nodes.find((n: any) => n.name === updateInfo.name);
+            if (nodeToUpdate) {
+              console.log(`      ✏️ Updating ${updateInfo.name} in final config`);
+              Object.assign(nodeToUpdate, updateInfo.updates);
+            }
+          });
+        }
+        
         updatedConfig = { ...existingConfig, ...updatedConfig };
       } catch (error) {
         console.warn('Warning: Could not merge with existing config, using new config only');

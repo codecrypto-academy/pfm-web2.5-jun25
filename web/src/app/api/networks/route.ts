@@ -46,7 +46,8 @@ import {
   generateNodeIPs, 
   generateNodePorts, 
   generateNodeTypes, 
-  validateNetworkConfig 
+  validateNetworkConfig,
+  calculateGateway 
 } from '@/lib/networkUtils';
 import { 
   NETWORK_DEFAULTS, 
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
       chainId, 
       nodeCount = NETWORK_DEFAULTS.NODE_COUNT,
       subnet = NETWORK_DEFAULTS.SUBNET,
-      gateway = NETWORK_DEFAULTS.GATEWAY,
+      gateway,
       baseRpcPort = PORT_DEFAULTS.BASE_RPC_PORT,
       baseP2pPort = PORT_DEFAULTS.BASE_P2P_PORT,
       bootnodeCount = NETWORK_DEFAULTS.BOOTNODE_COUNT,
@@ -139,13 +140,16 @@ export async function POST(request: NextRequest) {
       env = {}
     } = body;
 
+    // Calculate gateway if not provided
+    const finalGateway = gateway || calculateGateway(subnet);
+
     // Validate input
     const validation = validateNetworkConfig({
       networkId,
       chainId,
       nodeCount,
       subnet,
-      gateway
+      gateway: finalGateway
     });
 
     if (!validation.valid) {
@@ -176,7 +180,7 @@ export async function POST(request: NextRequest) {
       networkId,
       chainId,
       subnet,
-      gateway,
+      gateway: finalGateway,
       nodes: []
     };
 

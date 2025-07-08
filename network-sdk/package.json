@@ -23,7 +23,10 @@
     "dev": "tsx src/index.ts",
     "clean": "rm -rf dist",
     "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts"
+    "format": "prettier --write src/**/*.ts",
+    "prepublishOnly": "yarn clean && yarn build",
+    "version": "yarn format && git add -A src",
+    "postversion": "git push && git push --tags"
   },
   "keywords": [
     "besu",
@@ -36,8 +39,20 @@
     "hyperledger",
     "typescript"
   ],
-  "author": "Your Name",
+  "author": "Rob Galeano",
   "license": "MIT",
+  "homepage": "https://github.com/robgaleano/pfm-web2.5/tree/main/network-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robgaleano/pfm-web2.5.git",
+    "directory": "network-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/robgaleano/pfm-web2.5/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "dockerode": "^4.0.7",
     "elliptic": "^6.5.4",

@@ -37,7 +37,9 @@ graph TD
 interface Network {
   id: string;
   name: string;
-  chainId: number;
+  ip: string; // IP del nodo principal
+  signerAddress: string; // Dirección del firmante
+  chainId: number; // ID de la cadena
   nodes: Node[];
   accounts: Account[];
   createdAt: Date;
@@ -50,7 +52,7 @@ interface Network {
 interface Node {
   id: string;
   networkId: string;
-  type: 'bootnode' | 'validator' | 'rpc';
+  type: 'bootnode' | 'miner' | 'rpc' | 'node';
   ip: string;
   port: number;
   status: 'running' | 'stopped';

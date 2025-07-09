@@ -3,7 +3,6 @@ import handler from '@/lib/ai-chat';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  // Simule un objet de réponse compatible avec le handler
   let statusCode = 200;
   let jsonData: any = {};
   const res = {

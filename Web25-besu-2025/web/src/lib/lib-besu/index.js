@@ -69,30 +69,35 @@ class DockerNetwork {
             if (!containerIds) {
                 return;
             }
-            const containersJson = executeCommand(`docker inspect ${containerIds}`);
-            const containers = JSON.parse(containersJson);
-            for (const container of containers) {
-                const labels = container.Config.Labels;
-                if (labels && labels.network === this._name) {
-                    let nodeType;
-                    for (const possibleType of ['bootnode', 'miner', 'rpc', 'node']) {
-                        if (labels.nodo && labels.nodo.startsWith(possibleType)) {
-                            nodeType = possibleType;
-                            break;
+            // CORRECTION: split IDs and inspect each container individually
+            const containerIdList = containerIds.split('\n').filter(Boolean);
+            if (containerIdList.length === 0)
+                return;
+            for (const containerId of containerIdList) {
+                const containerJson = executeCommand(`docker inspect ${containerId}`);
+                const containers = JSON.parse(containerJson);
+                for (const container of containers) {
+                    const labels = container.Config.Labels;
+                    if (labels && labels.network === this._name) {
+                        let nodeType;
+                        for (const possibleType of ['bootnode', 'miner', 'rpc', 'node']) {
+                            if (labels.nodo && labels.nodo.startsWith(possibleType)) {
+                                nodeType = possibleType;
+                                break;
+                            }
                         }
+                        if (!nodeType)
+                            continue;
+                        const port = labels.port;
+                        const networkSettings = container.NetworkSettings.Networks[this._name];
+                        const ip = networkSettings ? networkSettings.IPAddress : '';
+                        this._besuNodes.push({
+                            name: container.Name.replace('/', ''),
+                            ip: ip,
+                            port: port,
+                            type: nodeType
+                        });
                     }
-                    if (!nodeType)
-                        continue;
-                    //const nodeType = labels.nodo as 'bootnode' | 'miner' | 'rpc' | 'node';
-                    const port = labels.port;
-                    const networkSettings = container.NetworkSettings.Networks[this._name];
-                    const ip = networkSettings ? networkSettings.IPAddress : '';
-                    this._besuNodes.push({
-                        name: container.Name.replace('/', ''),
-                        ip: ip,
-                        port: port,
-                        type: nodeType
-                    });
                 }
             }
         }
@@ -271,16 +276,24 @@ bootnodes=["${bootnode}"]
         catch (error) {
             console.log(`Container ${this._name}-${nodeName} doesn't exist or couldn't be removed: ${error}`);
         }
-        if (nodeName !== nodeType) {
-            // Create repository node if it doesn't exist
-            const nodeDir = path_1.default.join(this._fileService.folder, this._name, nodeName);
-            if (!fs_1.default.existsSync(nodeDir)) {
-                // Create the directory for the node
-                fs_1.default.mkdirSync(nodeDir, { recursive: true });
-                // Create keys for the node
-                const subnet = this._networkData?.[0]?.IPAM?.Config?.[0]?.Subnet || "";
-                createKeys(this._fileService, this._name, subnet, nodeName);
-            }
+        // --- PATCH: logique de nommage cohérente pour les mineurs ---
+        let nodeDirName = nodeName;
+        if (nodeType === 'miner') {
+            // Récupère tous les ports des mineurs existants + celui en cours de création
+            const allMinerPorts = this._besuNodes
+                .filter(n => n.type === 'miner')
+                .map(n => parseInt(n.port));
+            allMinerPorts.push(parseInt(port));
+            const lowestPort = Math.min(...allMinerPorts);
+            // Si c'est le premier mineur (plus petit port), dossier = "miner", sinon "miner{port}"
+            nodeDirName = parseInt(port) === lowestPort ? "miner" : `miner${port}`;
+        }
+        // Crée le dossier du noeud si besoin
+        const nodeDir = path_1.default.join(this._fileService.folder, this._name, nodeDirName);
+        if (!fs_1.default.existsSync(nodeDir)) {
+            fs_1.default.mkdirSync(nodeDir, { recursive: true });
+            const subnet = this._networkData?.[0]?.IPAM?.Config?.[0]?.Subnet || "";
+            createKeys(this._fileService, this._name, subnet, nodeDirName);
         }
         try {
             let dockerCommand;
@@ -318,7 +331,7 @@ bootnodes=["${bootnode}"]
             }
             else if (nodeType === "miner") {
                 // Read miner address for coinbase
-                const minerAddress = await this._fileService.readFile(this._name, `${nodeName}/address`);
+                const minerAddress = await this._fileService.readFile(this._name, `${nodeDirName}/address`);
                 dockerCommand = `docker run -d \
                     --name ${this._name}-${nodeName} \
                     --label nodo=${nodeName} \
@@ -330,8 +343,8 @@ bootnodes=["${bootnode}"]
                     -v ${this._fileService.folder}/${this._name}:/data \
                     hyperledger/besu:latest \
                     --config-file=/data/config.toml \
-                    --data-path=/data/${nodeName}/data \
-                    --node-private-key-file=/data/${nodeName}/key \
+                    --data-path=/data/${nodeDirName}/data \
+                    --node-private-key-file=/data/${nodeDirName}/key \
                     --genesis-file=/data/genesis.json \
                     --miner-enabled=true \
                     --miner-coinbase=${minerAddress.trim()}`;

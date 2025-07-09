@@ -45,7 +45,18 @@ Interfaz gráfica desarrollada con Next.js 13 que incluye:
 - Integración con MongoDB para persistencia
 - Incluye la librería lib-docker compilada en `lib-besu`
 
-#### Datos de Red (`/web/networks/Keypair`)
+#### Servidor MCP (`/web/mcp-server`)
+- Contiene un servidor MCP (Model Context Protocol
+- Implementa el modelo de contexto para la gestión de redes Besu
+- Gestiona la creación y la gestión de redes Besu
+- Permite la interacción con la IA para automatización de tareas
+- Permite gestionar la lógica de negocio con un lenguaje humano 
+
+#### Datos de ejemplo de redes (`/web/data`)
+- Contiene un fichero JSON con ejemplos de redes Besu
+- Facilita la creación de redes de pruebas en mongoDB
+
+#### Claves y direcciones para nodos (`/web/networks/Keypair`)
 - Contine las cuentas usadas para el primer firmante
 - Almacena pares de claves predefinidos
 - Claves públicas y privadas para validadores
@@ -147,26 +158,54 @@ graph LR
 
    # Compilar la librería
    npm run build
-
-   # Copiar los archivos compilados a la aplicación web
-   # En Windows
-   xcopy /E /I /Y dist ..\web\src\lib\lib-besu
-
-   # En Linux/Mac
-   cp -r dist/* ../web/src/lib/lib-besu/
    ```
+   # Copiar los archivos compilados a la aplicación web y al servidor MCP
+
+   ## En Windows
+   ```bash
+   xcopy /E /I /Y dist ..\web\src\lib\lib-besu
+   xcopy /E /I /Y dist ..\web\mcp-server\dist\lib-besu
+   ```
+
+   ## En Linux/Mac
+   ```bash
+   cp -r dist/* ../web/src/lib/lib-besu/
+   cp -r dist/* ../web/mcp-server/dist/lib-besu/
+   ```
+   
    Este proceso actualiza la librería en la aplicación web con los últimos cambios realizados.
 
 4. **Iniciar Servicios**
    ```bash
-   # Iniciar aplicación web
+
+   cd scripts
+   # Iniciar la base de datos MongoDB (Solo la primera vez)
+   ./mongodb-docker-setup.sh
+
+   cd ../web
+   # Iniciar servidor MCP
+   npm run start:mcp-server
+
+   #-----------Y en otro terminal ------------
+
    cd web
+   # Iniciar aplicación web
    npm run dev
    ```
 
 5. **Gestión de Firmantes con besu-ethers-toolkit.js**
 
-   Los nodos validadores que son creados al mismo tiempo que la red son firmantes por defecto. Para añadir o eliminar firmantes, se utiliza el script `besu-ethers-toolkit.js` que interactúa con la red Besu a través de JSON-RPC.
+   Los nodos validadores que son creados son firmantes por defecto. Para añadir o eliminar firmantes, se utiliza el script `besu-ethers-toolkit.js` que interactúa con la red Besu a través de JSON-RPC.
+
+   Para configurar el script besu-ethers-toolkit.js, debes crear un archivo `.env` en el directorio scripts y definir las siguientes variables de entorno:
+   ```bash
+   BESU_RPC=http://localhost:18555 (Puerto del node Besu Firmante)
+   PRIVATE_KEY=0x... (clave privada del firmante)
+   ```
+
+   BESU_RPC indica la URL del nodo Besu al que se conectará el script.
+   PRIVATE_KEY es la clave privada de la cuenta que firmará las transacciones.
+   Asegúrate de mantener este archivo seguro, ya que contiene información sensible.
    
    ```bash
    # Mostrar los firmantes actuales
@@ -245,6 +284,46 @@ graph LR
    - Comprobar configuración bootnode
    - Revisar reglas de firewall
 
+## AI Manager
+
+El sistema incluye un módulo de gestión inteligente (AI Manager) que facilita la interacción y automatización de tareas en la red Besu mediante inteligencia artificial.
+
+### 1. Integración con OpenAI
+
+La IA del sistema utiliza la API de OpenAI para asistir en la gestión de redes, generación de comandos, ayuda contextual y automatización de flujos. Para habilitar esta funcionalidad es necesario disponer de una clave de API de OpenAI.
+
+- **Dónde colocar la clave:**
+  Debe crearse un archivo `.env.local` en el directorio `web/` con el siguiente contenido:
+  
+  ```env
+  OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  ```
+  Sustituya el valor por su clave personal de OpenAI. Sin esta clave, las funciones de IA no estarán disponibles en la interfaz web.
+
+### 2. Servidor MCP (Model Context Protocol)
+
+El servidor MCP es responsable de gestionar la comunicación entre la interfaz web y los servicios de backend, incluyendo la IA y la gestión de redes Besu. Este servidor permite la orquestación de tareas complejas y la integración de la lógica de negocio avanzada.
+
+- **¿Para qué sirve?**
+  - Centraliza la lógica de gestión de redes y nodos
+  - Expone endpoints para la IA y la administración de la red
+  - Permite la creación y gestión de redes Besu desde la web
+  - Permite la interacción con MongoDB para persistencia de datos
+  - Permite añadir funciones de forma modular y escalable
+  - Permite añadir condiciones y reglas complejas de forma sencilla
+
+  **Cómo se compila:**
+   - Asegúrese de que la librería `lib-docker` está compilada y actualizada en el directorio `web/mcp-server/dist/lib-besu/`.
+   - La librería se compila al ejecutar `npm run build` en el directorio `web/mcp-server`.
+
+- **Cómo se ejecuta:**
+  Desde el directorio `web`, utilice el siguiente comando para iniciar el servidor MCP:
+  
+  ```bash
+  npm run start:mcp-server
+  ```
+  > **Importante:** Debe ejecutar este comando para poder utilizar la pagina AI Manager. Y se debe ejecutar desde el directorio `web` para que los directorios de las redes se creen en la ubicación correcta. Si se ejecuta desde otro directorio, la estructura de carpetas podría no ser la esperada y causar errores en la gestión de redes.
+
 ## Mejoras Potenciales
 
 1. **Publicación de lib-docker en NPM**
@@ -260,8 +339,12 @@ graph LR
 
 - [Documentación Hyperledger Besu](https://besu.hyperledger.org/en/stable/)
 - [Especificación Clique PoA](https://eips.ethereum.org/EIPS/eip-225)
+- [Ethers.js Documentation](https://docs.ethers.io/v5/)
 - [Docker Documentation](https://docs.docker.com/)
 - [MongoDB Documentation](https://www.mongodb.com/docs/)
+- [Next.js Documentation](https://nextjs.org/docs)
+- [OpenAI API Documentation](https://platform.openai.com/docs/api-reference)
+- [Model Context Protocol Documentation](https://github.com/openai/model-context-protocol)
 
 ## Licencia
 

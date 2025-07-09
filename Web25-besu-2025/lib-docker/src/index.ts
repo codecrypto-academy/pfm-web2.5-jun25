@@ -88,40 +88,42 @@ export class DockerNetwork {
         try {
             // Get container IDs first
             const containerIds = executeCommand(`docker ps -aq --filter "network=${this._name}"`).trim();
-            
+
             // Only proceed if there are containers
             if (!containerIds) {
                 return;
             }
 
-            // CORRECTION: split IDs and join with space for docker inspect
+            // CORRECTION: split IDs and inspect each container individually
             const containerIdList = containerIds.split('\n').filter(Boolean);
             if (containerIdList.length === 0) return;
-            const containersJson = executeCommand(`docker inspect ${containerIdList.join(' ')}`);
-            const containers = JSON.parse(containersJson);
 
-            for (const container of containers) {
-                const labels = container.Config.Labels;
-                if (labels && labels.network === this._name) {
-                    let nodeType: typeNode | undefined;
-                    for (const possibleType of ['bootnode', 'miner', 'rpc', 'node'] as typeNode[]) {
-                        if (labels.nodo && labels.nodo.startsWith(possibleType)) {
-                            nodeType = possibleType;
-                            break;
+            for (const containerId of containerIdList) {
+                const containerJson = executeCommand(`docker inspect ${containerId}`);
+                const containers = JSON.parse(containerJson);
+
+                for (const container of containers) {
+                    const labels = container.Config.Labels;
+                    if (labels && labels.network === this._name) {
+                        let nodeType: typeNode | undefined;
+                        for (const possibleType of ['bootnode', 'miner', 'rpc', 'node'] as typeNode[]) {
+                            if (labels.nodo && labels.nodo.startsWith(possibleType)) {
+                                nodeType = possibleType;
+                                break;
+                            }
                         }
+                        if (!nodeType) continue;
+                        const port = labels.port;
+                        const networkSettings = container.NetworkSettings.Networks[this._name];
+                        const ip = networkSettings ? networkSettings.IPAddress : '';
+
+                        this._besuNodes.push({
+                            name: container.Name.replace('/', ''),
+                            ip: ip,
+                            port: port,
+                            type: nodeType
+                        });
                     }
-                    if (!nodeType) continue;
-                    //const nodeType = labels.nodo as 'bootnode' | 'miner' | 'rpc' | 'node';
-                    const port = labels.port;
-                    const networkSettings = container.NetworkSettings.Networks[this._name];
-                    const ip = networkSettings ? networkSettings.IPAddress : '';
-                    
-                    this._besuNodes.push({
-                        name: container.Name.replace('/', ''),
-                        ip: ip,
-                        port: port,
-                        type: nodeType
-                    });
                 }
             }
         } catch (error) {
@@ -326,21 +328,39 @@ bootnodes=["${bootnode}"]
             console.log(`Container ${this._name}-${nodeName} doesn't exist or couldn't be removed: ${error}`);
         }
 
-        if (nodeName !== nodeType) {
-            // Create repository node if it doesn't exist
-            const nodeDir = path.join(this._fileService.folder, this._name, nodeName);
-            if (!fs.existsSync(nodeDir)) {
-                // Create the directory for the node
-                fs.mkdirSync(nodeDir, { recursive: true });
-                // Create keys for the node
-                const subnet = this._networkData?.[0]?.IPAM?.Config?.[0]?.Subnet || "";
-                createKeys(this._fileService, this._name, subnet, nodeName);
-            }
+        let nodeDirName = nodeName;
+        if (nodeType === 'miner') {
+            // Not work if the network is created with the AI Manager because the MCP server use another port for miner
+            // Get all existing miner ports and the new miner port to determine the directory name
+            /*const allMinerPorts = this._besuNodes
+                .filter(n => n.type === 'miner')
+                .map(n => parseInt(n.port));
+            allMinerPorts.push(parseInt(port));
+            const lowestPort = Math.min(...allMinerPorts);
+
+            // If it's the first miner (the one with the lowest port), use "miner" as the directory name else use "miner{port}"
+            nodeDirName = parseInt(port) === lowestPort ? "miner" : `miner${port}`;*/
+
+            // From network page, the first miner started at 18555
+            // From MCP server, the first miner started at 28555
+            const portNum = parseInt(port);
+            const isFirstMiner =
+                (portNum >= 18555 && portNum <= 18564) ||
+                (portNum >= 28555 && portNum <= 28564);
+            nodeDirName = isFirstMiner ? "miner" : `miner${port}`;
+        }
+
+        // Create the node directory name
+        const nodeDir = path.join(this._fileService.folder, this._name, nodeDirName);
+        if (!fs.existsSync(nodeDir)) {
+            fs.mkdirSync(nodeDir, { recursive: true });
+            const subnet = this._networkData?.[0]?.IPAM?.Config?.[0]?.Subnet || "";
+            createKeys(this._fileService, this._name, subnet, nodeDirName);
         }
 
         try {
             let dockerCommand: string;
-            
+
             if (nodeType === "bootnode") {
                 if (ip) {
                     // change ip in enode file
@@ -378,8 +398,8 @@ bootnodes=["${bootnode}"]
                     --genesis-file=/data/genesis.json`;
             } else if (nodeType === "miner") {
                 // Read miner address for coinbase
-                const minerAddress = await this._fileService.readFile(this._name, `${nodeName}/address`);
-                
+                const minerAddress = await this._fileService.readFile(this._name, `${nodeDirName}/address`);
+
                 dockerCommand = `docker run -d \
                     --name ${this._name}-${nodeName} \
                     --label nodo=${nodeName} \
@@ -391,8 +411,8 @@ bootnodes=["${bootnode}"]
                     -v ${this._fileService.folder}/${this._name}:/data \
                     hyperledger/besu:latest \
                     --config-file=/data/config.toml \
-                    --data-path=/data/${nodeName}/data \
-                    --node-private-key-file=/data/${nodeName}/key \
+                    --data-path=/data/${nodeDirName}/data \
+                    --node-private-key-file=/data/${nodeDirName}/key \
                     --genesis-file=/data/genesis.json \
                     --miner-enabled=true \
                     --miner-coinbase=${minerAddress.trim()}`;

@@ -13,6 +13,8 @@ export interface Network {
     id: string;
     name: string;
     chainId: number;
+    subnet: string;
+    ip: string;
     signerAddress: string;
     accounts: {
         address: string;

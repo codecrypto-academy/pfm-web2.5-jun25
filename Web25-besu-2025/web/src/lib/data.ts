@@ -220,46 +220,7 @@ export const initializeDatabase = async (): Promise<void> => {
     const networkCount = await networksCollection.countDocuments();
     
     /* Sample Besu Network initialization
-    if (networkCount === 0) {
-      // Create a sample network
-      const now = new Date();
-      const networkData = {
-        name: "Prueba Red Besu",
-        chainId: 1337,
-        signerAddress: "0x4F9d6Eafa67ae9F317AC6A67138727E13D80Fe98",
-        accounts: [
-          {
-            address: "0x6243A64dd2E56F164E1f08e99433A7DEC132AB4E",
-            balance: "100",
-          },
-          {
-            address: "0xd69A7b47f4038BC831B8F22991Cf3A69DdC21574",
-            balance: "250",
-          },
-        ],
-        nodes: [
-          {
-            type: "rpc",
-            ip: "10.0.0.11",
-            name: "rpc18962",
-            port: 18962,
-          },
-          {
-            type: "miner",
-            ip: "10.0.0.12",
-            name: "miner18963",
-            port: 18963,
-          },
-          {
-            type: "node",
-            ip: "10.0.0.13",
-            name: "node18964",
-            port: 18964,
-          },
-        ],
-        createdAt: now,
-        updatedAt: now,
-      };
+    if (networkCount === 0) {copy content of file ejemplo.besuNetworks.networks.json};
       
       await networksCollection.insertOne(networkData);
       

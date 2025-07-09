@@ -36,12 +36,12 @@ If a parameter is not provided by the user, apply these rules:
 - For chainId, use a unique value not already used by other networks.
 - For subnet, use a subnet not already used by other networks in the range 192.168.x.x/24 or 10.x.x.x/16.
 - For prefunded addresses, use: 0x6243A64dd2E56F164E1f08e99433A7DEC132AB4E with an amount of 10000.
-- When creating a new node, use a free port that is not already in use.
-- For a new Miner node (except the first), use IP addresses in the .20-.29 range. The name must be minerX where X is the node port (except the first is only miner).
-- For a new RPC node, use IP addresses in the .30-.39 range. The name must be rpcX where X is the node port.
-- For a new Fullnode (Node), use IP addresses in the .40-.49 range. The name must be nodeX where X is the node number.
 - Node IP addresses must be within the network's subnet (CIDR), and the CIDR (Subnet) parameter must match the network's subnet.
 - When creating a new network, use an unused subnet (not already assigned to another network).
+- When creating a new node, use a free port that is not already in use.
+- For a new Miner node, use IP addresses in the .20-.29 range. The name must be minerX where X is the node port.
+- For a new RPC node, use IP addresses in the .30-.39 range. The name must be rpcX where X is the node port.
+- For a new Fullnode (Node), use IP addresses in the .40-.49 range. The name must be nodeX where X is the node number.
 
 Response format (JSON only):
 {

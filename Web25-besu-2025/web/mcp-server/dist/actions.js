@@ -115,9 +115,11 @@ async function createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccoun
         const network = await createNetworkAction({
             name,
             chainId,
+            subnet,
+            ip: bootnodeIP,
             signerAddress: signerAccount,
             accounts: prefundedAccounts.map(acc => ({ address: acc.address, balance: acc.amount })),
-            nodes // Include all nodes in the initial creation
+            nodes
         });
         if (!network) {
             throw new Error('Failed to create network in database');
@@ -235,8 +237,8 @@ async function getNetworksForLocalStorage() {
         return networks.map(network => ({
             id: network.id,
             network: network.name,
-            cidr: "192.168.0.0/24", // Default value as it's required by the UI but not stored in DB
-            ip: network.nodes[0]?.ip || "192.168.0.10", // Use first node's IP or default
+            cidr: network.subnet,
+            ip: network.ip,
             chainId: network.chainId,
             signerAccount: network.signerAddress,
             prefundedAccounts: network.accounts.map(acc => ({

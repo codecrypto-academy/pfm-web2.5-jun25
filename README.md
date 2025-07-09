@@ -89,7 +89,7 @@ Full-stack application for managing cryptocurrency wallet contacts with user aut
 
 #### **Installation & Setup**
 
-1. **Clone and navigate**
+1.  **Clone and navigate**
 ```bash
 cd backend
 npm install
@@ -97,7 +97,15 @@ cd ../front
 npm install
 ```
 
-2. **Environment Configuration**
+2.  **Start MongoDB Database**
+    Navigate to the database infrastructure directory and start the MongoDB container:
+    ```bash
+    cd backend/database-infraestructure
+    docker-compose up -d
+    cd ../..
+    ```
+
+3.  **Environment Configuration**
 ```bash
 # Backend (.env)
 DATABASE_URL="mongodb://localhost:27017/wallet-address-book"
@@ -105,14 +113,14 @@ PORT=3000
 JWT_SECRET=your-secret-key
 ```
 
-3. **Database Setup**
+4.  **Database Setup**
 ```bash
 cd backend
 npx prisma generate
 npx prisma db push
 ```
 
-4. **Start Services**
+5.  **Start Services**
 ```bash
 # Backend (Terminal 1)
 cd backend
@@ -122,6 +130,14 @@ npm run dev
 cd front
 npm run dev
 ```
+
+6.  **Stop MongoDB Database**
+    To stop the MongoDB container when you are finished:
+    ```bash
+    cd backend/database-infraestructure
+    docker-compose down
+    cd ../..
+    ```
 
 #### **API Endpoints**
 - `POST /user` - User registration
@@ -159,86 +175,76 @@ npm test
 **Location**: `/blockchain-manager`
 
 #### **Description**
-Hyperledger Besu node management system with Docker automation, including a TypeScript library and web interface for managing blockchain networks.
+This project provides two distinct methods for managing a Hyperledger Besu blockchain network: a self-contained shell script for quick deployments and a TypeScript-based library for programmatic control and testing.
 
 #### **Project Relationships**
-- **Independent Project**: Self-contained with no external dependencies
-- **Components**: Script, Library, Web Interface work together
-- **Library** → **Docker** via dockerode
-- **Web Interface** → **Library** for network operations
+- **Independent Project**: Self-contained within the `blockchain-manager` directory.
+- **Components**: The shell script (`script/docker.sh`) and the TypeScript library (`lib`) offer independent functionalities.
+- **Library (`lib`)**: Interacts with **Docker** via `dockerode`.
+- **Web Interface (`web`)**: (Planned/In Progress) will interact with the Library for network operations.
 
 #### **Technology Stack**
-- **Library**: TypeScript, dockerode, Jest
-- **Web Interface**: Next.js 15, React, TypeScript, Tailwind CSS
-- **Scripts**: Shell scripting, Docker
+- **Shell Script**: Bash, Docker
+- **Library**: TypeScript, Dockerode, Ethers.js, Elliptic, Keccak256, Jest (for testing)
 - **Blockchain**: Hyperledger Besu
 
 #### **Features**
-- Docker-based node deployment
+- Docker-based node deployment (via shell script or TypeScript library)
 - Clique consensus protocol implementation
 - Multi-node network creation
-- REST API for network management
-- Web interface for node operations
-- Automated testing
+- Programmatic network management (via TypeScript library)
+- End-to-end testing of network functionality
+- Automated key generation, genesis file creation, and node configuration
 
 #### **Components**
-- **Script (`/script`)**: Shell scripting for node deployment
-- **Library (`/lib-dockercode`)**: TypeScript library for Docker management
-- **Web Interface (`/web`)**: Next.js application
+- **Script (`/script`)**: Contains `docker.sh` for an automated, hardcoded network setup, and `index.mjs` for various network commands.
+- **Library (`/lib`)**: A TypeScript application for programmatic control of the network. It includes:
+    -   Configuration constants in `src/constants.ts`.
+    -   Main application logic in `src/app.ts` for node creation.
+    -   End-to-end network tests in `src/test_network.ts`.
+-   **Web Interface (`/web`)**: (Planned/In Progress) This component is for a web interface that will interact with the library. Note: This directory may not yet exist in the current project structure but is part of the overall plan.
 
 #### **Prerequisites**
-- Node.js (v18+)
-- Docker Desktop
-- Hyperledger Besu knowledge
+- Docker
+- Node.js (v14+)
+- Yarn
+- TypeScript (for `lib` project)
 
 #### **Installation & Setup**
+Detailed installation and setup instructions for both the shell script and the TypeScript library are available in `blockchain-manager/documentation/BlockchainNetworkGuide.md`.
 
-1. **Install Library Dependencies**
-```bash
-cd blockchain-manager/lib-dockercode
-npm install
-```
-
-2. **Install Web Interface Dependencies**
-```bash
-cd blockchain-manager/web
-npm install
-```
-
-3. **Build Library**
-```bash
-cd blockchain-manager/lib-dockercode
-npm run build
-```
-
-4. **Start Web Interface**
-```bash
-cd blockchain-manager/web
-npm run dev
-```
-
-#### **API Endpoints**
-- `POST /api/networks` - Create network
-- `DELETE /api/networks/:id` - Delete network
-- `POST /api/networks/:id/nodes` - Add node
-- `DELETE /api/networks/:id/nodes/:nodeId` - Remove node
+For a quick overview:
+1.  **For the TypeScript Library (`lib`):**
+    ```bash
+    cd blockchain-manager/lib
+    yarn install
+    yarn build
+    ```
+2.  **To create the network using the shell script:**
+    ```bash
+    ./blockchain-manager/script/docker.sh
+    ```
+3.  **To create the network using the TypeScript application:**
+    ```bash
+    cd blockchain-manager/lib
+    yarn start
+    ```
 
 #### **Development Commands**
-```bash
-# Library
-npm run build    # Build library
-npm test         # Run tests
+For a comprehensive list of commands for both the shell script and the TypeScript library, refer to `blockchain-manager/documentation/BlockchainNetworkGuide.md`.
 
-# Web Interface
-npm run dev      # Development server
-npm run build    # Build for production
+Key commands for the `lib` project:
+```bash
+cd blockchain-manager/lib
+yarn dev            # Development server with nodemon
+yarn build          # Compile TypeScript to JavaScript
+yarn start          # Run the main application (creates network nodes)
+yarn test           # Run unit tests
+yarn check-blockchain # Run end-to-end network tests
 ```
 
 #### **Testing**
-```bash
-cd blockchain-manager/lib-dockercode
-npm test
-```
+End-to-end network tests for the TypeScript library are located in `blockchain-manager/lib/src/test_network.ts` and can be run with `yarn check-blockchain` from the `blockchain-manager/lib` directory.
 
 ---
 

@@ -3450,20 +3450,19 @@ start_block_monitor() {
                     local block_num=$((16#${current#0x}))
                     
                     if [[ $block_num -gt $last_block ]]; then
-                        for ((i=last_block+1; i<=block_num; i++)); do
-                            local block_data=$(curl -s -X POST -H "Content-Type: application/json" \
-                                -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"0x$(printf '%x' $i)\",false],\"id\":1}" \
-                                "$rpc_url" 2>/dev/null)
-                            
-                            if [[ -n "$block_data" ]]; then
-                                local tx_count=$(echo "$block_data" | jq -r '.result.transactions | length' 2>/dev/null)
-                                if [[ "$tx_count" == "0" ]]; then
-                                    log_block "Block #$i - EMPTY"
-                                else
-                                    log_block "Block #$i - $tx_count tx"
-                                fi
+                        # Show only the latest block
+                        local block_data=$(curl -s -X POST -H "Content-Type: application/json" \
+                            -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"0x$(printf '%x' $block_num)\",false],\"id\":1}" \
+                            "$rpc_url" 2>/dev/null)
+                        
+                        if [[ -n "$block_data" ]]; then
+                            local tx_count=$(echo "$block_data" | jq -r '.result.transactions | length' 2>/dev/null)
+                            if [[ "$tx_count" == "0" ]]; then
+                                log_block "Block #$block_num - EMPTY"
+                            else
+                                log_block "Block #$block_num - $tx_count tx"
                             fi
-                        done
+                        fi
                         last_block=$block_num
                     fi
                 fi

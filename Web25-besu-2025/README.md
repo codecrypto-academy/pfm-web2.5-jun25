@@ -130,9 +130,6 @@ graph LR
    
    # Instalar Node.js
    node --version
-   
-   # Instalar MongoDB
-   ./mongodb-docker-setup.sh
    ```
 
 2. **Configuración del Proyecto**

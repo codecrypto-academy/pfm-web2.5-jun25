@@ -27,7 +27,7 @@ export default function BlockExplorer() {
   const { selectedNetwork } = useNetwork();
   
   const BLOCK_TIME_SECONDS = 15; // De config.yaml
-  const MAX_BLOCKS_DISPLAY = 20;
+  const MAX_BLOCKS_DISPLAY = 13;
 
   const fetchBlocks = useCallback(async () => {
     if (!selectedNetwork) return;
@@ -114,28 +114,28 @@ export default function BlockExplorer() {
 
   // Componente para el indicador de progreso circular
   const CircularProgress = ({ progress }: { progress: number }) => {
-    const radius = 16;
+    const radius = 12;
     const circumference = 2 * Math.PI * radius;
     const strokeDasharray = circumference;
     const strokeDashoffset = circumference - (progress / 100) * circumference;
     
     return (
-      <div className="relative w-10 h-10">
-        <svg className="transform -rotate-90 w-10 h-10" viewBox="0 0 40 40">
+      <div className="relative w-8 h-8">
+        <svg className="transform -rotate-90 w-8 h-8" viewBox="0 0 32 32">
           <circle
-            cx="20"
-            cy="20"
+            cx="16"
+            cy="16"
             r={radius}
             stroke="#e5e7eb"
-            strokeWidth="3"
+            strokeWidth="2"
             fill="none"
           />
           <circle
-            cx="20"
-            cy="20"
+            cx="16"
+            cy="16"
             r={radius}
             stroke="white"
-            strokeWidth="3"
+            strokeWidth="2"
             fill="none"
             strokeDasharray={strokeDasharray}
             strokeDashoffset={strokeDashoffset}
@@ -159,15 +159,15 @@ export default function BlockExplorer() {
     
     return (
       <div 
-        className="relative h-12 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 rounded-lg flex items-center justify-between px-4 shadow-lg transform transition-all duration-300 hover:scale-105"
+        className="relative h-10 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 rounded-lg flex items-center justify-between px-3 shadow-lg transform transition-all duration-300 hover:scale-105"
         style={pulseAnimation}
       >
         <CircularProgress progress={block.progress} />
         <div className="flex-1 text-center">
-          <div className="text-white font-bold text-lg">Block #{block.number}</div>
-          <div className="text-blue-100 text-sm">Mining...</div>
+          <div className="text-white font-bold text-sm">Block #{block.number}</div>
+          <div className="text-blue-100 text-xs">Mining...</div>
         </div>
-        <div className="text-white font-mono text-lg min-w-[60px] text-center">
+        <div className="text-white font-mono text-sm min-w-[50px] text-center">
           {block.elapsedTime}s
         </div>
       </div>
@@ -176,25 +176,49 @@ export default function BlockExplorer() {
 
   // Componente para bloque confirmado
   const ConfirmedBlockStrip = ({ block, index }: { block: Block; index: number }) => {
-    const colors = [
-      'from-blue-500 to-blue-600',
-      'from-indigo-500 to-indigo-600', 
-      'from-purple-500 to-purple-600',
-      'from-pink-500 to-pink-600'
-    ];
+    // SVG Components inline
+    const GreenBlockIcon = () => (
+      <svg width="24" height="24" viewBox="0 0 100 100" className="flex-shrink-0">
+        <polygon points="50,10 90,30 50,50 10,30" fill="#3cb043"/>
+        <polygon points="10,30 50,50 50,90 10,70" fill="#2d8c33"/>
+        <polygon points="90,30 50,50 50,90 90,70" fill="#1f6623"/>
+      </svg>
+    );
     
-    const colorClass = colors[index % colors.length];
+    const BlueBlockIcon = () => (
+      <svg width="24" height="24" viewBox="0 0 100 100" className="flex-shrink-0">
+        <polygon points="50,10 90,30 50,50 10,30" fill="#4ea3e0"/>
+        <polygon points="10,30 50,50 50,90 10,70" fill="#327bbd"/>
+        <polygon points="90,30 50,50 50,90 90,70" fill="#1c4e96"/>
+      </svg>
+    );
+    
+    const formatHash = (hash: string) => {
+      return `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}`;
+    };
     
     return (
       <div 
-        className={`h-10 bg-gradient-to-r ${colorClass} rounded-lg flex items-center justify-center shadow-md transform transition-all duration-500 hover:scale-102`}
+        className="h-8 bg-white rounded-lg flex items-center px-3 shadow-sm border border-gray-200 transform transition-all duration-300 hover:scale-102"
         style={{
           animationDelay: `${index * 50}ms`,
-          transform: `translateY(${index * 2}px)`,
+          transform: `translateY(${index * 1}px)`,
         }}
       >
-        <div className="text-white font-bold text-lg">
-          #{block.number}
+        {/* SVG Icon */}
+        <div className="mr-3">
+          {block.transactionCount > 0 ? <GreenBlockIcon /> : <BlueBlockIcon />}
+        </div>
+        
+        {/* Block Info */}
+        <div className="flex-1 flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-2">
+            <span className="font-bold text-gray-800">#{block.number}</span>
+            <span className="text-gray-500 font-mono">{formatHash(block.hash)}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-gray-600">{block.transactionCount}tx</span>
+          </div>
         </div>
       </div>
     );
@@ -242,43 +266,33 @@ export default function BlockExplorer() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+      <div className="bg-white rounded-lg shadow-md p-3 mb-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold">⛓️ Block Stream</h2>
-          <div className="flex items-center space-x-4">
-            <div className="text-sm text-gray-500">
-              {blocks.length > 0 ? `Latest: #${blocks[0].number}` : 'No blocks'}
-            </div>
-            <button 
-              onClick={fetchBlocks}
-              className="bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600 text-sm"
-            >
-              Refresh
-            </button>
+          <h2 className="text-lg font-bold">⛓️ Block Stream</h2>
+          <div className="text-xs text-gray-500">
+            {blocks.length > 0 ? `Latest: #${blocks[0].number}` : 'No blocks'}
           </div>
         </div>
       </div>
 
       {/* Visualización Central de Bloques */}
-      <div className="flex-1 bg-gray-50 rounded-lg p-6 overflow-hidden">
+      <div className="flex-1 bg-gray-50 rounded-lg p-4 overflow-hidden">
         <div className="max-w-md mx-auto h-full">
-          <div className="space-y-3 h-full overflow-y-auto">
+          <div className="space-y-2 h-full overflow-y-auto max-h-[calc(100vh-200px)]">
             {/* Bloque en Minado */}
             {miningBlock && (
-              <div className="mb-6">
+              <div className="mb-4">
                 <MiningBlockStrip block={miningBlock} />
               </div>
             )}
             
             {/* Separador */}
-            <div className="flex items-center justify-center py-2">
-              <div className="w-full h-px bg-gray-300"></div>
-              <div className="px-4 text-sm text-gray-500 bg-gray-50">Confirmed Blocks</div>
-              <div className="w-full h-px bg-gray-300"></div>
+            <div className="text-center py-2">
+              <div className="text-xs text-gray-500 bg-gray-50">Confirmed Blocks</div>
             </div>
             
             {/* Bloques Confirmados */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               {blocks.slice(0, MAX_BLOCKS_DISPLAY).map((block, index) => (
                 <div 
                   key={block.hash}
@@ -295,8 +309,8 @@ export default function BlockExplorer() {
             
             {/* Indicador de más bloques */}
             {blocks.length >= MAX_BLOCKS_DISPLAY && (
-              <div className="text-center py-4">
-                <div className="text-sm text-gray-500">
+              <div className="text-center py-2">
+                <div className="text-xs text-gray-500">
                   • • • {blocks.length - MAX_BLOCKS_DISPLAY} more blocks • • •
                 </div>
               </div>

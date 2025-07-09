@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { NetworkConfig } from '@/types/network';
+import { NetworkConfig } from '@/types';
 
 const networksDir = path.join(process.cwd(), 'app', 'networks');
 

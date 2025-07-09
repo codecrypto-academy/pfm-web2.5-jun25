@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import { getNetworkConfig } from '@/lib/network';
 
 export async function POST(request: Request) {
-    const { address: toAddress, networkId, amount } = await request.json();
+    const { toAddress, networkId, amount } = await request.json();
 
     if (!toAddress || !networkId || !amount) {
         return NextResponse.json({ error: 'toAddress, networkId, and amount are required' }, { status: 400 });

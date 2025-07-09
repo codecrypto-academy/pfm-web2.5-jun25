@@ -56,6 +56,7 @@ export async function POST(request: Request) {
             name,
             rpcUrl,
             chainId: parseInt(chainId, 10),
+            privateKey: '', // Las redes añadidas manualmente no tienen private key
             theme: {
                 primary: 'blue-dark',
                 secondary: 'blue-light',

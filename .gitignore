@@ -48,3 +48,5 @@ DELETEME.txt
 
 # Claude settings
 .claude/settings.local.json
+
+frontback/.next/trace

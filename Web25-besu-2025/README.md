@@ -138,15 +138,18 @@ graph LR
 2. **Configuración del Proyecto**
    ```bash
    # Clonar repositorio
-   git clone [URL_REPO]
+   git clone --branch pfm-2.5-besu https://github.com/codecrypto-academy/CarreteroSamuel.git
    
    # Instalar dependencias
    cd web 
    npm install
-   cd ../lib-docker 
+   cd mcp-server
+   npm install
+   cd ../../lib-docker 
    npm install
    cd ../scripts 
    npm install
+   cd 
    ```
 
 3. **Compilación y Despliegue de lib-docker**

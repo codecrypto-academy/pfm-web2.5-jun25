@@ -49,4 +49,8 @@ DELETEME.txt
 # Claude settings
 .claude/settings.local.json
 
-frontback/.next/trace
+# Ignore Next.js build output and traces
+frontback/.next/
+frontback/.next/**
+.next/
+.next/**

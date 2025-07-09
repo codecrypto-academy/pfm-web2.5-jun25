@@ -42,7 +42,7 @@ The SDK leverages **Dockerode** for direct interaction with the Docker daemon, p
 
 ## 3. Getting Started
 
-The library is located in the `besu-sdk/` directory. This directory serves a dual purpose: it's a shared Node.js environment for other project scripts and the development home for this library.
+The library is located in the `besu-sdk/` directory. This directory serves a dual purpose: it's a shared Node.js environment for other project scripts in this repository and the development home for this library.
 
 ### 3.1. Installation
 
@@ -82,8 +82,8 @@ Ensure your `package.json` contains the following scripts for building and testi
 
 ```json
 "scripts": {
-  "build": "tsc",
-  "test": "jest"
+  "build": "tsc",  // npm run build
+  "test": "jest"   // npm test
 }
 ```
 
@@ -97,18 +97,51 @@ The build command compiles all TypeScript source files into JavaScript.
     ```
 *   **Action:** Uses `tsconfig.json` to compile files from `src/` and outputs the resulting `.js` and `.d.ts` (declaration) files to the `dist/` directory.
 
-### 4.2. Running Tests
 
-The test command executes all unit and integration tests for the library.
+### To be used at "frontback"
 
-*   **Command:**
-    ```bash
-    npm test
-    ```
-*   **Action:** Runs Jest, which discovers and executes all test files matching the `*.test.ts` pattern within the `src/` directory, as configured in `jest.config.js`.
+There's no mistery in this. The file is imported as 
 
-For better organization, create a dedicated directory for your tests:
+### To be used somewhere else
 
+
+# Besu Network Automation SDK
+
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
+![Jest](https://img.shields.io/badge/Jest-C21325?style=for-the-badge&logo=jest&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)
+
+A professional-grade, type-safe TypeScript library for programmatically creating, managing, and tearing down private Hyperledger Besu networks using Docker.
+
+> **Pro Tip:** The source code is annotated with 💡 lightbulb emojis to highlight key architectural patterns and important implementation details.
+
+## Core Features
+
+-   **Fluent Builder API**: A chainable, declarative interface (`BesuNetworkBuilder`) for constructing complex network topologies with ease.
+-   **Fine-Grained Control**: Configure over 20 distinct parameters, from `chainId` and `blockPeriodSeconds` to Docker image tags and network subnets.
+-   **Deterministic Generation**: Provide an optional `identitySeed` to deterministically generate node keys and addresses, ensuring reproducible network states for testing.
+-   **Robust Lifecycle Management**:
+    -   Strict state machine using a `NetworkStatus` enum for nodes and the network.
+    -   Built-in readiness probes (`waitForNodeReady`) to wait for RPC services to become available.
+    -   Automated teardown and cleanup on startup failure to prevent orphaned containers.
+    -   Emits operational events to allow for external monitoring.
+-   **Advanced Networking**: Supports creating new Docker networks or attaching to pre-existing ones, with automatic subnet collision detection.
+-   **Comprehensive Testing**: Includes a test suite with **136 test cases** built with Jest.
+
+## Installation
+
+### Local Development / Monorepo Integration
+
+For use within this project or a similar monorepo structure, install it using a relative file path. This creates a symbolic link, allowing changes in the SDK to be immediately reflected in the consuming project.
+
+From the consuming directory (e.g., `frontback/`):
 ```bash
-mkdir -p src/__tests__
+npm install ../besu-sdk
 ```
+
+This will add the following entry to your `package.json`:
+```json
+"dependencies": {
+  "besu-sdk": "file:../besu-sdk"
+}

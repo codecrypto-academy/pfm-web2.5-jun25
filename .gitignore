@@ -35,8 +35,10 @@ jest-transform-cache/
 
 # DELETEME files - temporary code aggregation files
 DELETEME.ts
+DELETEME.md
 DELETEME.txt
 **/DELETEME.ts
+**/DELETEME.md
 **/DELETEME.txt
 
 # Environment variables - contains sensitive information

@@ -213,15 +213,31 @@ export class Network extends EventEmitter {
       // 1. Arrancamos el nodo ancla de forma secuencial.
       this.log.info(`Starting anchor node '${anchorValidatorConfig.name}' sequentially...`);
       const anchorNode = await this.createAndStartNode(anchorValidatorConfig);
-      const bootnodeEnode = await anchorNode.getEnodeUrl();
-      this.log.success(`Anchor node '${anchorNode.getName()}' is running. Enode: ${bootnodeEnode}`);
+      
+      // Safely get bootnode enode with validation
+      let bootnodeEnode: string | null = null;
+      try {
+        bootnodeEnode = await anchorNode.getEnodeUrl();
+        if (!bootnodeEnode || !bootnodeEnode.startsWith('enode://')) {
+          this.log.warn(`Anchor node returned invalid enode: ${bootnodeEnode}`);
+          bootnodeEnode = null;
+        }
+      } catch (error) {
+        this.log.error(`Failed to get enode from anchor node '${anchorNode.getName()}'`, error);
+        bootnodeEnode = null;
+      }
+      
+      this.log.success(`Anchor node '${anchorNode.getName()}' is running. Enode: ${bootnodeEnode || 'N/A'}`);
       
       // 2. Arrancamos todos los demás nodos en paralelo.
       if (otherNodeConfigs.length > 0) {
         this.log.info(`Starting remaining ${otherNodeConfigs.length} nodes in parallel...`);
 
+        // Only pass valid bootnode to other nodes
+        const validBootnodes = bootnodeEnode ? [bootnodeEnode] : [];
+        
         const startPromises = otherNodeConfigs.map(config => 
-          this.createAndStartNode(config, undefined, [bootnodeEnode])
+          this.createAndStartNode(config, undefined, validBootnodes)
         );
 
         // Promise.all espera a que todos los nodos terminen de arrancar.
@@ -312,8 +328,41 @@ export class Network extends EventEmitter {
         rpc: options.rpc || false
       };
       
-      // Create and start the node
-      const node = await this.createAndStartNode(nodeConfig, identity);
+      // --- ROBUST BOOTNODE DISCOVERY SOLUTION ---
+      this.log.info('Attempting to retrieve bootnode URLs from existing validators...');
+      
+      const validators = this.getValidators().filter(v => v.getStatus() === 'RUNNING');
+      if (validators.length === 0) {
+        throw new Error("Cannot add a new node: No running validators available to act as bootnodes.");
+      }
+
+      // Use Promise.allSettled to attempt getting all enodes in parallel
+      const enodePromises = validators.map(v => v.getEnodeUrl());
+      const enodeResults = await Promise.allSettled(enodePromises);
+
+      const bootnodes: string[] = [];
+      enodeResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          this.log.debug(`Successfully retrieved enode from validator '${validators[index].getName()}'`);
+          bootnodes.push(result.value);
+        } else {
+          this.log.warn(`Failed to retrieve enode from validator '${validators[index].getName()}'. Reason: ${result.reason}`);
+        }
+      });
+
+      // CRITICAL VALIDATION!
+      if (bootnodes.length === 0) {
+        throw new Error(
+          "Failed to add node: Could not retrieve an enode URL from any of the running validators. " +
+          "The network may be unstable or nodes may be unresponsive. Please check validator logs."
+        );
+      }
+      
+      this.log.success(`Successfully retrieved ${bootnodes.length} bootnode URL(s).`);
+      // --- END OF SOLUTION ---
+
+      // Create and start the node with explicit bootnodes
+      const node = await this.createAndStartNode(nodeConfig, identity, bootnodes);
       
       // --- RUNTIME FUNDING LOGIC ---
       if (options.initialBalance) {
@@ -618,17 +667,30 @@ export class Network extends EventEmitter {
     // --- LÓGICA DE BOOTNODES MEJORADA ---
     let bootnodes: string[] = [];
     if (explicitBootnodes) {
-      // Si nos pasan bootnodes explícitamente, los usamos.
-      bootnodes = explicitBootnodes;
+      // Si nos pasan bootnodes explícitamente, los validamos y filtramos
+      bootnodes = explicitBootnodes.filter(bootnode => 
+        bootnode && 
+        typeof bootnode === 'string' && 
+        bootnode.trim() !== '' &&
+        bootnode.startsWith('enode://')
+      );
+      if (explicitBootnodes.length > bootnodes.length) {
+        this.log.warn(`Filtered out ${explicitBootnodes.length - bootnodes.length} invalid bootnodes from explicit list`);
+      }
     } else {
       // Si no, los calculamos como antes (para el primer nodo).
       for (const [name, node] of this.nodes) {
         if (node.isValidator() && node.getStatus() === 'RUNNING') {
           try {
             const enode = await node.getEnodeUrl();
-            bootnodes.push(enode);
+            // Validate enode before adding
+            if (enode && typeof enode === 'string' && enode.startsWith('enode://')) {
+              bootnodes.push(enode);
+            } else {
+              this.log.warn(`Invalid enode URL from node ${name}: ${enode}`);
+            }
           } catch (err) {
-            this.log.warn(`Could not get enode URL for ${name}`);
+            this.log.warn(`Could not get enode URL for ${name}`, err);
           }
         }
       }

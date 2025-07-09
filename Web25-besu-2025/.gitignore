@@ -45,7 +45,8 @@ scripts/tests/
 # Ignore OS generated files
 Thumbs.db
 
-# Ignore networks directories
-networks/
+# Ignore networks directories except Keypair
+networks/!
+!web/networks/Keypair/
 lib-docker/networks/
 scripts/networks/

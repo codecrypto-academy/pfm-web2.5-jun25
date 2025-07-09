@@ -1,0 +1,18 @@
+genesis-file="/data/genesis.json"
+# Networking
+p2p-host="0.0.0.0"
+p2p-port=30303
+p2p-enabled=true
+
+# BootNode
+bootnodes=["enode://e7595992cf6b831c3c497b0d79323c598947999b207c3eb9f94aedfccdb51b4fb360e254ffde346bef237200142c28c287d869ecb0b10de9e7861e51bf9390af@172.20.0.10:30303"]
+# Node discovery
+discovery-enabled=true
+
+# JSON-RPC
+rpc-http-enabled=true
+rpc-http-host="0.0.0.0"
+rpc-http-port=8545
+rpc-http-cors-origins=["*"]
+rpc-http-api=["ETH","NET","CLIQUE","ADMIN", "TRACE", "DEBUG", "TXPOOL", "PERM"]
+host-allowlist=["*"]            

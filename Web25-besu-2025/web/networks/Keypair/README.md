@@ -44,17 +44,7 @@ Keypair/
 
 ## Uso
 
-### Importar Claves
-
-1. Copiar directorios de nodos:
-```bash
-cp -r basenode1/* ../networks/mi-red/nodo1/
-```
-
-2. Ajustar permisos:
-```bash
-chmod 600 ../networks/mi-red/nodo1/key
-```
+Usar una clave privada (fichero "key") en la pagina "Networks" de la aplicación web para configurar el primer nodo firmante.
 
 ## Seguridad
 

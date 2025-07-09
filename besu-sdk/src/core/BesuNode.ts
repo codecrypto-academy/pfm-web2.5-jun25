@@ -17,7 +17,12 @@ import {
   NodeStatusChangeEvent,
   ContainerOptions 
 } from '../types';
-import { InvalidNodeStateError, DockerOperationError } from '../errors';
+import { 
+  InvalidNodeStateError, 
+  DockerOperationError, 
+  ContainerNotAssociatedError, 
+  NodeReadinessTimeoutError 
+} from '../errors';
 import { DockerManager } from '../services/DockerManager';
 import { logger, ChildLogger } from '../utils/logger';
 
@@ -218,7 +223,7 @@ export class BesuNode extends EventEmitter {
     }
     
     if (!this.container) {
-      throw new Error('Container not found');
+      throw new ContainerNotAssociatedError(this.config.name, 'stop');
     }
     
     this.setStatus(NodeStatus.STOPPING);
@@ -423,7 +428,7 @@ export class BesuNode extends EventEmitter {
       await new Promise(resolve => setTimeout(resolve, checkInterval));
     }
     
-    throw new Error(`Node did not become ready within ${timeoutMs}ms`);
+    throw new NodeReadinessTimeoutError(this.config.name, timeoutMs);
   }
   
   /**

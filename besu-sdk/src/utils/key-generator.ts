@@ -9,6 +9,13 @@
 import { ethers } from 'ethers';
 import { NodeIdentity } from '../types';
 import { logger } from './logger';
+import { 
+  KeyGenerationError, 
+  InvalidPrivateKeyError, 
+  InvalidNodeIdentityError, 
+  InvalidEnodeUrlError, 
+  ConfigurationValidationError 
+} from '../errors';
 
 /**
  * Generate a new node identity with Ethereum address and key pair
@@ -40,7 +47,7 @@ export async function generateNodeIdentity(): Promise<NodeIdentity> {
     return identity;
   } catch (error) {
     logger.error('Failed to generate node identity', error);
-    throw new Error(`Key generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new KeyGenerationError('Failed to generate a new node identity', error as Error);
   }
 }
 
@@ -55,7 +62,7 @@ export async function generateNodeIdentity(): Promise<NodeIdentity> {
  */
 export async function generateMultipleIdentities(count: number): Promise<NodeIdentity[]> {
   if (count <= 0 || !Number.isInteger(count)) {
-    throw new Error('Count must be a positive integer');
+    throw new ConfigurationValidationError('count', 'Must be a positive integer', count);
   }
   
   logger.debug(`Generating ${count} node identities...`);
@@ -69,7 +76,7 @@ export async function generateMultipleIdentities(count: number): Promise<NodeIde
     return identities;
   } catch (error) {
     logger.error(`Failed to generate ${count} identities`, error);
-    throw new Error(`Batch key generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new KeyGenerationError('Failed to generate multiple identities', error as Error);
   }
 }
 
@@ -97,7 +104,7 @@ export function deriveAddressFromPrivateKey(privateKey: string): string {
     
     return wallet.address.toLowerCase();
   } catch (error) {
-    throw new Error(`Invalid private key: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new InvalidPrivateKeyError('The provided private key is invalid or malformed', error as Error);
   }
 }
 
@@ -114,24 +121,28 @@ export function validateNodeIdentity(identity: NodeIdentity): boolean {
   try {
     // Validate address format
     if (!ethers.isAddress(identity.address)) {
-      throw new Error('Invalid Ethereum address format');
+      throw new InvalidNodeIdentityError('Invalid Ethereum address format');
     }
     
     // Validate that private key derives to the same address
     const derivedAddress = deriveAddressFromPrivateKey(identity.privateKey);
     if (derivedAddress.toLowerCase() !== identity.address.toLowerCase()) {
-      throw new Error('Private key does not match the provided address');
+      throw new InvalidNodeIdentityError('Private key does not match the provided address');
     }
     
     // Create wallet to validate public key
     const wallet = new ethers.Wallet(identity.privateKey);
     if (wallet.signingKey.publicKey !== identity.publicKey) {
-      throw new Error('Public key does not match the private key');
+      throw new InvalidNodeIdentityError('Public key does not match the private key');
     }
     
     return true;
   } catch (error) {
-    throw new Error(`Identity validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Re-throw InvalidNodeIdentityError as is, wrap others
+    if (error instanceof InvalidNodeIdentityError) {
+      throw error;
+    }
+    throw new InvalidNodeIdentityError(`Identity validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -178,7 +189,7 @@ export async function generateDeterministicIdentity(seed: string): Promise<NodeI
     return identity;
   } catch (error) {
     logger.error('Failed to generate deterministic identity', error);
-    throw new Error(`Deterministic key generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new KeyGenerationError('Failed to generate deterministic identity from seed', error as Error);
   }
 }
 
@@ -196,7 +207,7 @@ export function addressFromEnode(enodeUrl: string): string {
     // Extract public key from enode URL
     const match = enodeUrl.match(/^enode:\/\/([0-9a-fA-F]{128})@/);
     if (!match) {
-      throw new Error('Invalid enode URL format');
+      throw new InvalidEnodeUrlError('The provided string is not a valid enode URL');
     }
     
     const publicKey = `0x${match[1]}`;
@@ -206,6 +217,10 @@ export function addressFromEnode(enodeUrl: string): string {
     
     return address.toLowerCase();
   } catch (error) {
-    throw new Error(`Failed to extract address from enode: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Re-throw InvalidEnodeUrlError as is, wrap others
+    if (error instanceof InvalidEnodeUrlError) {
+      throw error;
+    }
+    throw new InvalidEnodeUrlError(`Failed to extract address from enode: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

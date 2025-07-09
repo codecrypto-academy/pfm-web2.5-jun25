@@ -300,3 +300,87 @@ export class PortAlreadyInUseError extends BesuSDKError {
     );
   }
 }
+
+/**
+ * Thrown when cryptographic key generation fails
+ * 
+ * This error indicates that the cryptographic operations required
+ * for generating node identities failed due to system issues or
+ * insufficient entropy.
+ */
+export class KeyGenerationError extends BesuSDKError {
+  constructor(message: string, originalError?: Error) {
+    const errorDetails = originalError ? ` Original error: ${originalError.message}` : '';
+    super(`${message}${errorDetails}`);
+  }
+}
+
+/**
+ * Thrown when a private key is invalid or malformed
+ * 
+ * Private keys must be valid hexadecimal strings that represent
+ * valid secp256k1 private keys. This error indicates format or
+ * cryptographic validation failure.
+ */
+export class InvalidPrivateKeyError extends BesuSDKError {
+  constructor(message: string, originalError?: Error) {
+    const errorDetails = originalError ? ` Original error: ${originalError.message}` : '';
+    super(`${message}${errorDetails}`);
+  }
+}
+
+/**
+ * Thrown when node identity validation fails
+ * 
+ * A valid node identity requires matching address, public key, and
+ * private key components. This error indicates inconsistency between
+ * these cryptographic components.
+ */
+export class InvalidNodeIdentityError extends BesuSDKError {
+  constructor(message: string) {
+    super(`Node identity validation failed: ${message}`);
+  }
+}
+
+/**
+ * Thrown when an enode URL is invalid or malformed
+ * 
+ * Enode URLs must follow the format enode://pubkey@ip:port.
+ * This error indicates parsing or format validation failure.
+ */
+export class InvalidEnodeUrlError extends BesuSDKError {
+  constructor(message: string) {
+    super(`Invalid enode URL: ${message}`);
+  }
+}
+
+/**
+ * Thrown when a node fails to reach ready state within timeout
+ * 
+ * Nodes must initialize and become responsive within expected timeframes.
+ * This error indicates the node startup process exceeded the timeout,
+ * suggesting potential resource constraints or configuration issues.
+ */
+export class NodeReadinessTimeoutError extends BesuSDKError {
+  constructor(nodeName: string, timeoutMs: number) {
+    super(
+      `Node '${nodeName}' did not become ready within ${timeoutMs}ms. ` +
+      `This may indicate resource constraints, network issues, or configuration problems.`
+    );
+  }
+}
+
+/**
+ * Thrown when a node operation requires a container but none is associated
+ * 
+ * This indicates an internal state inconsistency where a node object
+ * exists without its corresponding Docker container.
+ */
+export class ContainerNotAssociatedError extends BesuSDKError {
+  constructor(nodeName: string, operation: string) {
+    super(
+      `Cannot perform operation '${operation}' on node '${nodeName}': ` +
+      `no Docker container is associated with this node instance.`
+    );
+  }
+}

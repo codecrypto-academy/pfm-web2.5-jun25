@@ -12,7 +12,13 @@ import { Network } from './Network';
 import { DockerManager } from '../services/DockerManager';
 import { FileManager } from '../services/FileManager';
 import { SystemValidator } from '../services/SystemValidator';
-import { ConfigurationValidationError, ChainIdConflictError, SubnetConflictError } from '../errors';
+import { 
+  ConfigurationValidationError, 
+  ChainIdConflictError, 
+  SubnetConflictError, 
+  DuplicateNodeNameError, 
+  IPAddressConflictError 
+} from '../errors';
 import { logger } from '../utils/logger';
 import * as path from 'path';
 
@@ -564,11 +570,7 @@ export class BesuNetworkBuilder {
     
     // Check for duplicate names
     if (this.state.nodes.some(n => n.name === name)) {
-      throw new ConfigurationValidationError(
-        'nodeName',
-        'Node name must be unique',
-        name
-      );
+      throw new DuplicateNodeNameError(name);
     }
     
     // Validate IP format
@@ -583,11 +585,8 @@ export class BesuNetworkBuilder {
     
     // Check for duplicate IPs
     if (this.state.nodes.some(n => n.ip === ip)) {
-      throw new ConfigurationValidationError(
-        'nodeIp',
-        'IP address must be unique',
-        ip
-      );
+      const existingNode = this.state.nodes.find(n => n.ip === ip);
+      throw new IPAddressConflictError(ip, existingNode?.name || 'unknown');
     }
   }
 }

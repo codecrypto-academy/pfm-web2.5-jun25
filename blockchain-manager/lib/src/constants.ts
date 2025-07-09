@@ -11,3 +11,4 @@ export const MINERNODE_IP = "172.25.0.20";
 export const MINERNODE_PORT = 8581;
 export const P2P_PORT = 30303;
 export const RPC_PORT = 8545;
+export const RPC_PORT_NODE_LIST = [8590, 8592, 8593, 8593];

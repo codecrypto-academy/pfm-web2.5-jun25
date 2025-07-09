@@ -12,6 +12,7 @@ import {
     NETWORK_GATEWAY,
     NETWORK_NAME,
     NETWORK_SUBNET,
+    RPC_PORT_NODE_LIST,
 } from "./constants";
 import { createBesuNodeConfigFile } from "./services/besuNodeConfigFile";
 import { createCliqueGenesisFile } from "./services/cliqueGenesisFile";
@@ -19,6 +20,7 @@ import { createBesuNode } from "./services/createBesuNode";
 import { createNodeIdentityFiles } from "./services/createNodeIdentityFiles";
 import { ensureNetworkExists } from "./services/ensureNetworkExists";
 import { BesuNodeConfig, BesuNodeType } from "./types";
+import { generateIpAddress } from "./services/generateIpAddress";
 
 const docker = new Docker();
 
@@ -59,7 +61,13 @@ const docker = new Docker();
         const validatorAddress = fs.readFileSync(path.join(blockchainDataPath, minernodeIdentityFiles.addressFile), { encoding: 'utf-8' });
         createCliqueGenesisFile(blockchainDataPath, {
             chainId: CHAIN_ID,
-            initialValidators: [`0x${validatorAddress}`]
+            initialValidators: [`0x${validatorAddress}`],
+            preAllocatedAccounts: [
+                {
+                    address: `0x${validatorAddress}`,
+                    balance: '0xad78ebc5ac6200000'
+                }
+            ],
         });
 
         createBesuNodeConfigFile(blockchainDataPath);
@@ -77,9 +85,30 @@ const docker = new Docker();
             }
         }, minernodeIdentityFiles);
 
+        for (const [index, rpcNodePort] of RPC_PORT_NODE_LIST.entries()) {
+            const ip = generateIpAddress(NETWORK_SUBNET, index);
+
+            const rpcnodeConfig: BesuNodeConfig = {
+                name: `RPC_${rpcNodePort}_NODE`,
+                network: {
+                    name: NETWORK_NAME,
+                    ip
+                },
+                hostPort: rpcNodePort,
+                type: BesuNodeType.RPC,
+                options: {
+                    bootnodes: bootnodeEnode
+                }
+            };
+            const rpcNodeIdentityFiles = createNodeIdentityFiles(rpcnodeConfig);
+
+            await createBesuNode(docker, rpcnodeConfig, rpcNodeIdentityFiles);
+        }
+
     } catch (error) {
         throw error;
     }
 })();
+
 
 

@@ -8,6 +8,8 @@ The SDK serves as a programmatic alternative to `docker-compose`, specifically t
 
 ## 1. Overview
 
+> **💡 Pro Tip**: For a deeper understanding of the SDK's design decisions and implementation details, consider reading through the scripts paying special attention to the lightbulb tips (💡) scattered throughout - they provide valuable insights into the technical choices and trade-offs that shaped this SDK.
+
 The original project utilized a monolithic Bash script (`/script/script.sh`) to automate the deployment of private Hyperledger Besu networks using Docker. Its capabilities included:
 
 *   Configuration via YAML files.

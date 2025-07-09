@@ -382,9 +382,14 @@ export class BesuNode extends EventEmitter {
    * Build volume mounts for the container
    */
   private buildVolumes(nodePath: string): string[] {
+    // Convert paths to absolute paths to avoid Docker's "bad parameter" error
+    // Docker requires absolute paths for host directory binds
+    const absoluteNodePath = path.resolve(nodePath);
+    const absoluteGenesisPath = path.resolve(this.genesisPath);
+    
     return [
-      `${nodePath}:/data`,
-      `${this.genesisPath}:/data/genesis.json:ro`
+      `${absoluteNodePath}:/data`,
+      `${absoluteGenesisPath}:/data/genesis.json:ro`
     ];
   }
   

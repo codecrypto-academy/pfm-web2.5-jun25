@@ -9,6 +9,7 @@
  * 
  */
 
+// @ts-ignore
 import Docker from 'dockerode';
 import { DockerOperationError, BesuImageNotFoundError, NetworkAlreadyExistsError, NetworkNotFoundError, ContainerStateTimeoutError, UnexpectedContainerStateError } from '../errors';
 import { logger } from '../utils/logger';

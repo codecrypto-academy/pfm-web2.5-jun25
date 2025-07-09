@@ -16,8 +16,9 @@ export default function NetworkStatus() {
   const [status, setStatus] = useState<NetworkStatusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { balance, fetchBalance } = useBalance();
-  const { selectedNetwork } = useNetwork();
+  const { selectedNetwork, deleteNetwork } = useNetwork();
 
   const fetchStatus = useCallback(async () => {
     if (!selectedNetwork) return;
@@ -37,6 +38,18 @@ export default function NetworkStatus() {
       setLoading(false);
     }
   }, [selectedNetwork, fetchBalance]);
+
+  const handleDeleteNetwork = async () => {
+    if (!selectedNetwork) return;
+    
+    try {
+      await deleteNetwork(selectedNetwork.id);
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error('Error deleting network:', error);
+      alert('Error al borrar la red: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
 
   useEffect(() => {
     fetchStatus();
@@ -126,12 +139,44 @@ export default function NetworkStatus() {
         </div>
       </div>
 
-      <button 
-        onClick={fetchStatus}
-        className="mt-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 text-sm"
-      >
-        Refresh Status
-      </button>
+      {/* Botón para borrar red */}
+      {selectedNetwork && selectedNetwork.id !== 'besu-local-env' && (
+        <div className="mt-4 flex justify-end">
+          <button 
+            onClick={() => setShowDeleteConfirm(true)}
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 text-sm"
+          >
+            Borrar Red
+          </button>
+        </div>
+      )}
+
+      {/* Modal de confirmación */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold mb-4">Confirmar eliminación</h3>
+            <p className="text-gray-600 mb-6">
+              ¿Estás seguro de que quieres borrar la red "{selectedNetwork?.name}"? Esta acción no se puede deshacer.
+            </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteNetwork}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Borrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

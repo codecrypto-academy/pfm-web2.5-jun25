@@ -85,4 +85,36 @@ export async function POST(request: Request) {
         console.error('Error creating network:', error);
         return NextResponse.json({ error: 'Failed to create network' }, { status: 500 });
     }
+}
+
+export async function DELETE(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get('id');
+        
+        if (!id) {
+            return NextResponse.json({ error: 'Network ID is required' }, { status: 400 });
+        }
+
+        // No permitir borrar la red por defecto del entorno
+        if (id === 'besu-local-env') {
+            return NextResponse.json({ error: 'Cannot delete default environment network' }, { status: 403 });
+        }
+
+        const networksDir = path.join(process.cwd(), 'app', 'networks');
+        const filePath = path.join(networksDir, `${id}.json`);
+        
+        // Verificar si el archivo existe
+        if (!fs.existsSync(filePath)) {
+            return NextResponse.json({ error: 'Network not found' }, { status: 404 });
+        }
+
+        // Borrar el archivo
+        fs.unlinkSync(filePath);
+
+        return NextResponse.json({ message: 'Network deleted successfully' }, { status: 200 });
+    } catch (error) {
+        console.error('Error deleting network:', error);
+        return NextResponse.json({ error: 'Failed to delete network' }, { status: 500 });
+    }
 } 

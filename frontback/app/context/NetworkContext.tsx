@@ -9,6 +9,7 @@ interface NetworkContextType {
   selectNetwork: (networkId: string) => void;
   loading: boolean;
   refreshNetworks: () => Promise<void>;
+  deleteNetwork: (networkId: string) => Promise<void>;
 }
 
 const NetworkContext = createContext<NetworkContextType | undefined>(undefined);
@@ -57,8 +58,32 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     }
   }, [networks]);
 
+  const deleteNetwork = useCallback(async (networkId: string) => {
+    try {
+      const response = await fetch(`/api/networks?id=${networkId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete network');
+      }
+
+      // Si la red borrada era la seleccionada, limpiar la selección
+      if (selectedNetwork?.id === networkId) {
+        setSelectedNetwork(null);
+      }
+
+      // Refrescar la lista de redes
+      await fetchNetworks();
+    } catch (error) {
+      console.error('Error deleting network:', error);
+      throw error;
+    }
+  }, [selectedNetwork?.id, fetchNetworks]);
+
   return (
-    <NetworkContext.Provider value={{ networks, selectedNetwork, selectNetwork, loading, refreshNetworks: fetchNetworks }}>
+    <NetworkContext.Provider value={{ networks, selectedNetwork, selectNetwork, loading, refreshNetworks: fetchNetworks, deleteNetwork }}>
       {children}
     </NetworkContext.Provider>
   );

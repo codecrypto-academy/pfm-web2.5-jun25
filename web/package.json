@@ -10,13 +10,22 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@mantine/core": "^8.1.3",
+    "@mantine/form": "^8.1.3",
+    "@mantine/hooks": "^8.1.3",
+    "@mantine/modals": "^8.1.3",
+    "@mantine/notifications": "^8.1.3",
+    "@tabler/icons-react": "^3.34.0",
+    "@tanstack/react-query": "^5.81.5",
+    "@tanstack/react-query-devtools": "^5.81.5",
     "@types/pg": "^8.15.4",
     "besu-network-manager": "1.0.1",
     "dotenv": "^17.1.0",
     "next": "^15.3.4",
     "pg": "^8.16.3",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-hook-form": "^7.60.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.8",

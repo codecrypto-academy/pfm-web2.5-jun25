@@ -1,6 +1,8 @@
 # Ignore everything inside etc/wisdom
 etc/wisdom/*
 
+etc/buildplans/
+
 # But don't ignore the learning folder inside etc/wisdom
 !etc/wisdom/learning/
 !etc/wisdom/learning/**
@@ -17,8 +19,6 @@ besu-sdk/node_modules/
 dist/
 build/
 *.tsbuildinfo
-
-etc/buildplans/
 
 # Cachés de Jest
 coverage/

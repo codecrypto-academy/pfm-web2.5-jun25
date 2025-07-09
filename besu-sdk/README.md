@@ -82,8 +82,8 @@ Ensure your `package.json` contains the following scripts for building and testi
 
 ```json
 "scripts": {
-  "build": "tsc",  // npm run build
-  "test": "jest"   // npm test
+  "build": "tsc",
+  "test": "jest"
 }
 ```
 
@@ -145,3 +145,15 @@ This will add the following entry to your `package.json`:
 "dependencies": {
   "besu-sdk": "file:../besu-sdk"
 }
+```
+
+### Peer Dependencies
+
+This SDK does not bundle `ethers`. It must be provided by the host project to avoid version conflicts and reduce package size. Ensure your project's `package.json` includes `ethers`.
+
+**`besu-sdk/package.json`:**
+```json
+"peerDependencies": {
+  "ethers": "^6.7.0"
+}
+```

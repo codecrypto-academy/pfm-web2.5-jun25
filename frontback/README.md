@@ -1,37 +1,19 @@
-## Peer Dependencies
-
-This SDK does not bundle `ethers`. It must be provided by the host project to avoid version conflicts and reduce package size. Ensure your project's `package.json` includes `ethers`.
-
-**`besu-sdk/package.json`:**
-```json
-"peerDependencies": {
-  "ethers": "^6.7.0"
-}
-```
-
-
-
-# Frontback: Besu Network Web Interface
+# Frontback - Besu Network Dashboard
 
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
 ![Ethers.js](https://img.shields.io/badge/Ethers.js-2535A4?style=for-the-badge&logo=ethereum&logoColor=white)
 
+A Next.js application serving as a web-based user interface to interact with a private Hyperledger Besu network deployed by the tools in this repository. This application demonstrates the final step of the project: consuming the resources of a custom-deployed blockchain. It is designed to connect to an RPC node whose connection details (URL and private key) are automatically provided by the backend deployment script (`/script/script.sh`).
 
-A Next.js application serving as a web-based user interface to interact with a private Hyperledger Besu network deployed by the tools in this repository.
+## Features
 
-## Project Goal
-
-This application demonstrates the final step of the project: consuming the resources of a custom-deployed blockchain. It is designed to connect to an RPC node whose connection details (URL and private key) are automatically provided by the backend deployment script (`/script/script.sh`).
-
-## Technology Stack
--   **Framework**: Next.js (App Router)
--   **UI Library**: React
--   **Styling**: Tailwind CSS
--   **Blockchain Interaction**: Ethers.js
--   **Language**: TypeScript
--   **Local SDK**: Integrates `besu-sdk` for potential programmatic interactions.
+- **Network Status**: Real-time monitoring of blockchain network status
+- **Test Faucet**: Send test ETH to any address using the validator account
+- **Balance Checker**: Check the ETH balance of any address
+- **Transfer Panel**: Send ETH between accounts using private keys
+- **Block Explorer**: View recent blocks and transactions
 
 ## Getting Started
 
@@ -50,9 +32,11 @@ The deployment script is responsible for creating the blockchain and generating 
     ```bash
     ./script.sh
     ```
-3.  When the script finishes and presents its interactive menu, choose **option [2] (Stop containers but preserve configuration)**. This is critical as it leaves the generated node data and the environment file intact.
 
-The script will create a `.env.local` file in this `frontback/` directory.
+   When prompted, either choose option 1 to visualize blocks or keep it standing by so that the machines don't get turned off.
+
+The script will create a `.env` file in this `frontback/` directory (configurable via `config.yaml` at `../script`)
+
 
 ### **Step 2: Install Dependencies**
 
@@ -86,7 +70,32 @@ NEXT_PUBLIC_PRIVATE_KEY=0x...
 -   `NEXT_PUBLIC_RPC_URL`: The JSON-RPC endpoint of a running Besu node.
 -   `NEXT_PUBLIC_PRIVATE_KEY`: The private key of an account that was pre-funded in the genesis block, allowing the application to sign and send transactions.
 
-## Local SDK Integration
 
-This project uses the `besu-sdk` via a local file path dependency (`"besu-sdk": "file:../besu-sdk"`). This means any changes to the SDK's source code in the `/besu-sdk` directory will be reflected here after rebuilding the project, creating a tightly-integrated development workflow.
-````
+## API Endpoints
+
+- `GET /api/network/status` - Network and blockchain status
+- `POST /api/faucet` - Send test ETH to an address
+- `GET /api/balance?address=0x...` - Check balance of an address
+- `POST /api/transfer` - Transfer ETH between accounts
+- `GET /api/blocks?limit=10` - Get recent blocks
+
+
+## Development
+
+This is an MVP (Minimum Viable Product) focused on functionality over aesthetics. The dashboard provides all essential features for blockchain network management and testing.
+
+## Dependencies
+
+- Next.js 14
+- React 18
+- TypeScript
+- Tailwind CSS
+- Ethers.js 6.13.0
+- besu-sdk (local dependency)
+
+## Important Notes
+
+- This is designed for development and testing purposes only
+- Private keys are handled client-side for the transfer functionality
+- The faucet uses the validator account's private key from the environment
+- All transactions are sent to your local Besu network

@@ -59,11 +59,12 @@ export class DockerService {
       hash = hash & hash; // Convertir a 32bit integer
     }
     
-    // Usar el hash para generar un rango único en 172.x.0.0/16
-    // Asegurar que x esté entre 16 y 31 para evitar conflictos con rangos comunes
-    const secondOctet = 16 + (Math.abs(hash) % 16);
-    const subnet = `172.${secondOctet}.0.0/16`;
-    const gateway = `172.${secondOctet}.0.1`;
+    // Usar el hash para generar un rango único en 10.x.0.0/16
+    // Usar el rango 10.100-199.0.0/16 para evitar conflictos con rangos comunes
+    // Este rango está reservado para uso privado y es menos probable que entre en conflicto
+    const secondOctet = 100 + (Math.abs(hash) % 100);
+    const subnet = `10.${secondOctet}.0.0/16`;
+    const gateway = `10.${secondOctet}.0.1`;
     
     return { subnet, gateway };
   }

@@ -84,12 +84,12 @@ export class IpManager {
       const networkDetails = await this.docker.inspectNetwork(networkId);
       if (networkDetails && networkDetails.IPAM && networkDetails.IPAM.Config && networkDetails.IPAM.Config.length > 0) {
         const subnet = networkDetails.IPAM.Config[0].Subnet;
-        // Extraer el segundo octeto de la subred (ej: 172.20.0.0/16 -> 20)
-        const match = subnet.match(/^172\.(\d+)\.0\.0\/16$/);
+        // Extraer el segundo octeto de la subred (ej: 10.120.0.0/16 -> 120)
+        const match = subnet.match(/^10\.(\d+)\.0\.0\/16$/);
         if (match) {
           const secondOctet = parseInt(match[1]);
           return {
-            baseIp: `172.${secondOctet}.0.`,
+            baseIp: `10.${secondOctet}.0.`,
             secondOctet
           };
         }
@@ -171,7 +171,7 @@ export class IpManager {
     if (!subnetInfo) {
       // Fallback al rango por defecto si no se puede obtener la información
       this.logger.warn(`Could not get subnet info for network ${networkName}, using default range`);
-      const baseIp = '172.20.0.';
+      const baseIp = '10.120.0.';
       
       for (let i = 10; i <= 254; i++) {
         const candidateIp = `${baseIp}${i}`;
@@ -194,7 +194,7 @@ export class IpManager {
     }
 
     // Si se agota el rango .0, usar .1
-    const baseIp1 = `172.${secondOctet}.1.`;
+    const baseIp1 = `10.${secondOctet}.1.`;
     for (let i = 1; i <= 254; i++) {
       const candidateIp = `${baseIp1}${i}`;
       if (!usedIps.includes(candidateIp)) {

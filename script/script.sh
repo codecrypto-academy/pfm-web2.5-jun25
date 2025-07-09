@@ -390,7 +390,7 @@ load_config() {
 
     # 🚩 Get "npm" dependencies directory from config.yaml (so as to stay flexible)
 
-    TX_SIGNER_DEPS_DIR_REL=$(yq eval '.tx_signer_deps_dir // "../frontback/"' "$CONFIG_FILE")
+    TX_SIGNER_DEPS_DIR_REL=$(yq eval '.tx_signer_deps_dir // "../besu-sdk/"' "$CONFIG_FILE")
     # Convert to absolute path relative to the script directory
     TX_SIGNER_DEPS_DIR="$(cd "${SCRIPT_DIR}" && cd "${TX_SIGNER_DEPS_DIR_REL}" 2>/dev/null && pwd)" || {
         log_warning "Transaction signer dependencies directory not found: ${SCRIPT_DIR}/${TX_SIGNER_DEPS_DIR_REL}"

@@ -1,9 +1,9 @@
 # Ignore everything inside etc/wisdom
 etc/wisdom/*
 
-# But don't ignore the gemini folder inside etc/wisdom
-!etc/wisdom/gemini/
-!etc/wisdom/gemini/**
+# But don't ignore the learning folder inside etc/wisdom
+!etc/wisdom/learning/
+!etc/wisdom/learning/**
 
 # Ignore env_forwarding script
 script/env_forwarding
@@ -11,12 +11,14 @@ script/nodes
 
 # Node dependencies
 node_modules/
-lib/node_modules/
+besu-sdk/node_modules/
 
 # Compilados de TypeScript
 dist/
 build/
 *.tsbuildinfo
+
+etc/buildplans/
 
 # Cachés de Jest
 coverage/
@@ -31,6 +33,12 @@ jest-transform-cache/
 *.tmp
 .DS_Store
 
+# DELETEME files - temporary code aggregation files
+DELETEME.ts
+DELETEME.txt
+**/DELETEME.ts
+**/DELETEME.txt
+
 # Environment variables - contains sensitive information
 .env
 .env.local
@@ -38,3 +46,5 @@ jest-transform-cache/
 
 # Claude settings
 .claude/settings.local.json
+
+__tests__

@@ -29,7 +29,7 @@
 
 This directory contains a bash script (`script.sh`) that deploys a private Hyperledger Besu network from scratch using Docker. It automates the creation of containers, the startup of multiple Besu nodes, and the execution of test transactions to validate the network’s operation, all based on the configuration defined in `config.yaml`, without needing to directly edit the script code.
 
-> **Note:** While this script is relatively large and includes considerable overhead for logging and debugging purposes, it is highly useful for execution and monitoring through color-coded logs—particularly when using the `--debug` mode. The script provides real-time async feedback as nodes are generated, displaying live status messages like "(🔷 $1)" that show each node's progression through the setup process. However, for production environments, improved operational clarity, modular usage, and better maintainability, it is recommended to use the module located in the `lib` directory (if it exists).
+> **Note:** While this script is relatively large and includes considerable overhead for logging and debugging purposes, it is highly useful for execution and monitoring through color-coded logs—particularly when using the `--debug` mode. The script provides real-time async feedback as nodes are generated, displaying live status messages like "(🔷 $1)" that show each node's progression through the setup process. However, for production environments, improved operational clarity, modular usage, and better maintainability, it is recommended to use the module located in the `besu-sdk/` directory.
 >
 > **The primary goal of this script is not for you to understand its internal logic line-by-line, but rather to execute it and observe its output. This provides a detailed, real-time understanding of what happens "under the hood" when setting up a PoA blockchain.**
 
@@ -50,14 +50,14 @@ During its testing phase, the script uses Node.js libraries (`ethers.js`) to sig
 
 ```bash
 # From the project root
-cd lib/shared
+cd besu-sdk/
 npm install ethers  # to avoid installing other libs (used for next blocks) via `npm install`
-cd ../../script
+cd ../script
 ```
 
-> **Why `lib/shared/`?** This folder already contains a separate Next.js app, but it's **not** used in these tests. We just reuse its `node_modules` to avoid duplicate installs. If you're only running the Bash script, you can ignore all Next.js files—both parts of the repo are independent.
+> **Why `besu-sdk/`?** This folder already contains a separate Next.js app, but it's **not** used in these tests. We just reuse its `node_modules` to avoid duplicate installs. If you're only running the Bash script, you can ignore all Next.js files—both parts of the repo are independent.
 >
-> The script reads the path to these dependencies from **`config.yaml`** (`tx_signer_deps_dir`). The default is `../lib/shared`, but you can change it if your directory layout differs. See the next section for details.
+> The script reads the path to these dependencies from **`config.yaml`** (`tx_signer_deps_dir`). The default is `../besu-sdk/`, but you can change it if your directory layout differs. See the next section for details.
 
 #### Using in Other Environments
 

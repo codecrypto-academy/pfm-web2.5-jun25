@@ -1112,10 +1112,12 @@ export class BesuNetworkUpdater {
 
     // Cargar la configuración existente
     let config: BesuNetworkConfig;
+    let configWithNodes: any = null; // Para manejar la propiedad nodes que no está en el tipo
     
     if (fs.existsSync(configPath)) {
       const configData = fs.readFileSync(configPath, 'utf-8');
-      config = JSON.parse(configData);
+      configWithNodes = JSON.parse(configData);
+      config = configWithNodes; // El objeto tiene las propiedades de BesuNetworkConfig
     } else {
       // Si no existe archivo de configuración, crear configuración básica
       console.log('⚠️  No network-config.json found, creating basic configuration...');
@@ -1131,15 +1133,94 @@ export class BesuNetworkUpdater {
     // Crear instancia de la red con la configuración cargada
     const network = new BesuNetwork(config, baseDir);
     
+    // Cargar nodos existentes en la instancia de red si están en la configuración
+    if (configWithNodes && configWithNodes.nodes && Array.isArray(configWithNodes.nodes)) {
+      console.log(`📂 Loading ${configWithNodes.nodes.length} existing nodes into network instance...`);
+      const { BesuNode } = await import('./create-besu-networks');
+      const fileService = (network as any).getFileService();
+      
+      for (const nodeData of configWithNodes.nodes) {
+        const nodeConfig = {
+          name: nodeData.name,
+          ip: nodeData.ip,
+          port: nodeData.p2pPort || nodeData.port || 30303,
+          rpcPort: nodeData.rpcPort,
+          type: nodeData.type
+        };
+        
+        const node = new BesuNode(nodeConfig, fileService);
+        (network as any).nodes.set(nodeData.name, node);
+        console.log(`   ✅ Loaded node: ${nodeData.name} (${nodeData.type})`);
+      }
+      
+      // Restaurar asociaciones de signerAccount si existen
+      if (configWithNodes.signerAccounts && Array.isArray(configWithNodes.signerAccounts)) {
+        console.log(`   🔑 Restoring ${configWithNodes.signerAccounts.length} signerAccount associations...`);
+        
+        // Ensure the network config has the signerAccounts
+        if (!(network as any).config.signerAccounts) {
+          (network as any).config.signerAccounts = [];
+        }
+        (network as any).config.signerAccounts = configWithNodes.signerAccounts;
+        
+        // Restore minerSignerKeys map for each miner
+        for (const signerAccountData of configWithNodes.signerAccounts) {
+          console.log(`   🔍 Processing signerAccount: ${signerAccountData.address}, minerNode: ${signerAccountData.minerNode}, hasPrivateKey: ${!!signerAccountData.privateKey}`);
+          
+          if (signerAccountData.minerNode && signerAccountData.privateKey) {
+            // Find the miner node
+            const minerNode = (network as any).nodes.get(signerAccountData.minerNode);
+            console.log(`   🔍 Found minerNode for ${signerAccountData.minerNode}: ${!!minerNode}`);
+            
+            if (minerNode) {
+              // Create the keys object for the minerSignerKeys map
+              const signerKeys = {
+                privateKey: signerAccountData.privateKey,
+                publicKey: signerAccountData.publicKey || '', // May not be stored
+                address: signerAccountData.address,
+                enode: signerAccountData.enode || '' // May not be stored
+              };
+              
+              // Store in minerSignerKeys map
+              if (!(network as any).minerSignerKeys) {
+                (network as any).minerSignerKeys = new Map();
+              }
+              (network as any).minerSignerKeys.set(signerAccountData.minerNode, signerKeys);
+              
+              console.log(`      - Associated signer ${signerAccountData.address} with miner ${signerAccountData.minerNode}`);
+            }
+          }
+        }
+      }
+    }
+    
     // Crear el updater y ejecutar la actualización
     const updater = new BesuNetworkUpdater(network);
     
     await updater.updateNetworkNodes(updates);
     
-    // Guardar la configuración actualizada
-    const updatedConfigData = JSON.stringify(network.getConfig(), null, 2);
+    // Guardar la configuración actualizada con nodos
+    const baseConfig = network.getConfig();
+    const currentNodes = Array.from(network.getNodes().entries()).map(([nodeName, node]) => {
+      const nodeConfig = node.getConfig();
+      return {
+        name: nodeConfig.name,
+        ip: nodeConfig.ip,
+        rpcPort: nodeConfig.rpcPort,
+        p2pPort: nodeConfig.port || 30303,
+        type: nodeConfig.type
+      };
+    });
+    
+    const fullConfig = {
+      ...baseConfig,
+      nodes: currentNodes
+    };
+    
+    const updatedConfigData = JSON.stringify(fullConfig, null, 2);
     fs.writeFileSync(configPath, updatedConfigData);
     console.log(`💾 Configuration saved to: ${configPath}`);
+    console.log(`   📊 Final config: ${currentNodes.length} nodes, ${baseConfig.signerAccounts?.length || 0} signerAccounts`);
     
     console.log(`✅ Network ${networkName} nodes updated successfully`);
   }
@@ -1283,6 +1364,8 @@ export async function addNodesToNetwork(
       signerAccounts: configJson.signerAccounts,
       accounts: configJson.accounts
     };
+    
+    console.log(`   📊 Loaded config with ${configJson.signerAccounts?.length || 0} signerAccounts`);
   } else {
     // If no config file, create basic config
     console.log('⚠️  No network-config.json found, creating basic configuration...');
@@ -1293,6 +1376,7 @@ export async function addNodesToNetwork(
       consensus: 'clique',
       gasLimit: '0x47E7C4'
     };
+    configJson = { ...config };
   }
 
   // Create or update nodes array in raw config JSON
@@ -1318,6 +1402,7 @@ export async function addNodesToNetwork(
   // Save updated config with all properties
   fs.writeFileSync(configPath, JSON.stringify(configJson, null, 2));
   console.log(`💾 Updated configuration saved to: ${configPath}`);
+  console.log(`   📊 Final config has ${configJson.signerAccounts?.length || 0} signerAccounts and ${configJson.nodes?.length || 0} nodes`);
 }
 
 /**
@@ -1400,6 +1485,52 @@ export async function updateNodeConfigurations(network: BesuNetwork): Promise<vo
     
     // Guardar nueva configuración con el mismo patrón de nombre que en la creación inicial
     fileService.createFile('', `${nodeConfig.name}_config.toml`, tomlConfig);
+  }
+}
+
+/**
+ * Actualiza las configuraciones de los nodos con un mapa específico de signerAccounts
+ * Esta función es útil cuando el network instance no tiene las asociaciones actualizadas
+ */
+export async function updateNodeConfigurationsWithSignerMap(
+  network: BesuNetwork, 
+  minerSignerMap: Map<string, string>
+): Promise<void> {
+  const bootnodeNodes = network.getNodesByType('bootnode');
+  const bootnodeEnodes = bootnodeNodes.map(node => node.getKeys().enode);
+  const nodes = network.getNodes();
+  const config = network.getConfig();
+  const fileService = network.getFileService();
+  
+  console.log(`   📝 Generating TOML files for ${nodes.size} nodes...`);
+  
+  for (const [nodeName, node] of nodes) {
+    const nodeConfig = node.getConfig();
+    
+    console.log(`   🔧 Generating TOML for ${nodeName} (${nodeConfig.type})`);
+    
+    // Generar nueva configuración TOML
+    let tomlConfig: string;
+    if (nodeConfig.type === 'bootnode') {
+      tomlConfig = node.generateTomlConfig(config);
+    } else if (nodeConfig.type === 'miner') {
+      // For miner nodes, get the associated signerAccount address from our map
+      const signerAccountAddress = minerSignerMap.get(nodeName);
+      if (!signerAccountAddress) {
+        console.warn(`⚠️  No signerAccount found for miner ${nodeName}, using default TOML generation`);
+        tomlConfig = node.generateTomlConfig(config, bootnodeEnodes);
+      } else {
+        console.log(`     🔑 Using signerAccount ${signerAccountAddress} for miner ${nodeName}`);
+        tomlConfig = node.generateTomlConfig(config, bootnodeEnodes, signerAccountAddress);
+      }
+    } else {
+      // For RPC and other node types
+      tomlConfig = node.generateTomlConfig(config, bootnodeEnodes);
+    }
+    
+    // Guardar nueva configuración con el mismo patrón de nombre que en la creación inicial
+    fileService.createFile('', `${nodeConfig.name}_config.toml`, tomlConfig);
+    console.log(`     ✅ Created ${nodeConfig.name}_config.toml`);
   }
 }
 
@@ -1990,6 +2121,54 @@ export async function updateNetworkNodesByName(
     // Añadir nuevos nodos
     if (nodeUpdates.add && nodeUpdates.add.length > 0) {
       console.log(`➕ Adding ${nodeUpdates.add.length} new nodes...`);
+      
+      // Check if we're adding miners and handle signerAccount associations
+      const newMiners = nodeUpdates.add.filter(node => node.type === 'miner');
+      if (newMiners.length > 0) {
+        console.log(`⛏️  Found ${newMiners.length} new miners requiring signerAccount associations`);
+        
+        // Load current network configuration to get existing signerAccounts
+        const configFilePath = path.join(networkPath, 'network-config.json');
+        let currentConfig: any = {};
+        if (fs.existsSync(configFilePath)) {
+          const configData = fs.readFileSync(configFilePath, 'utf-8');
+          currentConfig = JSON.parse(configData);
+        }
+        
+        const existingSignerAccounts = currentConfig.signerAccounts || [];
+        const existingMiners = (currentConfig.nodes || []).filter((node: any) => node.type === 'miner');
+        
+        console.log(`   Current signerAccounts: ${existingSignerAccounts.length}`);
+        console.log(`   Current miners: ${existingMiners.length}`);
+        console.log(`   New miners to add: ${newMiners.length}`);
+        
+        // Generate new signerAccounts for new miners
+        const newSignerAccounts = [];
+        const cryptoLib = new CryptoLib();
+        
+        for (const miner of newMiners) {
+          // Generate a new signerAccount for this miner
+          const keyPair = cryptoLib.generateKeyPair(miner.ip || '127.0.0.1');
+          const newSignerAccount = {
+            address: keyPair.address,
+            weiAmount: '50000000000000000000000', // 50,000 ETH default amount
+            minerNode: miner.name
+          };
+          
+          newSignerAccounts.push(newSignerAccount);
+          console.log(`   🔐 Generated signerAccount ${keyPair.address} for miner ${miner.name}`);
+        }
+        
+        // Update the network configuration with new signerAccounts
+        const updatedSignerAccounts = [...existingSignerAccounts, ...newSignerAccounts];
+        currentConfig.signerAccounts = updatedSignerAccounts;
+        
+        // Save updated configuration with new signerAccounts
+        fs.writeFileSync(configFilePath, JSON.stringify(currentConfig, null, 2));
+        console.log(`   ✅ Updated configuration with ${newSignerAccounts.length} new signerAccounts`);
+        console.log(`   📊 Total signerAccounts now: ${updatedSignerAccounts.length}`);
+      }
+      
       await addNodesToNetwork(networkName, nodeUpdates.add, baseDir);
       result.nodesAdded = nodeUpdates.add.map(node => node.name);
       
@@ -2002,7 +2181,35 @@ export async function updateNetworkNodesByName(
         
         // Create the node key files
         const cryptoLib = new CryptoLib();
-        const { privateKey, publicKey, address } = cryptoLib.generateKeyPair(nodeDefinition.ip || '127.0.0.1');
+        let keyPair;
+        
+        // For miners, we need to generate keys and update the signerAccount address to match
+        if (nodeDefinition.type === 'miner') {
+          // Generate new keys for this miner
+          keyPair = cryptoLib.generateKeyPair(nodeDefinition.ip || '127.0.0.1');
+          
+          // Update the signerAccount address to match the generated keys
+          const configFilePath = path.join(networkPath, 'network-config.json');
+          const configData = fs.readFileSync(configFilePath, 'utf-8');
+          const config = JSON.parse(configData);
+          const minerSignerAccount = config.signerAccounts?.find((sa: any) => sa.minerNode === nodeDefinition.name);
+          
+          if (minerSignerAccount) {
+            console.log(`   📝 Updating signerAccount address from ${minerSignerAccount.address} to ${keyPair.address} for miner ${nodeDefinition.name}`);
+            minerSignerAccount.address = keyPair.address;
+            
+            // Save the updated config with the new address
+            fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
+            console.log(`   🔐 Updated signerAccount for miner ${nodeDefinition.name} (${keyPair.address})`);
+          } else {
+            console.log(`   ⚠️  No signerAccount found for miner ${nodeDefinition.name}, using generated keys`);
+          }
+        } else {
+          // For non-miners, generate regular keys
+          keyPair = cryptoLib.generateKeyPair(nodeDefinition.ip || '127.0.0.1');
+        }
+        
+        const { privateKey, publicKey, address } = keyPair;
         
         fs.writeFileSync(path.join(nodeDirectory, 'key.priv'), privateKey);
         fs.writeFileSync(path.join(nodeDirectory, 'key.pub'), publicKey);
@@ -2025,44 +2232,94 @@ export async function updateNetworkNodesByName(
         // Create new network instance with updated configuration
         const refreshedNetwork = new BesuNetwork(updatedConfig, baseDir);
         
+        // For new miners, we need to set up the miner-signer associations in the network instance
+        if (newMiners.length > 0) {
+          console.log(`🔗 Setting up miner-signerAccount associations for new miners...`);
+          const cryptoLib = new CryptoLib();
+          
+          for (const miner of newMiners) {
+            const minerSignerAccount = updatedConfig.signerAccounts?.find((sa: any) => sa.minerNode === miner.name);
+            if (minerSignerAccount) {
+              // The keys were already generated and the address updated during file creation
+              // We need to read the keys from the files we just created
+              const minerDirectory = path.join(networkPath, miner.name);
+              const privateKeyPath = path.join(minerDirectory, 'key.priv');
+              const publicKeyPath = path.join(minerDirectory, 'key.pub');
+              
+              if (fs.existsSync(privateKeyPath) && fs.existsSync(publicKeyPath)) {
+                const privateKey = fs.readFileSync(privateKeyPath, 'utf-8').trim();
+                const publicKey = fs.readFileSync(publicKeyPath, 'utf-8').trim();
+                
+                // Store the miner-signer association in the network
+                const signerKeys = {
+                  privateKey,
+                  publicKey,
+                  address: minerSignerAccount.address,
+                  enode: `enode://${publicKey.substring(2)}@${miner.ip}:30303`
+                };
+                
+                // Access the internal minerSignerKeys map
+                (refreshedNetwork as any).minerSignerKeys.set(miner.name, signerKeys);
+                console.log(`   🔐 Associated signerAccount ${minerSignerAccount.address} with miner ${miner.name}`);
+              } else {
+                console.log(`   ⚠️  Could not find key files for miner ${miner.name}`);
+              }
+            }
+          }
+        }
+        
         // Generate TOML configuration files for all nodes including new ones
         console.log(`📝 Generating TOML configuration files for all nodes...`);
-        await updateNodeConfigurations(refreshedNetwork);
+        
+        // First, we need to reload the config to get the updated signerAccounts
+        const configForTOML = fs.readFileSync(configFilePath, 'utf-8');
+        const configJsonForTOML = JSON.parse(configForTOML);
+        
+        // Create a map of miner names to signerAccount addresses from the config file
+        const minerSignerMap = new Map<string, string>();
+        if (configJsonForTOML.signerAccounts) {
+          configJsonForTOML.signerAccounts.forEach((sa: any) => {
+            if (sa.minerNode) {
+              minerSignerMap.set(sa.minerNode, sa.address);
+              console.log(`   🔗 Mapped miner ${sa.minerNode} to signerAccount ${sa.address}`);
+            }
+          });
+        }
+        
+        // Generate TOML files for all nodes using the updated signerAccount mappings
+        await updateNodeConfigurationsWithSignerMap(refreshedNetwork, minerSignerMap);
         console.log(`✅ TOML configuration files updated for all nodes`);
       }
     }
 
     // Guardar la configuración actualizada
     const currentConfigPath = path.join(networkPath, 'network-config.json');
-    let updatedConfig = network.getConfig();
     
-    // Cargar la configuración existente para mantener la información de nodos
+    // Load the existing configuration which should have all our updates
     if (fs.existsSync(currentConfigPath)) {
       try {
         const existingConfigData = fs.readFileSync(currentConfigPath, 'utf-8');
         const existingConfig = JSON.parse(existingConfigData);
         
-        // Make sure the existing config's nodes include any updates we've made
-        if (existingConfig.nodes && nodeUpdates.update) {
-          console.log(`   📝 Updating node properties in final configuration...`);
-          nodeUpdates.update.forEach(updateInfo => {
-            const nodeToUpdate = existingConfig.nodes.find((n: any) => n.name === updateInfo.name);
-            if (nodeToUpdate) {
-              console.log(`      ✏️ Updating ${updateInfo.name} in final config`);
-              Object.assign(nodeToUpdate, updateInfo.updates);
-            }
-          });
-        }
+        // The config file should already be updated with the correct nodes by the BesuNetworkUpdater
+        // So we don't need to update it again here - just log the final state
+        console.log(`💾 Final configuration already saved by BesuNetworkUpdater`);
+        console.log(`   ✅ Final saved config: ${existingConfig.nodes?.length || 0} nodes, ${existingConfig.signerAccounts?.length || 0} signerAccounts`);
         
-        updatedConfig = { ...existingConfig, ...updatedConfig };
       } catch (error) {
-        console.warn('Warning: Could not merge with existing config, using new config only');
+        console.warn('Warning: Could not merge with existing config, using network config only');
+        const networkConfig = network.getConfig();
+        const updatedConfigData = JSON.stringify(networkConfig, null, 2);
+        fs.writeFileSync(currentConfigPath, updatedConfigData);
+        console.log(`💾 Configuration saved to: ${currentConfigPath}`);
       }
+    } else {
+      // If no existing config file, just save the network config
+      const networkConfig = network.getConfig();
+      const updatedConfigData = JSON.stringify(networkConfig, null, 2);
+      fs.writeFileSync(currentConfigPath, updatedConfigData);
+      console.log(`💾 Configuration saved to: ${currentConfigPath}`);
     }
-
-    const updatedConfigData = JSON.stringify(updatedConfig, null, 2);
-    fs.writeFileSync(currentConfigPath, updatedConfigData);
-    console.log(`💾 Configuration saved to: ${currentConfigPath}`);
 
     // Iniciar la red si se solicita
     if (options.startAfterUpdate) {

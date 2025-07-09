@@ -287,64 +287,209 @@ describe('Adding bootnode and RPC nodes to existing network', () => {
                     (expandedNetwork as any).nodes.set(nodeData.name, node);
                 }
                 
+                // Restore signerAccount associations from config if any exist
+                if (updatedConfig.signerAccounts && Array.isArray(updatedConfig.signerAccounts)) {
+                    console.log(`   Restoring ${updatedConfig.signerAccounts.length} signerAccount associations...`);
+                    
+                    for (const signerAccountData of updatedConfig.signerAccounts) {
+                        if (signerAccountData.minerNode) {
+                            // Find the miner node
+                            const minerNode = (expandedNetwork as any).nodes.get(signerAccountData.minerNode);
+                            if (minerNode) {
+                                // Create signerAccount object
+                                const signerAccount = {
+                                    address: signerAccountData.address,
+                                    privateKey: signerAccountData.privateKey
+                                };
+                                
+                                // Add to network's signerAccount associations
+                                if (!(expandedNetwork as any).minerSignerAssociations) {
+                                    (expandedNetwork as any).minerSignerAssociations = [];
+                                }
+                                
+                                (expandedNetwork as any).minerSignerAssociations.push({
+                                    minerName: signerAccountData.minerNode,
+                                    signerAccount: signerAccount
+                                });
+                                
+                                console.log(`      - Associated signer ${signerAccount.address} with miner ${signerAccountData.minerNode}`);
+                            }
+                        }
+                    }
+                }
+                
                 console.log(`   ✅ Loaded ${(expandedNetwork as any).nodes.size} nodes`);
             }
+            
+            // Regenerate TOML files with proper signerAccount associations
+            console.log('📝 Regenerating TOML files to ensure all nodes have proper configuration...');
+            
+            // Create a miner-signerAccount map from the config
+            const minerSignerMap = new Map<string, string>();
+            if (updatedConfig.signerAccounts && Array.isArray(updatedConfig.signerAccounts)) {
+                for (const signerAccountData of updatedConfig.signerAccounts) {
+                    if (signerAccountData.minerNode) {
+                        minerSignerMap.set(signerAccountData.minerNode, signerAccountData.address);
+                        console.log(`   - Mapped miner ${signerAccountData.minerNode} to signerAccount ${signerAccountData.address}`);
+                    }
+                }
+            }
+            
+            const { updateNodeConfigurationsWithSignerMap } = await import('../src/update-besu-networks');
+            await updateNodeConfigurationsWithSignerMap(expandedNetwork, minerSignerMap);
+            console.log('   ✅ TOML files regenerated for all nodes');
             
             // Start the expanded network
             await expandedNetwork.start();
             
-            // Wait for network stabilization
-            console.log('⏳ Waiting for expanded network stabilization...');
-            await new Promise(resolve => setTimeout(resolve, 20000));
+            // Wait for network stabilization with longer time for all nodes to sync
+            console.log('⏳ Waiting for expanded network stabilization and node synchronization...');
+            console.log('   This may take some time as new nodes need to sync and connect...');
+            await new Promise(resolve => setTimeout(resolve, 50000)); // 50 seconds for full sync
             
-            // Verify expanded network connectivity
-            console.log('🔍 Checking expanded network connectivity...');
-            const expandedConnectivity = await expandedNetwork.getNetworkConnectivity();
-            const expandedActiveNodes = expandedConnectivity.filter(node => node.isActive);
+            // Verify expanded network connectivity and wait for all nodes to be active
+            console.log('🔍 Checking expanded network connectivity and synchronization...');
             
-            console.log('📊 Expanded network state:');
+            let expandedConnectivity = await expandedNetwork.getNetworkConnectivity();
+            let expandedActiveNodes = expandedConnectivity.filter(node => node.isActive);
+            
+            // Wait for ALL 5 nodes to be active - retry up to 3 times with increasing delays
+            let retryCount = 0;
+            const maxRetries = 3;
+            
+            while (expandedActiveNodes.length < 5 && retryCount < maxRetries) {
+                retryCount++;
+                const waitTime = 30000 + (retryCount * 10000); // 30s, 40s, 50s
+                
+                console.log(`   Currently ${expandedActiveNodes.length}/5 nodes active, retry ${retryCount}/${maxRetries}...`);
+                console.log(`   Waiting ${waitTime/1000}s for all nodes to become active...`);
+                
+                // Show which nodes are not active yet
+                const inactiveNodes = expandedConnectivity.filter(node => !node.isActive);
+                if (inactiveNodes.length > 0) {
+                    console.log(`   Inactive nodes: ${inactiveNodes.map(n => n.nodeName).join(', ')}`);
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                
+                expandedConnectivity = await expandedNetwork.getNetworkConnectivity();
+                expandedActiveNodes = expandedConnectivity.filter(node => node.isActive);
+            }
+            
+            console.log('📊 Final expanded network state:');
             expandedConnectivity.forEach(node => {
                 const status = node.isActive ? '✅' : '❌';
                 const block = node.blockNumber !== undefined ? ` | Block: ${node.blockNumber}` : '';
-                console.log(`   ${status} ${node.nodeName}${block}`);
+                const peers = node.peers !== undefined ? ` | Peers: ${node.peers}` : '';
+                console.log(`   ${status} ${node.nodeName}${block}${peers}`);
             });
             
-            // Verify we have active nodes (but be tolerant if not all are active)
-            // The main test is that the configuration was properly updated
-            console.log(`   Expanded network has ${expandedActiveNodes.length} active nodes (originally ${activeNodes.length})`);
+            // Verify ALL 5 nodes are now active (strict requirement)
+            console.log(`📊 Network connectivity: ${expandedActiveNodes.length}/5 nodes are active`);
             
-            // Instead of requiring >= original active nodes, just log the results
-            // Network connectivity can be unreliable in test environments
-            if (expandedActiveNodes.length >= activeNodes.length) {
-                console.log('   ✅ Network connectivity maintained or improved after node addition');
-            } else {
-                console.log('   ℹ️  Network connectivity may be affected by node addition (this is acceptable for config testing)');
+            // Require ALL 5 nodes to be active for successful test
+            expect(expandedActiveNodes.length).toBe(5);
+            console.log(`   ✅ Excellent! All 5 nodes are active and connected`);
+            
+            // Specifically verify that new nodes are active and participating
+            const bootnode2Active = expandedActiveNodes.find(node => node.nodeName === 'bootnode2');
+            const rpc2Active = expandedActiveNodes.find(node => node.nodeName === 'rpc2');
+            
+            expect(bootnode2Active).toBeDefined();
+            expect(rpc2Active).toBeDefined();
+            
+            console.log(`   ✅ New bootnode2 is active | Block: ${bootnode2Active!.blockNumber} | Peers: ${bootnode2Active!.peers}`);
+            console.log(`   ✅ New rpc2 is active | Block: ${rpc2Active!.blockNumber} | Peers: ${rpc2Active!.peers}`);
+            
+            // Check block synchronization across all active nodes
+            console.log('🔍 Verifying block synchronization across all nodes...');
+            const nodeBlockNumbers = expandedActiveNodes
+                .map(node => ({ name: node.nodeName, block: node.blockNumber || 0 }))
+                .filter(node => node.block > 0);
+                
+            console.log('   Node block synchronization:');
+            nodeBlockNumbers.forEach(node => {
+                console.log(`      - ${node.name}: Block ${node.block}`);
+            });
+            
+            // Ensure we have block data from all active nodes
+            expect(nodeBlockNumbers.length).toBe(expandedActiveNodes.length);
+            console.log(`   ✅ All ${expandedActiveNodes.length} nodes are reporting block numbers`);
+            
+            if (nodeBlockNumbers.length > 1) {
+                // Verify nodes are synchronized (within 3 blocks of each other)
+                const maxBlock = Math.max(...nodeBlockNumbers.map(n => n.block));
+                const minBlock = Math.min(...nodeBlockNumbers.map(n => n.block));
+                const blockDifference = maxBlock - minBlock;
+                
+                console.log(`   Block synchronization: Max=${maxBlock}, Min=${minBlock}, Diff=${blockDifference}`);
+                
+                // Allow up to 3 blocks difference for tight synchronization
+                expect(blockDifference).toBeLessThanOrEqual(3);
+                console.log(`   ✅ All nodes are tightly synchronized (block difference: ${blockDifference} ≤ 3)`);
             }
+            
+            // Verify peer connectivity between all nodes
+            console.log('🌐 Verifying peer connectivity between all nodes...');
+            
+            const nodesWithPeers = expandedActiveNodes.filter(node => (node.peers || 0) > 0);
+            console.log(`   Nodes with peer connections: ${nodesWithPeers.length}/${expandedActiveNodes.length}`);
+            
+            // Verify that ALL nodes have peer connections
+            expect(nodesWithPeers.length).toBe(expandedActiveNodes.length);
+            console.log(`   ✅ All nodes have established peer connections`);
+            
+            // Check average peer count
+            const totalPeers = expandedActiveNodes.reduce((sum, node) => sum + (node.peers || 0), 0);
+            const averagePeers = expandedActiveNodes.length > 0 ? totalPeers / expandedActiveNodes.length : 0;
+            
+            console.log(`   Average peer count: ${averagePeers.toFixed(2)}`);
+            console.log(`   Total peer connections: ${totalPeers}`);
+            
+            // Verify that average peer count is excellent
+            expect(averagePeers).toBeGreaterThan(2);
+            console.log(`   ✅ Network has excellent peer connectivity (avg peers: ${averagePeers.toFixed(2)} > 2)`);
             
             // Verify that mining continues (block number should be >= initial)
             const expandedMinerNode = expandedActiveNodes.find(node => node.nodeName === 'miner1');
             const expandedBlockNumber = expandedMinerNode?.blockNumber || 0;
-            console.log(`📊 Expanded network block number: ${expandedBlockNumber}`);
-            console.log(`📊 Block progression: ${initialBlockNumber} → ${expandedBlockNumber}`);
+            console.log(`📊 Mining verification:`);
+            console.log(`   Initial block number: ${initialBlockNumber}`);
+            console.log(`   Final block number: ${expandedBlockNumber}`);
+            console.log(`   Block progression: ${initialBlockNumber} → ${expandedBlockNumber} (+${expandedBlockNumber - initialBlockNumber})`);
             
-            // Block number should be equal or greater (network may have been mining during the process)
+            // Block number should be equal or greater (network should have been mining during the process)
             expect(expandedBlockNumber).toBeGreaterThanOrEqual(initialBlockNumber);
+            console.log(`   ✅ Mining activity confirmed (blocks progressed)`);
             
-            // Verify that new nodes are included in active nodes (if they're active)
-            const bootnode2Active = expandedActiveNodes.find(node => node.nodeName === 'bootnode2');
-            const rpc2Active = expandedActiveNodes.find(node => node.nodeName === 'rpc2');
+            // Verify new nodes are participating in the network
+            console.log('🔍 Verifying new nodes participation...');
             
-            if (bootnode2Active) {
-                console.log('   ✅ New bootnode2 is active');
-            } else {
-                console.log('   ℹ️ New bootnode2 is not active yet (this is normal for new nodes)');
-            }
+            const newNodes = expandedActiveNodes.filter(node => 
+                node.nodeName === 'bootnode2' || node.nodeName === 'rpc2'
+            );
             
-            if (rpc2Active) {
-                console.log('   ✅ New rpc2 is active');
-            } else {
-                console.log('   ℹ️ New rpc2 is not active yet (this is normal for new nodes)');
-            }
+            console.log(`   New nodes status:`);
+            newNodes.forEach(node => {
+                console.log(`      - ${node.nodeName}: Block ${node.blockNumber}, Peers: ${node.peers}`);
+            });
+            
+            // Ensure both new nodes are active
+            expect(newNodes.length).toBe(2);
+            console.log(`   ✅ Both new nodes (bootnode2, rpc2) are active and connected`);
+            
+            // Check if new nodes have synchronized (block > 0)
+            const syncedNewNodes = newNodes.filter(node => (node.blockNumber || 0) > 0);
+            console.log(`   📋 ${syncedNewNodes.length}/2 new nodes have synchronized with the network`);
+            
+            // Require BOTH new nodes to be synchronized
+            expect(syncedNewNodes.length).toBe(2);
+            console.log(`   ✅ Both new nodes have successfully joined and synchronized with the network`);
+            
+            // Verify new nodes have proper peer connections
+            const newNodesWithPeers = newNodes.filter(node => (node.peers || 0) > 0);
+            expect(newNodesWithPeers.length).toBe(2);
+            console.log(`   ✅ Both new nodes have established peer connections`);
             
             // Stop the expanded network
             console.log('⏸️  Stopping expanded network...');
@@ -352,8 +497,10 @@ describe('Adding bootnode and RPC nodes to existing network', () => {
             
             console.log('✅ Node addition test completed successfully!');
             console.log('✅ Successfully added new bootnode and RPC nodes to existing network');
-            console.log(`🎯 Network configuration expanded from 3 to 5 nodes`);
-            console.log(`📊 Node connectivity: ${expandedActiveNodes.length} of 5 nodes are active`);
+            console.log(`🎯 Network configuration expanded from 3 to 5 nodes with ALL nodes active`);
+            console.log(`📊 Final network connectivity: ${expandedActiveNodes.length}/5 nodes are active`);
+            console.log(`🔗 All nodes properly synchronized and connected with excellent peer connectivity`);
+            console.log(`➕ Both new nodes (bootnode2, rpc2) successfully joined and synchronized`);
 
         } finally {
             // Cleanup network
@@ -365,5 +512,5 @@ describe('Adding bootnode and RPC nodes to existing network', () => {
                 console.log(`⚠️  Cleanup error for original network: ${cleanupError}`);
             }
         }
-    }, 180000); // 3-minute timeout for longer test
+    }, 300000); // 5-minute timeout for comprehensive synchronization test
 });

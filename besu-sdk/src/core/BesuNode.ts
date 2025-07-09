@@ -371,8 +371,19 @@ export class BesuNode extends EventEmitter {
     }
     
     // Add bootnodes if available
-    if (this.bootnodes.length > 0) {
-      env.push(`BESU_BOOTNODES=${this.bootnodes.join(',')}`);
+    // Filter out any undefined, null, or empty values to prevent null byte errors
+    const validBootnodes = this.bootnodes.filter(bootnode => 
+      bootnode && 
+      typeof bootnode === 'string' && 
+      bootnode.trim() !== '' &&
+      bootnode.startsWith('enode://')
+    );
+    
+    if (validBootnodes.length > 0) {
+      env.push(`BESU_BOOTNODES=${validBootnodes.join(',')}`);
+      this.log.debug(`Using bootnodes: ${validBootnodes.join(', ')}`);
+    } else if (this.bootnodes.length > 0) {
+      this.log.warn(`All bootnodes were invalid or empty. Original array: ${JSON.stringify(this.bootnodes)}`);
     }
     
     return env;

@@ -1,6 +1,9 @@
 import React from "react";
 import { Alert, Loader, Stack, Card, Group, Text, Badge, Button } from "@mantine/core";
 import { IconAlertCircle, IconTrash } from "@tabler/icons-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { showNotification } from "@mantine/notifications";
+import { confirmDeleteNode } from "./confirmDeleteNode";
 
 interface Node {
   id: string;
@@ -33,9 +36,49 @@ const useNodes = (networkId: string) =>
     enabled: Boolean(networkId),
   });
 
-const NodesList: React.FC<NodesListProps> = ({ networkId }) => {
+
+const NodesList: React.FC<NodesListProps & { showFullAddress?: boolean }> = ({ networkId, showFullAddress }) => {
   // @ts-ignore
   const { data, isLoading, error } = useNodes(networkId);
+  const queryClient = useQueryClient();
+
+  const deleteNodeMutation = useMutation({
+    mutationFn: async (nodeId: string) => {
+      const res = await fetch(`/api/networks/${networkId}/nodes/${nodeId}`, { method: "DELETE" });
+      return res.json();
+    },
+    onSuccess: (data, nodeId) => {
+      if (data.success) {
+        showNotification({
+          title: "Node Deleted",
+          message: `Node '${nodeId}' deleted successfully!`,
+          color: "green",
+          position: "bottom-right",
+        });
+        queryClient.invalidateQueries({ queryKey: ["nodes", networkId] });
+      } else {
+        showNotification({
+          title: "Error",
+          message: data.error || "Failed to delete node.",
+          color: "red",
+        });
+      }
+    },
+    onError: (e: any) => {
+      showNotification({
+        title: "Error",
+        message: e.message,
+        color: "red",
+      });
+    },
+  });
+
+  const handleDeleteNode = (nodeId: string) => {
+    confirmDeleteNode({
+      nodeId,
+      onConfirm: () => deleteNodeMutation.mutate(nodeId),
+    });
+  };
 
   if (isLoading) return <Loader size="sm" />;
   if (error)
@@ -63,20 +106,33 @@ const NodesList: React.FC<NodesListProps> = ({ networkId }) => {
       {(data as any).nodes.map((node: Node) => (
         <Card key={node.id} shadow="xs" radius="md" withBorder>
           <Group style={{ justifyContent: "space-between", width: "100%" }}>
-            <Text fw={500}>{node.id}</Text>
-            <Badge color={node.type === "miner" ? "yellow" : "blue"}>{node.type}</Badge>
+            <Text fw={500} style={{
+              whiteSpace: 'nowrap',
+              maxWidth: 120,
+              width: 120,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: 'inline-block',
+            }}>{node.id}</Text>
+            <Badge color={node.type === "miner" ? "yellow" : node.type === "validator" ? "teal" : "blue"}>{node.type}</Badge>
             <Badge color="gray">IP: {node.ip}</Badge>
             <Badge color="gray">RPC: {node.rpcPort}</Badge>
             <Badge color="gray">P2P: {node.p2pPort}</Badge>
-            <Badge color="gray">Address: {node.address.slice(0, 10)}...</Badge>
+            <Badge color="gray" style={{ maxWidth: 320, overflow: 'auto', textOverflow: 'ellipsis', whiteSpace: showFullAddress ? 'normal' : 'nowrap', wordBreak: showFullAddress ? 'break-all' : 'normal' }}>
+              Address: {showFullAddress ? node.address : node.address.slice(0, 10) + '...'}
+            </Badge>
             {node.containerStatus && (
               <Badge color={node.containerStatus.state === "running" ? "green" : "red"}>
                 {node.containerStatus.state}
               </Badge>
             )}
-            <Button variant="subtle" color="red" size="xs">
-              <IconTrash size={16} />
-            </Button>
+            {node.type !== "bootnode" ? (
+              <Button variant="subtle" color="red" size="xs" style={{ minWidth: 32, minHeight: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNode(node.id)}>
+                <IconTrash size={16} />
+              </Button>
+            ) : (
+              <span style={{ display: 'inline-block', minWidth: 32, minHeight: 32 }} />
+            )}
           </Group>
         </Card>
       ))}

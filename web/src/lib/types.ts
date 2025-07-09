@@ -76,6 +76,8 @@ export interface ListNetworksResponse {
 export interface AddNodeRequest {
   /** Node type */
   type: 'miner' | 'rpc';
+  /** Custom node ID (optional, used if provided) */
+  node_id?: string;
   /** Custom IP address (auto-assigned if not specified) */
   ip?: string;
   /** Custom RPC port (auto-assigned if not specified) */

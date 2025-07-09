@@ -120,6 +120,7 @@ export async function POST(
       ipOffset = 10,
       portStrategy = 'sequential',
       nodeIdPrefix = 'node',
+      node_id, // allow custom node id from request
       memoryLimit,
       cpuLimit,
       labels,
@@ -185,8 +186,10 @@ export async function POST(
       );
     }
 
-    // Generate node credentials
-    const nodeId = NODE_ID_GENERATION.DYNAMIC_PATTERN(nodeIdPrefix);
+    // Use custom node_id if provided, otherwise generate
+    const nodeId = node_id && typeof node_id === 'string' && node_id.trim() !== ''
+      ? node_id.trim()
+      : NODE_ID_GENERATION.DYNAMIC_PATTERN(nodeIdPrefix);
     const credentials = keyGenerator.generateKeyPair(nodeIp, nodeP2pPort);
 
     // Find existing bootnodes
@@ -208,7 +211,8 @@ export async function POST(
 
     // Create node directory and save keys
     const nodePath = await NetworkStorage.createNodeDirectory(networkId, nodeId);
-    
+    // Ensure directory exists before writing files
+    await fs.promises.mkdir(nodePath, { recursive: true });
     await fs.promises.writeFile(
       path.join(nodePath, FILE_NAMING.NODE_FILES.PRIVATE_KEY), 
       credentials.privateKey.slice(2)

@@ -38,14 +38,22 @@ const NetworksAccordion: React.FC<NetworksAccordionProps> = ({ data, error, isLo
       </Alert>
     );
 
+  // Accordions always open: render all panels open, controls not interactive
   return (
-    <Accordion variant="separated">
+    <Accordion variant="separated" multiple value={data.networks.map(n => n.networkId)}>
       {data.networks.map((network) => (
         <Accordion.Item key={network.networkId} value={network.networkId}>
-          <Accordion.Control>
+          <Accordion.Control disabled={false} style={{ pointerEvents: 'none', background: 'transparent' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-              <Group>
-                <Text fw={500}>{network.networkId}</Text>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', minWidth: 0 }}>
+                <span style={{
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                  maxWidth: 120,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: 'inline-block',
+                }}>{network.networkId}</span>
                 <Badge color="blue" variant="light">
                   {network.nodesCount} nodes
                 </Badge>
@@ -55,31 +63,33 @@ const NetworksAccordion: React.FC<NetworksAccordionProps> = ({ data, error, isLo
                 <Badge color="gray" variant="light">
                   Subnet: {network.subnet}
                 </Badge>
-              </Group>
-              <Menu shadow="md" width={180} position="bottom-end">
-                <Menu.Target>
-                  <span
-                    onClick={e => e.stopPropagation()}
-                    tabIndex={0}
-                    aria-label="Network actions"
-                    style={{ display: 'inline-flex' }}
-                  >
-                    <IconDots size={18} style={{ cursor: 'pointer' }} />
-                  </span>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Item leftSection={<IconTrash size={14} />} color="red" onClick={() => onDeleteNetwork && onDeleteNetwork(network.networkId)}>
-                    Delete Network
-                  </Menu.Item>
-                  <Menu.Item leftSection={<IconPlus size={14} />} onClick={() => onAddNode && onAddNode(network.networkId)}>
-                    Add Node
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
+              </div>
+              <span style={{ pointerEvents: 'auto', paddingRight: 10 }}>
+                <Menu shadow="md" width={180} position="bottom-end">
+                  <Menu.Target>
+                    <span
+                      onClick={e => e.stopPropagation()}
+                      tabIndex={0}
+                      aria-label="Network actions"
+                      style={{ display: 'inline-flex' }}
+                    >
+                      <IconDots size={18} style={{ cursor: 'pointer' }} />
+                    </span>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item leftSection={<IconTrash size={14} />} color="red" onClick={() => onDeleteNetwork && onDeleteNetwork(network.networkId)}>
+                      Delete Network
+                    </Menu.Item>
+                    <Menu.Item leftSection={<IconPlus size={14} />} onClick={() => onAddNode && onAddNode(network.networkId)}>
+                      Add Node
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+              </span>
             </div>
           </Accordion.Control>
           <Accordion.Panel>
-            <NodesList networkId={network.networkId} />
+            <NodesList networkId={network.networkId} showFullAddress />
           </Accordion.Panel>
         </Accordion.Item>
       ))}

@@ -3,7 +3,7 @@
 
 ## Descripción Técnica
 
-Esta aplicación web proporciona una interfaz completa para gestionar redes blockchain Hyperledger Besu, implementando el protocolo IBFT 2.0 (Istanbul Byzantine Fault Tolerance) para redes privadas empresariales.
+Esta aplicación web proporciona una interfaz completa para gestionar redes blockchain Hyperledger Besu, implementando el protocolo Clique (PoA) para redes privadas empresariales.
 
 ### Arquitectura del Sistema
 
@@ -11,7 +11,7 @@ Esta aplicación web proporciona una interfaz completa para gestionar redes bloc
 graph TD
     A[Cliente Web] -->|Next.js SSR| B[Servidor Next.js]
     B -->|API Routes| C[Capa de Servicios]
-    C -->|Mongoose| D[MongoDB]
+    C -->|MongoDB| D[MongoDB]
     C -->|Docker API| E[Contenedores Besu]
     E -->|P2P| F[Red Blockchain]
 ```
@@ -89,7 +89,7 @@ mongosh mongodb://admin:password123@localhost:27017
 npm install
 
 # Configurar variables de entorno
-cp .env.example .env.local
+touch .env.local
 ```
 
 Contenido de .env.local:

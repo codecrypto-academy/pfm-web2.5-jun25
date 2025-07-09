@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNetwork } from '../context/NetworkContext';
 
 interface Block {
@@ -13,23 +13,54 @@ interface Block {
   gasLimit: string;
 }
 
+interface MiningBlock {
+  number: number;
+  progress: number;
+  elapsedTime: number;
+}
+
 export default function BlockExplorer() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [miningBlock, setMiningBlock] = useState<MiningBlock | null>(null);
   const { selectedNetwork } = useNetwork();
+  
+  const BLOCK_TIME_SECONDS = 15; // De config.yaml
+  const MAX_BLOCKS_DISPLAY = 20;
 
   const fetchBlocks = useCallback(async () => {
     if (!selectedNetwork) return;
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/blocks?networkId=${selectedNetwork.id}&limit=10`);
+      const response = await fetch(`/api/blocks?networkId=${selectedNetwork.id}&limit=${MAX_BLOCKS_DISPLAY}`);
       if (!response.ok) {
         throw new Error('Failed to fetch blocks');
       }
       const data = await response.json();
-      setBlocks(data.blocks);
+      
+      // Actualizar bloques con animación ciempiés
+      setBlocks(prevBlocks => {
+        const newBlocks = data.blocks;
+        if (newBlocks.length > 0 && prevBlocks.length > 0) {
+          // Detectar nuevo bloque
+          const latestBlock = newBlocks[0];
+          const wasNewBlock = latestBlock.number > prevBlocks[0]?.number;
+          
+          if (wasNewBlock) {
+            // Reiniciar el bloque en minado
+            setMiningBlock({
+              number: latestBlock.number + 1,
+              progress: 0,
+              elapsedTime: 0
+            });
+          }
+        }
+        
+        return newBlocks;
+      });
+      
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -40,87 +71,264 @@ export default function BlockExplorer() {
 
   useEffect(() => {
     fetchBlocks();
-    const interval = setInterval(fetchBlocks, 10000); // Refresh every 10 seconds
+    const interval = setInterval(fetchBlocks, 3000); // Refresh every 3 seconds
     return () => clearInterval(interval);
   }, [fetchBlocks]);
+
+  // Timer para el bloque en minado
+  useEffect(() => {
+    if (!miningBlock) return;
+    
+    const timer = setInterval(() => {
+      setMiningBlock(prev => {
+        if (!prev) return null;
+        
+        const newElapsedTime = prev.elapsedTime + 1;
+        const newProgress = Math.min((newElapsedTime / BLOCK_TIME_SECONDS) * 100, 100);
+        
+        return {
+          ...prev,
+          elapsedTime: newElapsedTime,
+          progress: newProgress
+        };
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [miningBlock]);
+
+  // Inicializar bloque en minado si no existe
+  useEffect(() => {
+    if (blocks.length > 0 && !miningBlock) {
+      setMiningBlock({
+        number: blocks[0].number + 1,
+        progress: 0,
+        elapsedTime: 0
+      });
+    }
+  }, [blocks, miningBlock]);
 
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleString();
   };
 
+  // Componente para el indicador de progreso circular
+  const CircularProgress = ({ progress }: { progress: number }) => {
+    const radius = 16;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDasharray = circumference;
+    const strokeDashoffset = circumference - (progress / 100) * circumference;
+    
+    return (
+      <div className="relative w-10 h-10">
+        <svg className="transform -rotate-90 w-10 h-10" viewBox="0 0 40 40">
+          <circle
+            cx="20"
+            cy="20"
+            r={radius}
+            stroke="#e5e7eb"
+            strokeWidth="3"
+            fill="none"
+          />
+          <circle
+            cx="20"
+            cy="20"
+            r={radius}
+            stroke="white"
+            strokeWidth="3"
+            fill="none"
+            strokeDasharray={strokeDasharray}
+            strokeDashoffset={strokeDashoffset}
+            className="transition-all duration-1000 ease-in-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xs font-medium text-white">{Math.round(progress)}%</span>
+        </div>
+      </div>
+    );
+  };
+
+  // Componente para el bloque en minado
+  const MiningBlockStrip = ({ block }: { block: MiningBlock }) => {
+    const pulseAnimation = useMemo(() => {
+      return {
+        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      };
+    }, []);
+    
+    return (
+      <div 
+        className="relative h-12 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 rounded-lg flex items-center justify-between px-4 shadow-lg transform transition-all duration-300 hover:scale-105"
+        style={pulseAnimation}
+      >
+        <CircularProgress progress={block.progress} />
+        <div className="flex-1 text-center">
+          <div className="text-white font-bold text-lg">Block #{block.number}</div>
+          <div className="text-blue-100 text-sm">Mining...</div>
+        </div>
+        <div className="text-white font-mono text-lg min-w-[60px] text-center">
+          {block.elapsedTime}s
+        </div>
+      </div>
+    );
+  };
+
+  // Componente para bloque confirmado
+  const ConfirmedBlockStrip = ({ block, index }: { block: Block; index: number }) => {
+    const colors = [
+      'from-blue-500 to-blue-600',
+      'from-indigo-500 to-indigo-600', 
+      'from-purple-500 to-purple-600',
+      'from-pink-500 to-pink-600'
+    ];
+    
+    const colorClass = colors[index % colors.length];
+    
+    return (
+      <div 
+        className={`h-10 bg-gradient-to-r ${colorClass} rounded-lg flex items-center justify-center shadow-md transform transition-all duration-500 hover:scale-102`}
+        style={{
+          animationDelay: `${index * 50}ms`,
+          transform: `translateY(${index * 2}px)`,
+        }}
+      >
+        <div className="text-white font-bold text-lg">
+          #{block.number}
+        </div>
+      </div>
+    );
+  };
+
   if (!selectedNetwork) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4">Latest Blocks</h2>
-        <p className="text-gray-500">Please select a network to see the latest blocks.</p>
+      <div className="h-full flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-bold mb-4">Blockchain Visualizer</h2>
+          <p className="text-gray-500">Please select a network to see the block stream.</p>
+        </div>
       </div>
     );
   }
   
   if (loading && blocks.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4">Latest Blocks</h2>
-        <div className="text-gray-500">Loading...</div>
+      <div className="h-full flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-bold mb-4">Blockchain Visualizer</h2>
+          <div className="text-gray-500">Loading blockchain data...</div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4">Latest Blocks</h2>
-        <div className="text-red-500">Error: {error}</div>
-        <button 
-          onClick={fetchBlocks}
-          className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Retry
-        </button>
+      <div className="h-full flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-bold mb-4">Blockchain Visualizer</h2>
+          <div className="text-red-500">Error: {error}</div>
+          <button 
+            onClick={fetchBlocks}
+            className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Recent Blocks</h2>
-        <button 
-          onClick={fetchBlocks}
-          className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 text-sm"
-        >
-          Refresh
-        </button>
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold">⛓️ Block Stream</h2>
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-500">
+              {blocks.length > 0 ? `Latest: #${blocks[0].number}` : 'No blocks'}
+            </div>
+            <button 
+              onClick={fetchBlocks}
+              className="bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600 text-sm"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Block</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transactions</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Miner</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gas Used</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gas Limit</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {blocks.map(block => (
-              <tr key={block.hash}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{block.number}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatTimestamp(block.timestamp)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{block.transactionCount}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate" title={block.miner ?? 'N/A'}>
-                  {block.miner ? `${block.miner.substring(0, 8)}...${block.miner.substring(block.miner.length - 6)}` : 'N/A'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(block.gasUsed).toLocaleString()}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(block.gasLimit).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Visualización Central de Bloques */}
+      <div className="flex-1 bg-gray-50 rounded-lg p-6 overflow-hidden">
+        <div className="max-w-md mx-auto h-full">
+          <div className="space-y-3 h-full overflow-y-auto">
+            {/* Bloque en Minado */}
+            {miningBlock && (
+              <div className="mb-6">
+                <MiningBlockStrip block={miningBlock} />
+              </div>
+            )}
+            
+            {/* Separador */}
+            <div className="flex items-center justify-center py-2">
+              <div className="w-full h-px bg-gray-300"></div>
+              <div className="px-4 text-sm text-gray-500 bg-gray-50">Confirmed Blocks</div>
+              <div className="w-full h-px bg-gray-300"></div>
+            </div>
+            
+            {/* Bloques Confirmados */}
+            <div className="space-y-2">
+              {blocks.slice(0, MAX_BLOCKS_DISPLAY).map((block, index) => (
+                <div 
+                  key={block.hash}
+                  className="transform transition-all duration-300 ease-in-out"
+                  style={{
+                    animationDelay: `${index * 100}ms`,
+                    animation: 'slideDown 0.5s ease-out forwards'
+                  }}
+                >
+                  <ConfirmedBlockStrip block={block} index={index} />
+                </div>
+              ))}
+            </div>
+            
+            {/* Indicador de más bloques */}
+            {blocks.length >= MAX_BLOCKS_DISPLAY && (
+              <div className="text-center py-4">
+                <div className="text-sm text-gray-500">
+                  • • • {blocks.length - MAX_BLOCKS_DISPLAY} more blocks • • •
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Styles para animaciones */}
+      <style jsx>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+            background-color: rgb(37 99 235);
+          }
+          50% {
+            opacity: 0.7;
+            background-color: rgb(59 130 246);
+          }
+        }
+      `}</style>
     </div>
   );
 }

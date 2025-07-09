@@ -20,16 +20,23 @@ export default function Home() {
         </div>
       </header>
       
-      <main className="container mx-auto p-4 md:p-6 lg:p-8">
-        <div className="grid grid-cols-1 gap-6">
-          <NetworkStatus />
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <main className="container mx-auto p-4 md:p-6 lg:p-8 h-screen">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+          {/* Columna Izquierda */}
+          <div className="space-y-6">
+            <NetworkStatus />
             <FaucetPanel />
-            <BalanceChecker />
           </div>
 
-          <BlockExplorer />
+          {/* Columna Central - Block Stream */}
+          <div className="h-full">
+            <BlockExplorer />
+          </div>
+
+          {/* Columna Derecha */}
+          <div className="space-y-6">
+            <BalanceChecker />
+          </div>
         </div>
       </main>
     </div>

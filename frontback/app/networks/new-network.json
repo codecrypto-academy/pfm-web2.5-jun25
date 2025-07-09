@@ -1,0 +1,10 @@
+{
+  "id": "new-network",
+  "name": "new-network",
+  "rpcUrl": "http://localhost:9998",
+  "chainId": 9341,
+  "theme": {
+    "primary": "blue-dark",
+    "secondary": "blue-light"
+  }
+}

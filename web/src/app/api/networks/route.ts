@@ -2,10 +2,10 @@
  * Networks API - Main endpoint for network management
  * GET /api/networks - List all networks
  * POST /api/networks - Create a new network
- * 
+ *
  * @example POST /api/networks
  * {
- *   "networkId": "my-test-network",
+ *   "id": "my-test-network",
  *   "chainId": 1337,
  *   "nodeCount": 3,
  *   "subnet": "172.21.0.0/24",
@@ -18,12 +18,12 @@
  *   "memoryLimit": "2g",
  *   "cpuLimit": "1.0"
  * }
- * 
+ *
  * @example Response
  * {
  *   "success": true,
  *   "network": {
- *     "networkId": "my-test-network",
+ *     "id": "my-test-network",
  *     "chainId": 1337,
  *     "dockerNetworkId": "abc123",
  *     "subnet": "172.21.0.0/24",
@@ -38,9 +38,20 @@ import {
   DockerManager, 
   GenesisGenerator, 
   KeyGenerator,
-  NetworkConfig,
-  BesuNodeConfig 
+  NetworkConfig
 } from 'besu-network-manager';
+
+// Extend BesuNodeConfig locally to allow 'validator' type
+type BesuNodeConfig = {
+  id: string;
+  type: 'bootnode' | 'miner' | 'validator' | 'rpc';
+  rpcPort: number;
+  p2pPort: number;
+  ip: string;
+  enode?: string;
+  address?: string;
+  bootnodes?: string[];
+};
 import { NetworkStorage, StoredNetworkData } from '@/lib/databaseStorage';
 import { 
   generateNodeIPs, 
@@ -102,9 +113,9 @@ export async function GET() {
 /**
  * POST /api/networks
  * Create a new network
- * 
+ *
  * Body: {
- *   networkId: string,
+ *   id: string,
  *   chainId: number,
  *   nodeCount: number,
  *   subnet?: string,
@@ -116,6 +127,9 @@ export async function GET() {
  * }
  */
 export async function POST(request: NextRequest) {
+  let dockerNetworkCreated = false;
+  let dockerNetworkId = null;
+  let createdContainers: any[] = [];
   try {
     const body = await request.json();
     const { 
@@ -132,7 +146,7 @@ export async function POST(request: NextRequest) {
       memoryLimit = DOCKER_DEFAULTS.MEMORY_LIMIT,
       cpuLimit = DOCKER_DEFAULTS.CPU_LIMIT,
       labels = {},
-      env = {}
+      env = {},
     } = body;
 
     // Calculate gateway if not provided
@@ -154,13 +168,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if network already exists
+    // Check if network already exists in DB
     const existingNetwork = await NetworkStorage.loadNetwork(networkId);
     if (existingNetwork) {
-      return NextResponse.json(
-        { success: false, error: 'Network already exists' },
-        { status: 409 }
-      );
+      // Try to delete it (cleanup DB and Docker)
+      try {
+        const containers = await dockerManager.findNetworkContainers(networkId);
+        for (const container of containers) {
+          try { await dockerManager.removeContainer(container.Id); } catch {}
+        }
+        await dockerManager.removeDockerNetwork(networkId);
+        await NetworkStorage.cleanupNetwork(networkId);
+      } catch (cleanupErr) {
+        return NextResponse.json(
+          { success: false, error: 'Network already exists and could not be cleaned up automatically. Please remove it manually.' },
+          { status: 409 }
+        );
+      }
     }
 
     // Check Docker availability
@@ -177,35 +201,39 @@ export async function POST(request: NextRequest) {
       chainId,
       subnet,
       gateway: finalGateway,
-      nodes: []
+      nodes: [] // will assign SDK-compatible nodes later
     };
 
-    // 2. Generate dynamic node configurations
+
+    // 2. Generate dynamic node configurations (legacy: only bootnode, miner, rpc)
     const nodeIPs = generateNodeIPs(subnet, nodeCount);
     const { rpcPorts, p2pPorts } = generateNodePorts(nodeCount, baseRpcPort, baseP2pPort);
-    const nodeTypes = generateNodeTypes(nodeCount, bootnodeCount, minerCount);
-    
+    // Compose nodeTypes array: bootnode, miner, rpc
+    const rpcCount = nodeCount - bootnodeCount - (minerCount || 0);
+    const nodeTypes: string[] = [];
+    for (let i = 0; i < bootnodeCount; i++) nodeTypes.push('bootnode');
+    for (let i = 0; i < (minerCount || 0); i++) nodeTypes.push('miner');
+    for (let i = 0; i < rpcCount; i++) nodeTypes.push('rpc');
+
     const nodeCredentials = [];
-    const validators = [];
+    const allNodeAddresses: string[] = [];
+    const allNodeConfigs: BesuNodeConfig[] = [];
 
     for (let i = 0; i < nodeCount; i++) {
       const ip = nodeIPs[i];
       const rpcPort = rpcPorts[i];
       const p2pPort = p2pPorts[i];
       const nodeType = nodeTypes[i];
-      
       const credentials = keyGenerator.generateKeyPair(ip, p2pPort);
-      
       const nodeConfig: BesuNodeConfig = {
         id: NODE_ID_GENERATION.NETWORK_PATTERN(i),
-        type: nodeType as 'bootnode' | 'miner' | 'rpc',
+        type: nodeType as BesuNodeConfig['type'],
         ip,
         rpcPort,
         p2pPort,
         address: credentials.address,
         enode: credentials.enode
       };
-
       // Set bootnodes for non-bootnode nodes
       if (nodeConfig.type !== 'bootnode' && nodeCredentials.length > 0) {
         // Use all bootnode enodes as bootnodes
@@ -214,14 +242,19 @@ export async function POST(request: NextRequest) {
           .map(cred => cred.enode);
         nodeConfig.bootnodes = bootnodeEnodes;
       }
-
-      networkConfig.nodes.push(nodeConfig);
+      allNodeConfigs.push(nodeConfig);
       nodeCredentials.push(credentials);
-
-      if (nodeConfig.type === 'miner') {
-        validators.push(credentials.address);
-      }
+      allNodeAddresses.push(credentials.address);
     }
+
+    // Only assign SDK-compatible nodes to networkConfig.nodes
+    networkConfig.nodes = allNodeConfigs.filter(n => n.type === 'bootnode' || n.type === 'miner' || n.type === 'rpc') as any;
+
+    // Use all miners for genesis validators
+    const validators = allNodeConfigs
+      .filter(n => n.type === 'miner')
+      .map(n => n.address)
+      .filter((addr): addr is string => Boolean(addr));
 
     // 3. Generate genesis file
     const genesis = GenesisGenerator.generateGenesis({
@@ -230,19 +263,25 @@ export async function POST(request: NextRequest) {
     });
 
     // 4. Create Docker network
-    const dockerNetworkId = await dockerManager.createDockerNetwork(networkConfig);
+    try {
+      dockerNetworkId = await dockerManager.createDockerNetwork(networkConfig);
+      dockerNetworkCreated = true;
+    } catch (err: any) {
+      if (err.statusCode === 409) {
+        return NextResponse.json({ success: false, error: `Docker network with name besu-${networkId} already exists. Please remove it or choose a different networkId.` }, { status: 409 });
+      }
+      throw err;
+    }
 
     // 5. Create network directory structure
     const networkPath = await NetworkStorage.createNetworkDirectory(networkId);
 
     // 6. Save node keys and files
-    for (let i = 0; i < networkConfig.nodes.length; i++) {
-      const node = networkConfig.nodes[i];
+    for (let i = 0; i < allNodeConfigs.length; i++) {
+      const node = allNodeConfigs[i];
       const credentials = nodeCredentials[i];
-      
       // Create node directory
       const nodePath = await NetworkStorage.createNodeDirectory(networkId, node.id);
-      
       // Ensure node directory exists before writing files
       await fs.promises.mkdir(nodePath, { recursive: true });
       await fs.promises.writeFile(
@@ -265,22 +304,41 @@ export async function POST(request: NextRequest) {
       JSON.stringify(genesis, null, 2)
     );
 
+
     // 7. Create and start containers
-    const containers = [];
-    for (const node of networkConfig.nodes) {
-      const nodePath = NetworkStorage.getNodePath(networkId, node.id);
-      const container = await dockerManager.createBesuContainer(
-        networkConfig,
-        node,
-        nodePath
-      );
-      containers.push(container);
+    createdContainers = [];
+    for (const node of allNodeConfigs) {
+      // Only create containers for SDK-supported node types
+      if (node.type === 'bootnode' || node.type === 'miner' || node.type === 'rpc') {
+        const nodePath = NetworkStorage.getNodePath(networkId, node.id);
+        try {
+          // Only start mining for 'miner' nodes (legacy SDK: no mining flag)
+          const container = await dockerManager.createBesuContainer(
+            networkConfig,
+            node as any,
+            nodePath
+          );
+          createdContainers.push(container);
+        } catch (err: any) {
+          // Clean up all created containers and network if any container fails
+          for (const c of createdContainers) {
+            try { await dockerManager.removeContainer(c.containerId); } catch {}
+          }
+          if (dockerNetworkCreated && dockerNetworkId) {
+            try { await dockerManager.removeDockerNetwork(networkId); } catch {}
+          }
+          return NextResponse.json({ success: false, error: `Failed to create container for node ${node.id}: ${err.message || err}` }, { status: 500 });
+        }
+      }
     }
 
     // 8. Save network metadata
-    const networkData: StoredNetworkData = {
-      config: networkConfig,
-      nodes: networkConfig.nodes,
+    // Store all nodes for UI, but only SDK-compatible nodes in config/nodes
+    const sdkNodes = allNodeConfigs.filter(n => n.type === 'bootnode' || n.type === 'miner' || n.type === 'rpc') as any;
+    const networkData: StoredNetworkData & { allNodes?: BesuNodeConfig[] } = {
+      config: { ...networkConfig, nodes: sdkNodes },
+      nodes: sdkNodes,
+      allNodes: allNodeConfigs, // for UI/metadata only
       genesis,
       dockerNetworkId,
       createdAt: new Date().toISOString(),
@@ -297,8 +355,8 @@ export async function POST(request: NextRequest) {
         dockerNetworkId,
         subnet,
         gateway,
-        containersCreated: containers.length,
-        nodes: networkConfig.nodes.map(n => ({
+        containersCreated: createdContainers.length,
+        nodes: allNodeConfigs.map(n => ({
           id: n.id,
           type: n.type,
           ip: n.ip,
@@ -309,10 +367,20 @@ export async function POST(request: NextRequest) {
       }
     });
 
-  } catch (error) {
-    console.error('Network creation failed:', error);
+  } catch (error: any) {
+    // Clean up on error
+    if (createdContainers.length > 0) {
+      for (const c of createdContainers) {
+        try { await dockerManager.removeContainer(c.containerId); } catch {}
+      }
+    }
+    if (dockerNetworkCreated && dockerNetworkId && typeof dockerNetworkId === 'string') {
+      try { await dockerManager.removeDockerNetwork(dockerNetworkId); } catch {}
+    }
+    let errorMsg = error?.message || error?.toString() || 'Failed to create network';
+    if (error?.json?.message) errorMsg = error.json.message;
     return NextResponse.json(
-      { success: false, error: 'Failed to create network' },
+      { success: false, error: errorMsg },
       { status: 500 }
     );
   }

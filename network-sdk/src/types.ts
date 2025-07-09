@@ -4,7 +4,7 @@
 
 export interface BesuNodeConfig {
   id: string;
-  type: 'bootnode' | 'miner' | 'rpc';
+  type: 'bootnode' | 'miner' | 'validator' | 'rpc';
   rpcPort: number;
   p2pPort: number;
   ip: string;

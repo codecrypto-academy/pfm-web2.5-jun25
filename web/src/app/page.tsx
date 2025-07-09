@@ -206,11 +206,16 @@ const CreateNetworkFormModalWrapper: React.FC<{ onSuccess: () => void }> = ({ on
     const bootnodeCount = 1;
     const minerCount = values.minerCount || 0;
     const nodeCount = bootnodeCount + minerCount;
+    // Remove empty subnet/gateway fields so backend uses defaults
+    const cleaned = { ...values };
+    if (cleaned.subnet === "") delete cleaned.subnet;
+    if (cleaned.gateway === "") delete cleaned.gateway;
     const payload = {
-      ...values,
+      ...cleaned,
       bootnodeCount,
       nodeCount,
     };
+    let closed = false;
     try {
       const res = await fetch("/api/networks", {
         method: "POST",
@@ -218,6 +223,8 @@ const CreateNetworkFormModalWrapper: React.FC<{ onSuccess: () => void }> = ({ on
         body: JSON.stringify(payload),
       });
       const data = await res.json();
+      modals.closeAll();
+      closed = true;
       if (data.success) {
         showNotification({
           title: "Network Created",
@@ -234,6 +241,7 @@ const CreateNetworkFormModalWrapper: React.FC<{ onSuccess: () => void }> = ({ on
         });
       }
     } catch (e) {
+      if (!closed) modals.closeAll();
       showNotification({
         title: "Error",
         message: (e as Error).message,

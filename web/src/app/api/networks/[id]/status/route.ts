@@ -1,12 +1,12 @@
 /**
  * Network Status API
  * GET /api/networks/[id]/status - Get network status and health information
- * 
+ *
  * @param {string} id - Network ID
  * @returns {Object} Response object
  * @returns {boolean} response.success - Whether the request was successful
  * @returns {Object} response.network - Network status information
- * @returns {string} response.network.networkId - Network identifier
+ * @returns {string} response.network.id - Network identifier
  * @returns {string} response.network.status - Overall network status ('running'|'stopped'|'partial'|'error')
  * @returns {number} response.network.totalNodes - Total number of nodes in the network
  * @returns {number} response.network.runningNodes - Number of currently running nodes
@@ -23,13 +23,13 @@
  * @returns {string} response.network.dockerNetwork.status - Docker network status
  * @returns {string} response.network.health - Network health status
  * @returns {string} response.network.lastUpdated - Last update timestamp
- * 
+ *
  * @example
  * // GET /api/networks/test-network/status
  * {
  *   "success": true,
  *   "network": {
- *     "networkId": "test-network",
+ *     "id": "test-network",
  *     "status": "running",
  *     "totalNodes": 3,
  *     "runningNodes": 2,

@@ -44,10 +44,18 @@ export class DockerManager {
   /**
    * Create a Besu container
    */
+  /**
+   * Create a Besu container
+   * @param networkConfig Network configuration
+   * @param nodeConfig Node configuration
+   * @param nodePath Path to node data
+   * @param opts Optional flags (e.g., mining)
+   */
   async createBesuContainer(
     networkConfig: NetworkConfig,
     nodeConfig: BesuNodeConfig,
-    nodePath: string
+    nodePath: string,
+    opts?: { mining?: boolean }
   ): Promise<ContainerInfo> {
     const containerName = `besu-${networkConfig.networkId}-${nodeConfig.id}`;
     const genesisPath = path.join(nodePath, "..", "genesis.json");
@@ -75,7 +83,8 @@ export class DockerManager {
       besuArgs.push(`--bootnodes=${nodeConfig.bootnodes.join(",")}`);
     }
 
-    if (nodeConfig.type === "miner") {
+    // Only enable mining for miner nodes (not validator-only)
+    if (opts?.mining || nodeConfig.type === "miner") {
       besuArgs.push(`--miner-enabled`);
       besuArgs.push(`--miner-coinbase=${nodeConfig.address}`);
     }

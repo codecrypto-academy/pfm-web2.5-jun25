@@ -127,10 +127,10 @@ export async function POST(
       env
     } = body;
 
-    // Validate node type
-    if (!['miner', 'rpc'].includes(type)) {
+    // Validate node type (allow validator)
+    if (!['miner', 'rpc', 'validator'].includes(type)) {
       return NextResponse.json(
-        { success: false, error: 'Node type must be "miner" or "rpc"' },
+        { success: false, error: 'Node type must be "miner", "validator", or "rpc"' },
         { status: 400 }
       );
     }
@@ -190,6 +190,35 @@ export async function POST(
     const nodeId = node_id && typeof node_id === 'string' && node_id.trim() !== ''
       ? node_id.trim()
       : NODE_ID_GENERATION.DYNAMIC_PATTERN(nodeIdPrefix);
+
+    // Remove any stale container for this node before proceeding
+    const staleContainer = await dockerManager.findNodeContainer(networkId, nodeId);
+    if (staleContainer && staleContainer.Id) {
+      try {
+        // Try to remove, if fails with 304 (already stopped), call remove() directly
+        try {
+          await dockerManager.removeContainer(staleContainer.Id);
+          console.info(`Removed stale container for node ${nodeId} in network ${networkId}`);
+        } catch (err: any) {
+          if (err?.statusCode === 304) {
+            // Container already stopped, try remove directly
+            try {
+              const docker = dockerManager.docker;
+              const containerObj = docker.getContainer(staleContainer.Id);
+              await containerObj.remove();
+              console.info(`Force-removed stopped container for node ${nodeId}`);
+            } catch (removeErr) {
+              console.warn(`Failed to force-remove stopped container for node ${nodeId}:`, removeErr);
+            }
+          } else {
+            throw err;
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to remove stale container for node ${nodeId}:`, err);
+      }
+    }
+
     const credentials = keyGenerator.generateKeyPair(nodeIp, nodeP2pPort);
 
     // Find existing bootnodes
@@ -209,52 +238,80 @@ export async function POST(
       bootnodes: bootnodes.length > 0 ? bootnodes : undefined
     };
 
-    // Create node directory and save keys
+    // Create node directory and write key files BEFORE starting container
     const nodePath = await NetworkStorage.createNodeDirectory(networkId, nodeId);
-    // Ensure directory exists before writing files
     await fs.promises.mkdir(nodePath, { recursive: true });
-    await fs.promises.writeFile(
-      path.join(nodePath, FILE_NAMING.NODE_FILES.PRIVATE_KEY), 
-      credentials.privateKey.slice(2)
-    );
-    await fs.promises.writeFile(
-      path.join(nodePath, FILE_NAMING.NODE_FILES.ADDRESS), 
-      credentials.address
-    );
-    await fs.promises.writeFile(
-      path.join(nodePath, FILE_NAMING.NODE_FILES.ENODE), 
-      credentials.enode
-    );
+    // Ensure no directory exists at the file paths before writing
+    const keyFile = path.join(nodePath, FILE_NAMING.NODE_FILES.PRIVATE_KEY);
+    const addressFile = path.join(nodePath, FILE_NAMING.NODE_FILES.ADDRESS);
+    const enodeFile = path.join(nodePath, FILE_NAMING.NODE_FILES.ENODE);
+    for (const filePath of [keyFile, addressFile, enodeFile]) {
+      try {
+        const stat = await fs.promises.lstat(filePath).catch(() => null);
+        if (stat && stat.isDirectory()) {
+          await fs.promises.rm(filePath, { recursive: true, force: true });
+        }
+      } catch {}
+    }
+    // Write private key (validator/miner/rpc): must be 64 hex chars, no 0x
+    const privKey = credentials.privateKey.startsWith('0x') ? credentials.privateKey.slice(2) : credentials.privateKey;
+    if (!/^[0-9a-fA-F]{64}$/.test(privKey)) {
+      throw new Error('Generated private key is not a valid 64-character hex string');
+    }
+    await fs.promises.writeFile(keyFile, privKey);
+    await fs.promises.writeFile(addressFile, credentials.address);
+    await fs.promises.writeFile(enodeFile, credentials.enode);
 
-    // Add node to Docker network
-    const container = await dockerManager.addNodeToNetwork(
-      networkData.config,
-      nodeConfig,
-      nodePath
-    );
+    try {
+      // Add node to Docker network (will fail if port conflict, etc.)
+      const container = await dockerManager.addNodeToNetwork(
+        networkData.config,
+        nodeConfig,
+        nodePath
+      );
 
-    // Update network metadata
-    await NetworkStorage.addNodeToNetwork(networkId, nodeConfig);
+      // Update network metadata
+      await NetworkStorage.addNodeToNetwork(networkId, nodeConfig);
 
-    return NextResponse.json({
-      success: true,
-      node: {
-        id: nodeId,
-        type,
-        ip: nodeIp,
-        rpcPort: nodeRpcPort,
-        p2pPort: nodeP2pPort,
-        address: credentials.address,
-        enode: credentials.enode,
-        containerId: container.containerId,
-        containerName: container.containerName
-      }
-    });
+      return NextResponse.json({
+        success: true,
+        node: {
+          id: nodeId,
+          type,
+          ip: nodeIp,
+          rpcPort: nodeRpcPort,
+          p2pPort: nodeP2pPort,
+          address: credentials.address,
+          enode: credentials.enode,
+          containerId: container.containerId,
+          containerName: container.containerName
+        }
+      });
+    } catch (error) {
+      // Clean up node directory and DB entry if Docker fails
+      try { await fs.promises.rm(nodePath, { recursive: true, force: true }); } catch {}
+      try { await NetworkStorage.removeNodeFromNetwork(networkId, nodeId); } catch {}
+      throw error;
+    }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to add node:', error);
+    let errorMsg = 'Failed to add node to network';
+    // Docker port conflict error message
+    if (typeof error?.message === 'string' && error.message.includes('Bind for 0.0.0.0')) {
+      const portMatch = error.message.match(/Bind for 0.0.0.0:(\d+)/);
+      if (portMatch) {
+        errorMsg = `Port ${portMatch[1]} is already in use by another container. Please choose a different port or remove the conflicting container.`;
+      } else {
+        errorMsg = 'Port conflict: a required port is already in use by another container.';
+      }
+    } else if (error?.json?.message) {
+      errorMsg = error.json.message;
+    } else if (error?.message) {
+      errorMsg = error.message;
+    }
     return NextResponse.json(
-      { success: false, error: 'Failed to add node to network' },
+      { success: false, error: errorMsg },
       { status: 500 }
     );
   }

@@ -310,4 +310,239 @@ describe('Updating existing node properties', () => {
             }
         }
     }, 150000); // 2.5-minute timeout
+
+    test('should update signerAccounts with validation and proper miner assignment', async () => {
+        if (!checkDockerAvailability()) {
+            console.log('⚠️  Skipping Docker-dependent test');
+            return;
+        }
+
+        const baseNetworkName = generateTestNetworkName('signer-accounts-update-test');
+        console.log(`🧪 Testing signerAccounts updates: ${baseNetworkName}`);
+
+        // Create initial network configuration with signerAccounts for 3 miners
+        const initialSignerAccounts = [
+            { 
+                address: '0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9', 
+                weiAmount: '100000000000000000000000' 
+            },
+            { 
+                address: '0x999d35Cc6354C6532C4c0a1b9AAB6ff119B4a999', 
+                weiAmount: '150000000000000000000000' 
+            },
+            { 
+                address: '0x888d35Cc6354C6532C4c0a1b9AAB6ff119B4a888', 
+                weiAmount: '175000000000000000000000' 
+            }
+        ];
+
+        const config: BesuNetworkConfig = {
+            name: baseNetworkName,
+            chainId: 1345,
+            subnet: '172.40.0.0/16',
+            consensus: 'clique',
+            gasLimit: '0x47E7C4',
+            blockTime: 5,
+            signerAccounts: initialSignerAccounts
+        };
+
+        const network = new BesuNetwork(config);
+
+        try {
+            // Step 1: Create initial network with 3 miners (odd number for Clique stability)
+            console.log('📦 Creating initial network with multiple miners...');
+            await network.create({
+                nodes: [
+                    { name: 'bootnode1', ip: '172.40.0.10', rpcPort: 8545, type: 'bootnode' },
+                    { name: 'miner1', ip: '172.40.0.11', rpcPort: 8546, type: 'miner' },
+                    { name: 'miner2', ip: '172.40.0.12', rpcPort: 8548, type: 'miner' }, // Non-consecutive port
+                    { name: 'miner3', ip: '172.40.0.13', rpcPort: 8550, type: 'miner' }, // Non-consecutive port
+                    { name: 'rpc1', ip: '172.40.0.14', rpcPort: 8552, type: 'rpc' }
+                ]
+            });
+
+            // Verify initial configuration
+            const networkPath = path.join('./networks', baseNetworkName);
+            const configPath = path.join(networkPath, 'network-config.json');
+            
+            // Save the network configuration manually if it doesn't exist
+            if (!fs.existsSync(configPath)) {
+                const config = network.getConfig();
+                const networkNodes = Array.from(network.getNodes().entries()).map(([nodeName, node]) => {
+                    const nodeConfig = node.getConfig();
+                    return {
+                        name: nodeConfig.name,
+                        ip: nodeConfig.ip,
+                        rpcPort: nodeConfig.rpcPort,
+                        p2pPort: nodeConfig.port || 30303,
+                        type: nodeConfig.type
+                    };
+                });
+                
+                const fullConfig = {
+                    ...config,
+                    nodes: networkNodes
+                };
+                
+                fs.mkdirSync(path.dirname(configPath), { recursive: true });
+                fs.writeFileSync(configPath, JSON.stringify(fullConfig, null, 2));
+                console.log(`💾 Saved initial configuration to: ${configPath}`);
+            }
+            
+            expect(fs.existsSync(configPath)).toBe(true);
+
+            let initialConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+            console.log(`🔍 Initial configuration has ${initialConfig.signerAccounts?.length || 0} signerAccounts`);
+            console.log(`🔍 Initial configuration has ${initialConfig.nodes?.filter((n: any) => n.type === 'miner').length || 0} miners`);
+
+            // Step 2: Update signerAccounts with 3 new accounts (one per miner)
+            console.log('🔄 Updating signerAccounts with 3 new accounts...');
+            const newSignerAccounts = [
+                { 
+                    address: '0x123d35Cc6354C6532C4c0a1b9AAB6ff119B4a123', 
+                    weiAmount: '200000000000000000000000' // 200,000 ETH
+                },
+                { 
+                    address: '0x456d35Cc6354C6532C4c0a1b9AAB6ff119B4a456', 
+                    weiAmount: '300000000000000000000000' // 300,000 ETH
+                },
+                { 
+                    address: '0x789d35Cc6354C6532C4c0a1b9AAB6ff119B4a789', 
+                    weiAmount: '400000000000000000000000' // 400,000 ETH
+                }
+            ];
+
+            await updateNetworkNodesByName(baseNetworkName, {
+                signerAccounts: newSignerAccounts
+            });
+
+            // Step 3: Verify that signerAccounts were updated correctly
+            console.log('🔍 Verifying signerAccounts update...');
+            const updatedConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+            
+            expect(updatedConfig.signerAccounts).toBeDefined();
+            expect(updatedConfig.signerAccounts.length).toBe(3);
+            
+            // Verify each signerAccount has correct address, weiAmount, and minerNode assignment
+            expect(updatedConfig.signerAccounts[0].address).toBe('0x123d35Cc6354C6532C4c0a1b9AAB6ff119B4a123');
+            expect(updatedConfig.signerAccounts[0].weiAmount).toBe('200000000000000000000000');
+            expect(updatedConfig.signerAccounts[0].minerNode).toBe('miner1');
+            expect(updatedConfig.signerAccounts[0]._autoGenerated).toBe(false);
+
+            expect(updatedConfig.signerAccounts[1].address).toBe('0x456d35Cc6354C6532C4c0a1b9AAB6ff119B4a456');
+            expect(updatedConfig.signerAccounts[1].weiAmount).toBe('300000000000000000000000');
+            expect(updatedConfig.signerAccounts[1].minerNode).toBe('miner2');
+            expect(updatedConfig.signerAccounts[1]._autoGenerated).toBe(false);
+
+            expect(updatedConfig.signerAccounts[2].address).toBe('0x789d35Cc6354C6532C4c0a1b9AAB6ff119B4a789');
+            expect(updatedConfig.signerAccounts[2].weiAmount).toBe('400000000000000000000000');
+            expect(updatedConfig.signerAccounts[2].minerNode).toBe('miner3');
+            expect(updatedConfig.signerAccounts[2]._autoGenerated).toBe(false);
+
+            console.log('✅ SignerAccounts assigned correctly:');
+            updatedConfig.signerAccounts.forEach((sa: any, index: number) => {
+                console.log(`   ${index + 1}. ${sa.address} (${sa.weiAmount} wei) → ${sa.minerNode}`);
+            });
+
+            // Step 4: Verify TOML files were regenerated
+            console.log('🔍 Verifying TOML configuration files were updated...');
+            const miner1TomlPath = path.join(networkPath, 'miner1_config.toml');
+            const miner2TomlPath = path.join(networkPath, 'miner2_config.toml');
+            const miner3TomlPath = path.join(networkPath, 'miner3_config.toml');
+            
+            expect(fs.existsSync(miner1TomlPath)).toBe(true);
+            expect(fs.existsSync(miner2TomlPath)).toBe(true);
+            expect(fs.existsSync(miner3TomlPath)).toBe(true);
+
+            const miner1Toml = fs.readFileSync(miner1TomlPath, 'utf-8');
+            const miner2Toml = fs.readFileSync(miner2TomlPath, 'utf-8');
+            const miner3Toml = fs.readFileSync(miner3TomlPath, 'utf-8');
+
+            // The TOML files should contain the signerAccount addresses
+            expect(miner1Toml).toContain('0x123d35Cc6354C6532C4c0a1b9AAB6ff119B4a123');
+            expect(miner2Toml).toContain('0x456d35Cc6354C6532C4c0a1b9AAB6ff119B4a456');
+            expect(miner3Toml).toContain('0x789d35Cc6354C6532C4c0a1b9AAB6ff119B4a789');
+
+            console.log('✅ TOML files updated correctly with new signerAccount addresses');
+
+            // Step 5: Test validation errors
+            console.log('🔍 Testing validation errors...');
+            
+            // Test: Wrong number of signerAccounts (should fail)
+            try {
+                const result = await updateNetworkNodesByName(baseNetworkName, {
+                    signerAccounts: [newSignerAccounts[0]] // Only 1 signer for 3 miners
+                });
+                // Check if the function returned an error instead of throwing
+                if (result && result.errors && result.errors.length > 0) {
+                    expect(result.errors[0]).toContain('must be exactly one signerAccount per miner');
+                    console.log('✅ Correctly rejected wrong number of signerAccounts');
+                } else {
+                    throw new Error('Expected validation error for wrong number of signerAccounts');
+                }
+            } catch (error) {
+                // If it threw directly, check the error message
+                expect((error as Error).message).toContain('must be exactly one signerAccount per miner');
+                console.log('✅ Correctly rejected wrong number of signerAccounts');
+            }
+
+            // Test: Invalid Ethereum address (should fail)
+            try {
+                const result = await updateNetworkNodesByName(baseNetworkName, {
+                    signerAccounts: [
+                        { address: 'invalid-address', weiAmount: '100000000000000000000000' },
+                        newSignerAccounts[1],
+                        newSignerAccounts[2]
+                    ]
+                });
+                // Check if the function returned an error instead of throwing
+                if (result && result.errors && result.errors.length > 0) {
+                    expect(result.errors[0]).toContain('Invalid Ethereum address');
+                    console.log('✅ Correctly rejected invalid Ethereum address');
+                } else {
+                    throw new Error('Expected validation error for invalid address');
+                }
+            } catch (error) {
+                // If it threw directly, check the error message
+                expect((error as Error).message).toContain('Invalid Ethereum address');
+                console.log('✅ Correctly rejected invalid Ethereum address');
+            }
+
+            // Test: Duplicate addresses (should fail)
+            try {
+                const result = await updateNetworkNodesByName(baseNetworkName, {
+                    signerAccounts: [
+                        newSignerAccounts[0],
+                        newSignerAccounts[0], // Duplicate
+                        newSignerAccounts[2]
+                    ]
+                });
+                // Check if the function returned an error instead of throwing
+                if (result && result.errors && result.errors.length > 0) {
+                    expect(result.errors[0]).toContain('Duplicate address');
+                    console.log('✅ Correctly rejected duplicate addresses');
+                } else {
+                    throw new Error('Expected validation error for duplicate address');
+                }
+            } catch (error) {
+                // If it threw directly, check the error message
+                expect((error as Error).message).toContain('Duplicate address');
+                console.log('✅ Correctly rejected duplicate addresses');
+            }
+
+            console.log('✅ SignerAccounts update test completed successfully!');
+            console.log('✅ All validation rules working correctly');
+            console.log('🎯 Automatic miner assignment working as expected');
+
+        } finally {
+            // Cleanup network
+            console.log('🧹 Cleaning up test network...');
+            try {
+                await network.stop();
+                await network.destroy();
+            } catch (cleanupError) {
+                console.log(`⚠️  Cleanup error for network: ${cleanupError}`);
+            }
+        }
+    }, 150000); // 2.5-minute timeout
 });

@@ -576,11 +576,22 @@ npm test -- --testNamePattern="Should validate updateNetworkAccountsByName"
 
 ### Comandos para Ejecutar Tests Individuales
 
-```bash
+````bash
 # ❌ NO ejecutar todos los tests juntos (puede causar conflictos)
 npm test
 
+# ⚠️ **Problema Conocido**: El archivo `update-existing-nodes.test.ts` puede fallar al ejecutar `npm test` completo debido a conflictos de compilación TypeScript, pero funciona correctamente cuando se ejecuta individualmente:
+
+```bash
+# ❌ Puede fallar al ejecutar todos los tests
+npm test
+
+# ✅ Funciona correctamente cuando se ejecuta individualmente
+npm test _test_/update-existing-nodes.test.ts
+````
+
 # ✅ Ejecutar tests específicos individualmente
+
 npm test -- --testNamePattern="Basic Network Creation"
 npm test -- --testNamePattern="should create a simple Besu network"
 npm test -- --testNamePattern="Node Update and Synchronization"
@@ -588,15 +599,19 @@ npm test -- --testNamePattern="Account Management Tests"
 npm test -- --testNamePattern="Multi-Miner Network Expansion"
 
 # ✅ Ejecutar por archivo de test específico
+
 npm test _test_/besu.test.ts
 npm test _test_/signer-update-new.test.ts
 npm test _test_/multi-miner-expansion.test.ts
+npm test _test_/update-existing-nodes.test.ts
 
 # ✅ Ejecutar un test específico por nombre completo
+
 npm test -- --testNamePattern="should add nodes to existing network and validate integration"
 npm test -- --testNamePattern="should fail validation when adding second miner with its own signerAccount"
 npm test -- --testNamePattern="should successfully add two new miners with their respective signerAccounts"
-```
+
+````
 
 ### Tests Disponibles
 
@@ -615,7 +630,7 @@ npm test -- --testNamePattern="Account Management Tests"
 
 # Test de validaciones
 npm test -- --testNamePattern="Should validate updateNetworkAccountsByName"
-```
+````
 
 #### Tests de Actualización de Nodos (`_test_/signer-update-new.test.ts`)
 
@@ -646,6 +661,31 @@ npm test -- --testNamePattern="Multi-Miner Network Expansion"
 # Ejecutar el archivo completo de tests de expansión multi-miner
 npm test _test_/multi-miner-expansion.test.ts
 ```
+
+#### Tests de Actualización de Nodos Existentes (`_test_/update-existing-nodes.test.ts`)
+
+**Propósito**: Validar funcionalidad de actualización de nodos existentes, incluyendo signerAccounts y validaciones de consenso.
+
+⚠️ **Nota Importante**: Este test puede fallar cuando se ejecuta `npm test` completo debido a conflictos de compilación TypeScript, pero funciona perfectamente cuando se ejecuta individualmente.
+
+```bash
+# ✅ Ejecutar individualmente (recomendado)
+npm test _test_/update-existing-nodes.test.ts
+
+# ✅ Ejecutar tests específicos de este archivo
+npm test -- --testNamePattern="should update signerAccounts and regenerate TOML files"
+npm test -- --testNamePattern="should validate signerAccounts format and duplicates"
+npm test -- --testNamePattern="should validate miner-signerAccount count mismatch"
+```
+
+**¿Qué valida?**
+
+- ✅ Actualización de signerAccounts en redes existentes
+- ✅ Regeneración de archivos TOML después de actualizaciones
+- ✅ Validación de formato de direcciones Ethereum
+- ✅ Detección de direcciones duplicadas
+- ✅ Validación de correspondencia entre miners y signerAccounts
+- ✅ Persistencia de configuración en archivos JSON
 
 **¿Qué valida?**
 

@@ -19,6 +19,7 @@ import {
   BesuNetworkCreateOptions,
   CryptoLib,
   ValidationError,
+  SignerAccount,
   isSubnetAvailable
 } from './create-besu-networks';
 
@@ -28,7 +29,7 @@ import {
 
 /**
  * Modifica la configuración de una red Besu existente sin afectar el genesis
- * Solo permite cambios en subnet, gasLimit y blockTime
+ * Solo permite cambios en subnet, gasLimit, blockTime y configuraciones de nodos
  */
 export async function updateNetworkConfig(
   network: BesuNetwork,
@@ -36,6 +37,12 @@ export async function updateNetworkConfig(
     subnet?: string;
     gasLimit?: string;
     blockTime?: number;
+    nodes?: Array<{
+      name: string;
+      ip?: string;
+      rpcPort?: number;
+      p2pPort?: number;
+    }>;
   }
 ): Promise<void> {
   let needsRestart = false;
@@ -47,7 +54,79 @@ export async function updateNetworkConfig(
 
   // Actualizar subnet si se proporciona
   if (updates.subnet && updates.subnet !== config.subnet) {
-    // Usar las mismas validaciones que en validateNetworkBasicConfig
+    // Validar que si se actualiza la subnet, el array nodes debe estar presente
+    if (!updates.nodes || updates.nodes.length === 0) {
+      errors.push({
+        field: 'nodes',
+        type: 'required',
+        message: 'When updating subnet, the nodes array is required and cannot be empty'
+      });
+    } else {
+      // Validar que el número de nodos coincide con los nodos existentes en la red
+      const existingNodes = network.getNodes();
+      if (updates.nodes.length !== existingNodes.size) {
+        errors.push({
+          field: 'nodes',
+          type: 'invalid',
+          message: `When updating subnet, nodes array must contain exactly ${existingNodes.size} nodes (one for each existing node), but got ${updates.nodes.length}`
+        });
+      } else {
+        // Validar que cada nodo en el array corresponde a un nodo existente
+        const existingNodeNames = new Set(Array.from(existingNodes.keys()));
+        const providedNodeNames = new Set(updates.nodes.map(n => n.name));
+        
+        for (const nodeName of providedNodeNames) {
+          if (!existingNodeNames.has(nodeName)) {
+            errors.push({
+              field: 'nodes',
+              type: 'invalid',
+              message: `Node '${nodeName}' does not exist in the network. Existing nodes: ${Array.from(existingNodeNames).join(', ')}`
+            });
+          }
+        }
+        
+        for (const nodeName of existingNodeNames) {
+          if (!providedNodeNames.has(nodeName)) {
+            errors.push({
+              field: 'nodes',
+              type: 'invalid',
+              message: `Missing node '${nodeName}' in nodes array. All existing nodes must be included when updating subnet.`
+            });
+          }
+        }
+        
+        // Validar que cada nodo tiene una IP especificada y que está en la nueva subnet
+        updates.nodes.forEach((nodeUpdate, index) => {
+          if (!nodeUpdate.ip) {
+            errors.push({
+              field: `nodes[${index}].ip`,
+              type: 'required',
+              message: `IP address is required for node '${nodeUpdate.name}' when updating subnet`
+            });
+          } else {
+            // Validar formato de IP
+            if (!isValidIpAddress(nodeUpdate.ip)) {
+              errors.push({
+                field: `nodes[${index}].ip`,
+                type: 'format',
+                message: `Invalid IP address format for node '${nodeUpdate.name}': ${nodeUpdate.ip}`
+              });
+            } else {
+              // Validar que la IP está en la nueva subnet
+              if (!isIpInSubnet(nodeUpdate.ip, updates.subnet!)) {
+                errors.push({
+                  field: `nodes[${index}].ip`,
+                  type: 'invalid',
+                  message: `IP '${nodeUpdate.ip}' for node '${nodeUpdate.name}' is not in the new subnet '${updates.subnet}'`
+                });
+              }
+            }
+          }
+        });
+      }
+    }
+
+    // Usar las mismas validaciones que en validateNetworkBasicConfig para la subnet
     if (!isValidSubnet(updates.subnet)) {
       errors.push({
         field: 'subnet',
@@ -64,6 +143,7 @@ export async function updateNetworkConfig(
 
     if (errors.length === 0) {
       console.log(`🔄 Updating subnet from ${config.subnet} to ${updates.subnet}`);
+      console.log(`📍 Will update IPs for ${updates.nodes!.length} nodes based on provided nodes array`);
       config.subnet = updates.subnet;
       needsSubnetUpdate = true;
       needsRestart = true;
@@ -126,8 +206,17 @@ export async function updateNetworkConfig(
       const dockerManager = (network as any).dockerManager;
       dockerManager.removeNetwork();
       
-      // Actualizar IPs de los nodos para la nueva subnet
-      updateNodesForNewSubnet(network, updates.subnet!);
+      // Actualizar IPs de los nodos usando las IPs proporcionadas en el array nodes
+      console.log('📍 Updating node IPs based on provided nodes array...');
+      const nodes = network.getNodes();
+      
+      for (const nodeUpdate of updates.nodes!) {
+        const node = nodes.get(nodeUpdate.name);
+        if (node && nodeUpdate.ip) {
+          console.log(`  🔄 Updating ${nodeUpdate.name} IP to ${nodeUpdate.ip}`);
+          node.updateIp(nodeUpdate.ip);
+        }
+      }
       
       // Crear nueva red Docker
       dockerManager.createNetwork(updates.subnet!, {
@@ -162,6 +251,19 @@ export async function updateNetworkConfig(
     console.log('💡 Use start() to restart the network with new configuration');
   } else {
     console.log('ℹ️  No changes detected in configuration');
+  }
+
+  // Manejar actualizaciones de nodos si se proporcionan
+  if (updates.nodes && updates.nodes.length > 0) {
+    console.log(`🔧 Processing ${updates.nodes.length} node configuration updates...`);
+    
+    // Crear instancia del updater y ejecutar actualizaciones de nodos
+    const updater = new BesuNetworkUpdater(network);
+    await updater.updateNetworkNodes({
+      nodes: updates.nodes
+    });
+    
+    console.log('✅ Node configurations updated successfully');
   }
 }
 
@@ -532,6 +634,7 @@ export function validateAccountUpdatesStatic(accounts: Array<{ address: string; 
 
   return errors;
 }
+
 
 /**
  * Método estático para actualizar las cuentas de una red existente por nombre
@@ -1093,6 +1196,7 @@ export class BesuNetworkUpdater {
       }>;
       addNodes?: BesuNodeDefinition[];
       removeNodes?: string[];
+      signerAccounts?: SignerAccount[];
     },
     options: {
       baseDir?: string;
@@ -1194,14 +1298,152 @@ export class BesuNetworkUpdater {
       }
     }
     
+    // Validar y actualizar signerAccounts si se proporcionan
+    if (updates.signerAccounts && updates.signerAccounts.length > 0) {
+      console.log(`🔑 Processing ${updates.signerAccounts.length} signerAccount updates...`);
+      
+      // Validar que cada signerAccount es válido
+      const signerValidationErrors: ValidationError[] = [];
+      const usedAddresses = new Set<string>();
+      
+      updates.signerAccounts.forEach((signer, index) => {
+        // Validar dirección Ethereum
+        if (!isValidEthereumAddress(signer.address)) {
+          signerValidationErrors.push({
+            field: `signerAccounts[${index}].address`,
+            type: 'format',
+            message: `SignerAccount ${index} address must be a valid Ethereum address (0x...)`
+          });
+        } else {
+          const lowerAddress = signer.address.toLowerCase();
+          if (usedAddresses.has(lowerAddress)) {
+            signerValidationErrors.push({
+              field: `signerAccounts[${index}].address`,
+              type: 'duplicate',
+              message: `SignerAccount ${index} address is duplicated`
+            });
+          } else {
+            usedAddresses.add(lowerAddress);
+          }
+        }
+        
+        // Validar weiAmount
+        if (!isValidWeiAmount(signer.weiAmount)) {
+          signerValidationErrors.push({
+            field: `signerAccounts[${index}].weiAmount`,
+            type: 'format',
+            message: `SignerAccount ${index} wei amount must be a valid positive number`
+          });
+        } else if (!isReasonableWeiAmount(signer.weiAmount)) {
+          signerValidationErrors.push({
+            field: `signerAccounts[${index}].weiAmount`,
+            type: 'range',
+            message: `SignerAccount ${index} wei amount should be between 1 wei and 10^24 wei (1,000,000 ETH max)`
+          });
+        }
+      });
+      
+      if (signerValidationErrors.length > 0) {
+        const errorMessages = signerValidationErrors.map(error => 
+          `${error.field}: ${error.message}`
+        ).join('\n');
+        throw new Error(`SignerAccount validation failed:\n${errorMessages}`);
+      }
+      
+      // Obtener nodos miner existentes en la red
+      const minerNodes = Array.from(network.getNodes().entries())
+        .filter(([_, node]) => node.getConfig().type === 'miner')
+        .map(([nodeName, _]) => nodeName);
+      
+      console.log(`   🔍 Found ${minerNodes.length} miner nodes in network: ${minerNodes.join(', ')}`);
+      
+      // Validar que hay exactamente un miner por cada signerAccount
+      if (minerNodes.length !== updates.signerAccounts.length) {
+        throw new Error(
+          `Miner-SignerAccount mismatch: Network has ${minerNodes.length} miner nodes but ${updates.signerAccounts.length} signerAccounts provided. ` +
+          `There must be exactly one signerAccount per miner node.`
+        );
+      }
+      
+      // Actualizar la configuración de signerAccounts en la red
+      console.log('   🔄 Updating signerAccounts configuration...');
+      const networkConfig = network.getConfig();
+      
+      // Actualizar signerAccounts con asociaciones a miners
+      const updatedSignerAccounts = updates.signerAccounts.map((signer, index) => ({
+        ...signer,
+        minerNode: minerNodes[index], // Asignar miner en orden
+        _autoGenerated: false
+      }));
+      
+      networkConfig.signerAccounts = updatedSignerAccounts;
+      
+      // Generar claves para cada signerAccount si no existen
+      console.log('   🔐 Generating or updating cryptographic keys for signerAccounts...');
+      const minerSignerKeys = new Map<string, any>();
+      const cryptoLib = new CryptoLib();
+      
+      for (let i = 0; i < updatedSignerAccounts.length; i++) {
+        const signerAccount = updatedSignerAccounts[i];
+        const minerNodeName = minerNodes[i];
+        
+        console.log(`      - Processing signerAccount ${signerAccount.address} for miner ${minerNodeName}`);
+        
+        // Generar nuevas claves para este signerAccount
+        const keyPair = cryptoLib.generateKeyPair('127.0.0.1'); // IP dummy ya que solo necesitamos las claves
+        
+        const signerKeys = {
+          privateKey: keyPair.privateKey,
+          publicKey: keyPair.publicKey,
+          address: signerAccount.address, // Usar la dirección proporcionada
+          enode: '' // Se calculará más tarde si es necesario
+        };
+        
+        minerSignerKeys.set(minerNodeName, signerKeys);
+        
+        // Actualizar la dirección en la configuración si las claves generan una diferente
+        // Nota: Para signerAccounts, usualmente queremos mantener la dirección especificada
+        // pero actualizar las claves privadas/públicas correspondientes
+        
+        console.log(`         ✅ Updated keys for signer ${signerAccount.address} (miner: ${minerNodeName})`);
+      }
+      
+      // Actualizar el mapa de claves en la instancia de red
+      (network as any).minerSignerKeys = minerSignerKeys;
+      
+      console.log(`   ✅ SignerAccounts updated successfully: ${updatedSignerAccounts.length} signers assigned to ${minerNodes.length} miners`);
+    }
+    
     // Crear el updater y ejecutar la actualización
     const updater = new BesuNetworkUpdater(network);
     
     await updater.updateNetworkNodes(updates);
     
-    // Guardar la configuración actualizada con nodos
-    const baseConfig = network.getConfig();
-    const currentNodes = Array.from(network.getNodes().entries()).map(([nodeName, node]) => {
+    // Get the updated network after all operations
+    const updatedNetwork = updater.besuNetwork;
+    
+    // Si se actualizaron signerAccounts, regenerar archivos TOML con las nuevas asociaciones
+    if (updates.signerAccounts && updates.signerAccounts.length > 0) {
+      console.log('🔧 Regenerating TOML configuration files with updated signerAccounts...');
+      
+      // Crear mapa de minerSignerKeys para pasar a la función de actualización
+      const minerSignerMap = new Map<string, string>();
+      const networkSignerAccounts = updatedNetwork.getConfig().signerAccounts || [];
+      
+      for (const signerAccount of networkSignerAccounts) {
+        if (signerAccount.minerNode) {
+          minerSignerMap.set(signerAccount.minerNode, signerAccount.address);
+        }
+      }
+      
+      console.log(`   📝 Updating TOML files for ${minerSignerMap.size} miner-signer associations`);
+      await updateNodeConfigurationsWithSignerMap(updatedNetwork, minerSignerMap);
+      console.log('   ✅ TOML files regenerated successfully');
+    }
+    
+    // Guardar la configuración actualizada con nodos usando la red actualizada
+    const baseConfig = updatedNetwork.getConfig();
+    const currentNodes = Array.from(updatedNetwork.getNodes().entries()).map(([nodeName, node]) => {
       const nodeConfig = node.getConfig();
       return {
         name: nodeConfig.name,
@@ -1335,6 +1577,9 @@ export async function addNodesToNetwork(
   // We need to directly update the config file to add nodes
   const baseDirPath = baseDir || "./networks";
   console.log(`🔍 Loading network configuration for adding nodes to: ${networkName}`);
+
+  // Declare refreshedNetwork at function scope to be available for config saving
+  let refreshedNetwork: BesuNetwork | undefined;
 
   // Construct path to network config file
   const networkPath = path.join(baseDirPath, networkName);
@@ -1658,7 +1903,8 @@ export async function updateNetworkNodesByName(
       rpcPort?: number;
       p2pPort?: number;
     }>,
-    remove?: Array<string>
+    remove?: Array<string>,
+    signerAccounts?: SignerAccount[]
   },
   options: {
     baseDir?: string;
@@ -1673,6 +1919,9 @@ export async function updateNetworkNodesByName(
 }> {
   const baseDir = options.baseDir || "./networks";
   console.log(`🔍 Loading network configuration for: ${networkName}`);
+
+  // Declare refreshedNetwork at function scope to be available for config saving
+  let refreshedNetwork: BesuNetwork | undefined;
 
   // Construir la ruta del archivo de configuración
   const networkPath = path.join(baseDir, networkName);
@@ -1843,7 +2092,72 @@ export async function updateNetworkNodesByName(
       }
     }
 
-    // 3. Procesar adiciones
+    // 3. Procesar actualizaciones de signerAccounts
+    if (nodeUpdates.signerAccounts && nodeUpdates.signerAccounts.length > 0) {
+      console.log(`🔍 Processing ${nodeUpdates.signerAccounts.length} signerAccount updates...`);
+      
+      // Obtener todos los miners de la red
+      const minerNodes = finalNodeDefinitions.filter(node => node.type === 'miner');
+      const minerNames = minerNodes.map(node => node.name);
+      
+      console.log(`   Found ${minerNodes.length} miner nodes: ${minerNames.join(', ')}`);
+      
+      // Validar que hay exactamente un signerAccount por cada miner
+      if (nodeUpdates.signerAccounts.length !== minerNodes.length) {
+        throw new Error(
+          `SignerAccount validation failed: Network has ${minerNodes.length} miner nodes but ${nodeUpdates.signerAccounts.length} signerAccounts provided. ` +
+          `There must be exactly one signerAccount per miner node.`
+        );
+      }
+      
+      // Validar formato de direcciones Ethereum y weiAmount
+      const usedAddresses = new Set<string>();
+      for (let i = 0; i < nodeUpdates.signerAccounts.length; i++) {
+        const signerAccount = nodeUpdates.signerAccounts[i];
+        
+        // Validar dirección Ethereum
+        if (!isValidEthereumAddress(signerAccount.address)) {
+          throw new Error(`SignerAccount validation failed: Invalid Ethereum address for signerAccount ${i}: ${signerAccount.address}`);
+        }
+        
+        // Verificar direcciones duplicadas
+        const lowerAddress = signerAccount.address.toLowerCase();
+        if (usedAddresses.has(lowerAddress)) {
+          throw new Error(`SignerAccount validation failed: Duplicate address found: ${signerAccount.address}`);
+        }
+        usedAddresses.add(lowerAddress);
+        
+        // Validar weiAmount
+        if (!isValidWeiAmount(signerAccount.weiAmount)) {
+          throw new Error(`SignerAccount validation failed: Invalid wei amount for signerAccount ${i}: ${signerAccount.weiAmount}`);
+        }
+        
+        if (!isReasonableWeiAmount(signerAccount.weiAmount)) {
+          throw new Error(`SignerAccount validation failed: Wei amount too large for signerAccount ${i}: ${signerAccount.weiAmount}`);
+        }
+      }
+      
+      console.log(`   ✅ SignerAccount validation passed for ${nodeUpdates.signerAccounts.length} accounts`);
+      
+      // Asignar signerAccounts a miners en orden (uno por cada miner)
+      const updatedSignerAccounts = nodeUpdates.signerAccounts.map((sa, index) => ({
+        address: sa.address,
+        weiAmount: sa.weiAmount,
+        minerNode: minerNames[index], // Asignar miner en orden
+        _autoGenerated: false
+      }));
+      
+      // Actualizar la configuración raw y la config del network
+      rawConfig.signerAccounts = updatedSignerAccounts;
+      config.signerAccounts = updatedSignerAccounts;
+      
+      console.log(`   📝 Updated signerAccounts configuration with ${updatedSignerAccounts.length} accounts`);
+      updatedSignerAccounts.forEach(sa => {
+        console.log(`      - ${sa.address} (${sa.weiAmount} wei) → miner ${sa.minerNode}`);
+      });
+    }
+
+    // 4. Procesar adiciones
     if (nodeUpdates.add && nodeUpdates.add.length > 0) {
       console.log(`🔍 Simulating addition of ${nodeUpdates.add.length} nodes...`);
       for (const newNode of nodeUpdates.add) {
@@ -1857,7 +2171,7 @@ export async function updateNetworkNodesByName(
       }
     }
 
-    // 4. VALIDAR EL CONJUNTO FINAL DE NODOS
+    // 5. VALIDAR EL CONJUNTO FINAL DE NODOS
     console.log('🔍 Validating the final node set after all operations...');
     console.log(`   Current nodes: ${currentNodeDefinitions.length}`);
     console.log(`   Final nodes: ${finalNodeDefinitions.length}`);
@@ -2011,7 +2325,7 @@ export async function updateNetworkNodesByName(
       console.log(`🔄 Reloading network with updated configuration...`);
       const updatedConfigData = fs.readFileSync(configFilePath, 'utf-8');
       const updatedConfig = JSON.parse(updatedConfigData);
-      const refreshedNetwork = new BesuNetwork(updatedConfig, baseDir);
+      refreshedNetwork = new BesuNetwork(updatedConfig, baseDir);
       
       // Manually add nodes to the refreshed network using the updated configuration
       console.log(`🔧 Adding nodes to refreshed network from updated config...`);
@@ -2116,6 +2430,97 @@ export async function updateNetworkNodesByName(
       }
       
       console.log(`✅ TOML configuration files updated for all nodes`);
+    }
+
+    // Actualizar signerAccounts si se proporcionaron
+    if (nodeUpdates.signerAccounts && nodeUpdates.signerAccounts.length > 0) {
+      console.log(`🔑 Processing ${nodeUpdates.signerAccounts.length} signerAccount updates...`);
+      
+      // Cargar la configuración actual
+      const configFilePath = path.join(networkPath, 'network-config.json');
+      let currentConfig: any = {};
+      if (fs.existsSync(configFilePath)) {
+        const configData = fs.readFileSync(configFilePath, 'utf-8');
+        currentConfig = JSON.parse(configData);
+      }
+      
+      // Obtener nombres de miners de la configuración actual
+      const currentMinerNodes = currentConfig.nodes ? 
+        currentConfig.nodes.filter((node: any) => node.type === 'miner').map((node: any) => node.name) :
+        [];
+      
+      if (currentMinerNodes.length !== nodeUpdates.signerAccounts.length) {
+        throw new Error(
+          `SignerAccount validation failed: Network has ${currentMinerNodes.length} miner nodes but ${nodeUpdates.signerAccounts.length} signerAccounts provided. ` +
+          `There must be exactly one signerAccount per miner node.`
+        );
+      }
+      
+      // Validar signerAccounts format usando la función estática
+      const signerValidationErrors = validateAccountUpdatesStatic(nodeUpdates.signerAccounts);
+      
+      if (signerValidationErrors.length > 0) {
+        const errorMessages = signerValidationErrors.map(error => 
+          `${error.field}: ${error.message}`
+        ).join('\n');
+        throw new Error(`SignerAccount validation failed:\n${errorMessages}`);
+      }
+      
+      // Crear nuevos signerAccounts asignando un miner a cada uno en orden
+      const updatedSignerAccounts = nodeUpdates.signerAccounts.map((sa, index) => ({
+        address: sa.address,
+        weiAmount: sa.weiAmount,
+        minerNode: currentMinerNodes[index], // Assign miner in order
+        _autoGenerated: false
+      }));
+      
+      // Actualizar la configuración con los nuevos signerAccounts
+      currentConfig.signerAccounts = updatedSignerAccounts;
+      
+      // Guardar la configuración actualizada
+      fs.writeFileSync(configFilePath, JSON.stringify(currentConfig, null, 2));
+      console.log(`💾 Updated configuration with ${updatedSignerAccounts.length} signerAccounts`);
+      updatedSignerAccounts.forEach(sa => {
+        console.log(`   - ${sa.address} (${sa.weiAmount} wei) → miner ${sa.minerNode}`);
+      });
+      
+      // Regenerar archivos TOML para miners con las nuevas asociaciones
+      console.log(`📝 Regenerating TOML files for miners with updated signerAccounts...`);
+      
+      // Recargar la red con la configuración actualizada
+      const reloadedConfigData = fs.readFileSync(configFilePath, 'utf-8');
+      const reloadedConfig = JSON.parse(reloadedConfigData);
+      const reloadedNetwork = new BesuNetwork(reloadedConfig, baseDir);
+      
+      // Cargar nodos en la instancia reloaded
+      if (reloadedConfig.nodes && Array.isArray(reloadedConfig.nodes)) {
+        for (const nodeConfigData of reloadedConfig.nodes) {
+          const nodeConfig = {
+            name: nodeConfigData.name,
+            ip: nodeConfigData.ip,
+            port: nodeConfigData.p2pPort || nodeConfigData.port || 30303,
+            rpcPort: nodeConfigData.rpcPort,
+            type: nodeConfigData.type
+          };
+          
+          const node = new BesuNode(nodeConfig, reloadedNetwork.getFileService());
+          (reloadedNetwork as any).nodes.set(nodeConfig.name, node);
+        }
+      }
+      
+      // Crear un mapa de signerAccounts para la regeneración de TOML
+      const minerSignerMap = new Map<string, string>();
+      for (const signerAccount of updatedSignerAccounts) {
+        minerSignerMap.set(signerAccount.minerNode, signerAccount.address);
+      }
+      
+      // Regenerar archivos TOML con las nuevas asociaciones
+      await updateNodeConfigurationsWithSignerMap(reloadedNetwork, minerSignerMap);
+      
+      console.log(`✅ SignerAccounts updated and TOML files regenerated`);
+      updatedSignerAccounts.forEach(sa => {
+        console.log(`   🔑 ${sa.address} (${sa.weiAmount} wei) → miner ${sa.minerNode}`);
+      });
     }
 
     // Añadir nuevos nodos
@@ -2230,7 +2635,7 @@ export async function updateNetworkNodesByName(
         const updatedConfig = JSON.parse(updatedConfigData);
         
         // Create new network instance with updated configuration
-        const refreshedNetwork = new BesuNetwork(updatedConfig, baseDir);
+        refreshedNetwork = new BesuNetwork(updatedConfig, baseDir);
         
         // For new miners, we need to set up the miner-signer associations in the network instance
         if (newMiners.length > 0) {
@@ -2295,30 +2700,50 @@ export async function updateNetworkNodesByName(
     // Guardar la configuración actualizada
     const currentConfigPath = path.join(networkPath, 'network-config.json');
     
-    // Load the existing configuration which should have all our updates
-    if (fs.existsSync(currentConfigPath)) {
+    // Check if BesuNetworkUpdater was used (for add/remove operations)
+    let configUpdatedByUpdater = false;
+    if (nodeUpdates.add && nodeUpdates.add.length > 0) {
+      configUpdatedByUpdater = true;
+    }
+    if (nodeUpdates.remove && nodeUpdates.remove.length > 0) {
+      configUpdatedByUpdater = true;
+    }
+    
+    if (configUpdatedByUpdater) {
+      // Config was already saved by BesuNetworkUpdater
       try {
         const existingConfigData = fs.readFileSync(currentConfigPath, 'utf-8');
         const existingConfig = JSON.parse(existingConfigData);
-        
-        // The config file should already be updated with the correct nodes by the BesuNetworkUpdater
-        // So we don't need to update it again here - just log the final state
         console.log(`💾 Final configuration already saved by BesuNetworkUpdater`);
         console.log(`   ✅ Final saved config: ${existingConfig.nodes?.length || 0} nodes, ${existingConfig.signerAccounts?.length || 0} signerAccounts`);
-        
       } catch (error) {
-        console.warn('Warning: Could not merge with existing config, using network config only');
-        const networkConfig = network.getConfig();
-        const updatedConfigData = JSON.stringify(networkConfig, null, 2);
-        fs.writeFileSync(currentConfigPath, updatedConfigData);
-        console.log(`💾 Configuration saved to: ${currentConfigPath}`);
+        console.warn('Warning: Could not read config saved by BesuNetworkUpdater');
       }
     } else {
-      // If no existing config file, just save the network config
-      const networkConfig = network.getConfig();
-      const updatedConfigData = JSON.stringify(networkConfig, null, 2);
-      fs.writeFileSync(currentConfigPath, updatedConfigData);
+      // For simple node updates, we need to save the config manually
+      // Build the final configuration from the refreshed network state if available, otherwise current network
+      const networkToUse = refreshedNetwork || network;
+      const finalConfig = {
+        ...rawConfig,
+        nodes: []
+      };
+      
+      // Add all nodes from the network state with their updated properties
+      for (const [nodeName, node] of networkToUse.getNodes()) {
+        const nodeConfig = node.getConfig();
+        finalConfig.nodes.push({
+          name: nodeName,
+          ip: nodeConfig.ip,
+          rpcPort: nodeConfig.rpcPort,
+          p2pPort: nodeConfig.port || 30303,
+          type: nodeConfig.type
+        });
+      }
+      
+      // Save the updated configuration
+      fs.writeFileSync(currentConfigPath, JSON.stringify(finalConfig, null, 2));
       console.log(`💾 Configuration saved to: ${currentConfigPath}`);
+      console.log(`   ✅ Final saved config: ${finalConfig.nodes?.length || 0} nodes, ${finalConfig.signerAccounts?.length || 0} signerAccounts`);
     }
 
     // Iniciar la red si se solicita

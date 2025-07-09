@@ -10,23 +10,17 @@ yarn-error.log*
 
 # Dependency directories
 lib-docker/node_modules/
-lib/node_modules/
-lib-dockercode/node_modules/
 scripts/node_modules/
 
 # Build output
 lib-docker/dist/
-lib/dist/
-lib-dockercode/dist/
 
 # Coverage
 coverage/
 lib-docker/coverage/
-lib-dockercode/coverage/
 
 # Jest
 lib-docker/jest-coverage/
-lib-dockercode/jest-coverage/
 
 # TypeScript
 *.tsbuildinfo
@@ -44,8 +38,6 @@ lib-dockercode/jest-coverage/
 
 # Ignore test output
 lib-docker/test/
-lib/test/
-lib-dockercode/test/
 
 # Ignore script output
 scripts/tests/
@@ -56,6 +48,4 @@ Thumbs.db
 # Ignore networks directories
 networks/
 lib-docker/networks/
-lib/networks/
-lib-dockercode/networks/
 scripts/networks/

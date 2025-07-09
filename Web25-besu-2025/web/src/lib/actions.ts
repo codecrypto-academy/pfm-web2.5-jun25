@@ -229,7 +229,14 @@ export async function stopBesuNetwork(name: string) {
 }
 
 export async function getBesuBalance(networkName: string, address: string) {
-  return besuManager.getBesuBalance(networkName, address);
+  const result = await besuManager.getBesuBalance(networkName, address);
+  // Convert BigInt to string if present
+  return JSON.parse(JSON.stringify(result, replacerBigInt));
+}
+
+// Utility to convert BigInt to string for JSON serialization
+function replacerBigInt(key: string, value: any) {
+  return typeof value === 'bigint' ? value.toString() : value;
 }
 
 export async function getNetworksForLocalStorage() {

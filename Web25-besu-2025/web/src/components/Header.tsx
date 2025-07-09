@@ -15,6 +15,9 @@ export function Header() {
           <Link href="/networks" className="hover:underline">
             Networks
           </Link>
+          <Link href="/ai-manager" className="hover:underline">
+            AI Manager
+          </Link>
         </nav>
       </div>
     </header>

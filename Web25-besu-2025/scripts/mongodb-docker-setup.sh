@@ -17,70 +17,202 @@ use besuNetworks
 
 db.networks.insertMany([
   {
-    "network": "Test Besu",
-    "cidr": "192.168.0.0/24",
-    "ip": "192.168.0.10",
+    "_id": {
+      "$oid": "686bbd06cdb770d9daabf02c"
+    },
+    "name": "PrebaRedBesu",
     "chainId": 1337,
-    "signerAccount": "0x3B2F47B0134033afCa05c02a81cD81c9eEd5e957",
-    "prefundedAccounts": [
+    "signerAddress": "0x3B2F47B0134033afCa05c02a81cD81c9eEd5e957",
+    "accounts": [
       {
         "address": "0x6243A64dd2E56F164E1f08e99433A7DEC132AB4E",
-        "amount": "1000"
+        "balance": "100"
       }
     ],
     "nodes": [
       {
+        "id": "PrebaRedBesu-rpc19041",
+        "networkId": "PrebaRedBesu",
+        "name": "rpc19041",
         "type": "rpc",
         "ip": "192.168.0.11",
-        "name": "rpc18883",
-        "port": 18883
+        "port": 19041,
+        "createdAt": {
+          "$date": "2025-07-07T12:26:46.108Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T12:26:46.108Z"
+        }
       },
       {
+        "id": "PrebaRedBesu-miner19042",
+        "networkId": "PrebaRedBesu",
+        "name": "miner19042",
         "type": "miner",
-        "ip": "192.168.0.3",
-        "name": "miner18884",
-        "port": 18884
+        "ip": "192.168.0.12",
+        "port": 19042,
+        "createdAt": {
+          "$date": "2025-07-07T12:26:46.108Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T12:26:46.108Z"
+        }
+      },
+      {
+        "id": "PrebaRedBesu-node19043",
+        "networkId": "PrebaRedBesu",
+        "name": "node19043",
+        "type": "node",
+        "ip": "192.168.0.13",
+        "port": 19043,
+        "createdAt": {
+          "$date": "2025-07-07T12:26:46.108Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T12:26:46.108Z"
+        }
+      },
+      {
+        "id": "PrebaRedBesu-miner19073",
+        "networkId": "686bbd06cdb770d9daabf02c",
+        "name": "miner19073",
+        "type": "miner",
+        "ip": "192.168.0.22",
+        "port": 19073,
+        "createdAt": {
+          "$date": "2025-07-07T13:10:39.826Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T13:10:39.826Z"
+        }
       }
     ],
-    "id": "3877004f-6b6d-4e8c-9fc0-499f6d5f0e63"
+    "createdAt": {
+      "$date": "2025-07-07T12:26:46.108Z"
+    },
+    "updatedAt": {
+      "$date": "2025-07-07T13:10:39.828Z"
+    }
   },
   {
-    "network": "Prueba Red Besu",
-    "cidr": "10.0.0.0/16",
-    "ip": "10.0.0.10",
+    "_id": {
+      "$oid": "686bd1433881932a96cea03f"
+    },
+    "name": "RedBesu",
     "chainId": 1338,
-    "signerAccount": "0x4F9d6Eafa67ae9F317AC6A67138727E13D80Fe98",
-    "prefundedAccounts": [
+    "signerAddress": "0x890DA66c41345142719A9349d19ab0f48F08D449",
+    "accounts": [
       {
         "address": "0x6243A64dd2E56F164E1f08e99433A7DEC132AB4E",
-        "amount": "100"
-      },
-      {
-        "address": "0xd69A7b47f4038BC831B8F22991Cf3A69DdC21574",
-        "amount": "250"
+        "balance": "10000"
       }
     ],
     "nodes": [
       {
+        "id": "RedBesu-rpc19074",
+        "networkId": "RedBesu",
+        "name": "rpc19074",
         "type": "rpc",
-        "ip": "10.0.0.11",
-        "name": "rpc18962",
-        "port": 18962
+        "ip": "10.0.10.10",
+        "port": 19074,
+        "createdAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        }
       },
       {
+        "id": "RedBesu-miner19075",
+        "networkId": "RedBesu",
+        "name": "miner19075",
         "type": "miner",
-        "ip": "10.0.0.12",
-        "name": "miner18963",
-        "port": 18963
+        "ip": "10.0.20.10",
+        "port": 19075,
+        "createdAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        }
       },
       {
+        "id": "RedBesu-miner19076",
+        "networkId": "RedBesu",
+        "name": "miner19076",
+        "type": "miner",
+        "ip": "10.0.20.11",
+        "port": 19076,
+        "createdAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        }
+      },
+      {
+        "id": "RedBesu-miner19077",
+        "networkId": "RedBesu",
+        "name": "miner19077",
+        "type": "miner",
+        "ip": "10.0.20.12",
+        "port": 19077,
+        "createdAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        }
+      },
+      {
+        "id": "RedBesu-node19078",
+        "networkId": "RedBesu",
+        "name": "node19078",
         "type": "node",
-        "ip": "10.0.0.13",
-        "name": "node18964",
-        "port": 18964
+        "ip": "10.0.30.10",
+        "port": 19078,
+        "createdAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T13:53:07.012Z"
+        }
+      },
+      {
+        "id": "RedBesu-miner19168",
+        "networkId": "686bd1433881932a96cea03f",
+        "name": "miner19168",
+        "type": "miner",
+        "ip": "10.0.20.13",
+        "port": 19168,
+        "createdAt": {
+          "$date": "2025-07-07T14:02:32.334Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T14:02:32.334Z"
+        }
+      },
+      {
+        "id": "RedBesu-miner19169",
+        "networkId": "686bd1433881932a96cea03f",
+        "name": "miner19169",
+        "type": "miner",
+        "ip": "10.0.20.14",
+        "port": 19169,
+        "createdAt": {
+          "$date": "2025-07-07T14:06:09.749Z"
+        },
+        "updatedAt": {
+          "$date": "2025-07-07T14:06:09.749Z"
+        }
       }
     ],
-    "id": "489744dc-b887-4ae0-8449-331c2a4c1cbb"
+    "createdAt": {
+      "$date": "2025-07-07T13:53:07.012Z"
+    },
+    "updatedAt": {
+      "$date": "2025-07-07T14:06:09.753Z"
+    }
   }
 ])
 

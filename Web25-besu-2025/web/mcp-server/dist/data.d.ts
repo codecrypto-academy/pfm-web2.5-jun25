@@ -1,0 +1,14 @@
+import { Network, Node } from "./types";
+import 'dotenv/config';
+export declare const getNetworks: () => Promise<Network[]>;
+export declare const getNetworkById: (id: string) => Promise<Network | null>;
+export declare const createNetwork: (data: Omit<Network, "id" | "createdAt" | "updatedAt">) => Promise<Network>;
+export declare const updateNetwork: (id: string, data: Partial<Omit<Network, "id" | "createdAt" | "updatedAt">>) => Promise<Network | null>;
+export declare const deleteNetwork: (id: string) => Promise<boolean>;
+export declare const getNodes: (networkId: string) => Promise<Node[]>;
+export declare const getNodeById: (networkId: string, nodeName: string) => Promise<Node | null>;
+export declare const createNode: (networkId: string, node: Node) => Promise<Node[]>;
+export declare const updateNode: (networkId: string, nodeName: string, data: Partial<Node>) => Promise<Node | null>;
+export declare const deleteNode: (networkId: string, nodeName: string) => Promise<boolean>;
+export declare const initializeDatabase: () => Promise<void>;
+export declare const getNetworkByName: (name: string) => Promise<Network | null>;

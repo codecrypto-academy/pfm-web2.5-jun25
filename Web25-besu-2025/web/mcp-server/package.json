@@ -1,0 +1,30 @@
+{
+  "name": "besu-mcp-server",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "body-parser": "^1.20.3",
+    "dotenv": "^17.1.0",
+    "express": "^5.1.0",
+    "mongodb": "^6.17.0"
+  },
+  "devDependencies": {
+    "@types/body-parser": "^1.19.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^18.19.1",
+    "rimraf": "^5.0.10",
+    "typescript": "^5.0.4"
+  },
+  "description": "MCP server to manage besu networks",
+  "author": "Samuel Carretero",
+  "license": "ISC"
+}

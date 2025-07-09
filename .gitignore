@@ -46,5 +46,3 @@ DELETEME.txt
 
 # Claude settings
 .claude/settings.local.json
-
-__tests__

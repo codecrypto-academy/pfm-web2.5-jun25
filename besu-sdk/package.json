@@ -5,6 +5,8 @@
   "scripts": {
     "build": "tsc",
     "test": "jest",
+    "test:basic": "jest src/tests/basic",
+    "test:e2e": "jest src/tests/e2e",
     "watch": "tsc -w"
   },
   "keywords": [],
@@ -18,6 +20,7 @@
   "devDependencies": {
     "@types/dockerode": "^3.3.42",
     "@types/jest": "^30.0.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^24.0.10",
     "jest": "^30.0.4",
     "ts-jest": "^29.4.0",

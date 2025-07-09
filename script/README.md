@@ -9,6 +9,7 @@
 > 💡 To fix it, run `cd ~` and then `cd /mnt/c/.../your-project` to refresh WSL’s working directory state.
 > This resolves internal `npm` errors like `uv_cwd` caused by broken path references in cross-platform filesystems.
 
+
 ## 📜 Table of Contents
 
 1.  [General Description](#-general-description)
@@ -25,13 +26,14 @@
 8.  [Internal Design Decisions](#-internal-design-decisions)
 9.  [Common Errors & Troubleshooting](#-common-errors--troubleshooting)
 
-## 🎯 General Description
+## Overview
 
 This directory contains a bash script (`script.sh`) that deploys a private Hyperledger Besu network from scratch using Docker. It automates the creation of containers, the startup of multiple Besu nodes, and the execution of test transactions to validate the network’s operation, all based on the configuration defined in `config.yaml`, without needing to directly edit the script code.
 
-> **Note:** While this script is relatively large and includes considerable overhead for logging and debugging purposes, it is highly useful for execution and monitoring through color-coded logs—particularly when using the `--debug` mode. The script provides real-time async feedback as nodes are generated, displaying live status messages like "(🔷 $1)" that show each node's progression through the setup process. However, for production environments, improved operational clarity, modular usage, and better maintainability, it is recommended to use the module located in the `besu-sdk/` directory.
+> **🚩 Pro tip:** While this script is large and includes debug-focused overhead, 🚩 flags throughout the code mark key architectural decisions and implementation checkpoints (searchable via `CTRL+F`). It also provides real-time async feedback through color-coded logs like "(🔷 \$1)", a purposeful feature that enhances visibility during node setup. For production, use the modular `besu-sdk/` for greater clarity and maintainability.
 >
 > **The primary goal of this script is not for you to understand its internal logic line-by-line, but rather to execute it and observe its output. This provides a detailed, real-time understanding of what happens "under the hood" when setting up a PoA blockchain.**
+
 
 ## ⚙️ Prerequisites
 

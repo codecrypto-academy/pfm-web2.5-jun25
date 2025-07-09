@@ -24,7 +24,19 @@ import { logger } from '../utils/logger';
  */
 export class FileManager {
   private readonly log = logger.child('FileManager');
-  
+
+  /**
+   * Validates a file or directory path.
+   *
+   * @param filePath The path to validate.
+   * @throws FileSystemError if the path is invalid (e.g., contains null bytes).
+   */
+  private validatePath(filePath: string): void {
+    if (filePath.includes('\x00')) {
+      throw new FileSystemError('pathValidation', filePath, new Error('Path contains null bytes.'));
+    }
+  }
+
   /**
    * Ensure a directory exists, creating it if necessary
    * 
@@ -33,6 +45,7 @@ export class FileManager {
    */
   async ensureDirectory(dirPath: string): Promise<void> {
     try {
+      this.validatePath(dirPath);
       await fs.mkdir(dirPath, { recursive: true });
       this.log.debug(`Ensured directory exists: ${dirPath}`);
     } catch (error) {
@@ -50,6 +63,7 @@ export class FileManager {
    */
   async writeFile(filePath: string, content: string): Promise<void> {
     try {
+      this.validatePath(filePath);
       // Ensure parent directory exists
       const dir = path.dirname(filePath);
       await this.ensureDirectory(dir);
@@ -90,6 +104,7 @@ export class FileManager {
    */
   async readFile(filePath: string): Promise<string> {
     try {
+      this.validatePath(filePath);
       const content = await fs.readFile(filePath, 'utf8');
       this.log.debug(`Read file: ${filePath}`);
       return content;
@@ -127,6 +142,7 @@ export class FileManager {
    */
   async exists(itemPath: string): Promise<boolean> {
     try {
+      this.validatePath(itemPath);
       await fs.access(itemPath);
       return true;
     } catch {
@@ -142,6 +158,7 @@ export class FileManager {
    */
   async removeFile(filePath: string): Promise<void> {
     try {
+      this.validatePath(filePath);
       await fs.unlink(filePath);
       this.log.debug(`Removed file: ${filePath}`);
     } catch (error) {
@@ -164,6 +181,7 @@ export class FileManager {
    */
   async removeDirectory(dirPath: string): Promise<void> {
     try {
+      this.validatePath(dirPath);
       await fs.rm(dirPath, { recursive: true, force: true });
       this.log.debug(`Removed directory: ${dirPath}`);
     } catch (error) {
@@ -181,6 +199,8 @@ export class FileManager {
    */
   async copyFile(source: string, destination: string): Promise<void> {
     try {
+      this.validatePath(source);
+      this.validatePath(destination);
       // Ensure destination directory exists
       const destDir = path.dirname(destination);
       await this.ensureDirectory(destDir);
@@ -204,6 +224,7 @@ export class FileManager {
    */
   async listFiles(dirPath: string, recursive = false): Promise<string[]> {
     try {
+      this.validatePath(dirPath);
       const files: string[] = [];
       
       const processDirectory = async (dir: string) => {
@@ -238,6 +259,7 @@ export class FileManager {
    */
   async listDirectories(dirPath: string): Promise<string[]> {
     try {
+      this.validatePath(dirPath);
       const directories: string[] = [];
       
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -265,7 +287,9 @@ export class FileManager {
    */
   async getStats(filePath: string): Promise<fsSync.Stats> {
     try {
+      this.validatePath(filePath);
       const stats = await fs.stat(filePath);
+      this.log.debug(`Retrieved stats for: ${filePath}`);
       return stats;
     } catch (error) {
       this.log.error(`Failed to get stats for: ${filePath}`, error);

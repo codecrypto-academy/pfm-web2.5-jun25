@@ -120,6 +120,9 @@ describe('FileManager E2E Tests', () => {
       
       await expect(fileManager.writeFile(invalidPath, 'content'))
         .rejects.toThrow(FileSystemError);
+      
+      await expect(fileManager.writeFile(invalidPath, 'content'))
+        .rejects.toThrow('Path contains null bytes.');
     });
   });
 

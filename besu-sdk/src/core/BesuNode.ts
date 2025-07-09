@@ -284,15 +284,25 @@ export class BesuNode extends EventEmitter {
         this.status
       );
     }
-    
+
     try {
       // Execute besu command to get enode URL
       const output = await this.dockerManager.executeSystemCommand(
         this.container,
         ['besu', 'public-key', 'export']
       );
-      
-      const publicKey = output.trim();
+
+      // Besu public-key export should output a 128-character hex string (64 bytes).
+      // We use a regex to extract exactly that, ignoring any log lines.
+      const publicKeyMatch = output.match(/[0-9a-fA-F]{128}/);
+
+      if (!publicKeyMatch || publicKeyMatch[0].length !== 128) {
+        this.log.error(`Unexpected output format when getting enode URL for node ${this.config.name}. Output: "${output.trim()}"`);
+        throw new Error(`Failed to extract a valid 128-character public key from Besu command output.`);
+      }
+
+      const publicKey = publicKeyMatch[0]; // Extract only the 128-char hex string
+
       return `enode://${publicKey}@${this.config.ip}:30303`;
     } catch (error) {
       this.log.error('Failed to get enode URL', error);

@@ -1,2 +1,3 @@
 export { DockerManager } from './docker-manager';
-export * from './types'; 
+export { BesuNetwork } from './besu-network';
+export * from './types';

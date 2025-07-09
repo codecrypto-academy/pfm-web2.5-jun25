@@ -2,28 +2,28 @@
 
 ## Descripción Técnica
 
-Esta biblioteca proporciona una capa de abstracción robusta para gestionar la infraestructura de contenedores Docker que ejecutan nodos Hyperledger Besu. Implementa el protocolo IBFT 2.0 y gestiona la configuración completa de redes blockchain privadas.
+Esta biblioteca proporciona una capa de abstracción robusta para gestionar la infraestructura de contenedores Docker que ejecutan nodos Hyperledger Besu. Implementa el protocolo Clique (Proof of Authority, PoA) y gestiona la configuración completa de redes blockchain privadas.
 
-### Características del Protocolo IBFT 2.0
+### Características del Protocolo Clique (PoA)
 
-1. **Consenso Bizantino**
-   - Tolerancia a fallos: (n-1)/3 nodos
-   - Finalidad inmediata
-   - Sin bifurcaciones (forks)
-   - Sellado de bloques determinista
+1. **Consenso basado en Autoridad**
+   - Solo los nodos validadores autorizados pueden firmar bloques
+   - Finalidad rápida y tiempos de bloque configurables
+   - Proceso de votación para añadir o eliminar validadores
+   - Sin bifurcaciones (forks) bajo condiciones normales
 
 2. **Roles de Nodos**
-   - Validadores (participan en consenso)
-   - Proponentes (proponen bloques)
-   - Observadores (no participan en consenso)
+   - Validadores (participan en consenso y firman bloques)
+   - Bootnode (facilita el descubrimiento de nodos)
+   - Nodos RPC y completos (no participan en consenso)
 
 3. **Proceso de Consenso**
    ```mermaid
    sequenceDiagram
-       Proponente->>Validadores: Propuesta de Bloque
-       Validadores->>Validadores: Validación
-       Validadores->>Proponente: Pre-commits (2f+1)
-       Proponente->>Red: Bloque Sellado
+       Validador->>Red: Propuesta de Bloque
+       Red->>Validadores: Votación/Aprobación
+       Validadores->>Red: Firma de Bloque
+       Red->>Todos: Bloque Añadido
    ```
 
 ## Arquitectura del Sistema

@@ -200,10 +200,34 @@ export class Network extends EventEmitter {
       // Generate genesis configuration
       await this.generateGenesis();
       
-      // Create and start nodes
-      for (const nodeConfig of this.config.nodes) {
-        await this.createAndStartNode(nodeConfig);
+      // --- INICIO DE LA SOLUCIÓN DE PARALELIZACIÓN ---
+      this.log.info('Creating and starting network nodes...');
+
+      // Separamos el nodo ancla (el primer validador) del resto.
+      const anchorValidatorConfig = this.config.nodes.find(n => n.validator);
+      if (!anchorValidatorConfig) {
+        throw new Error("Configuration requires at least one validator to act as a bootnode.");
       }
+      const otherNodeConfigs = this.config.nodes.filter(n => n.name !== anchorValidatorConfig.name);
+
+      // 1. Arrancamos el nodo ancla de forma secuencial.
+      this.log.info(`Starting anchor node '${anchorValidatorConfig.name}' sequentially...`);
+      const anchorNode = await this.createAndStartNode(anchorValidatorConfig);
+      const bootnodeEnode = await anchorNode.getEnodeUrl();
+      this.log.success(`Anchor node '${anchorNode.getName()}' is running. Enode: ${bootnodeEnode}`);
+      
+      // 2. Arrancamos todos los demás nodos en paralelo.
+      if (otherNodeConfigs.length > 0) {
+        this.log.info(`Starting remaining ${otherNodeConfigs.length} nodes in parallel...`);
+
+        const startPromises = otherNodeConfigs.map(config => 
+          this.createAndStartNode(config, undefined, [bootnodeEnode])
+        );
+
+        // Promise.all espera a que todos los nodos terminen de arrancar.
+        await Promise.all(startPromises);
+      }
+      // --- FIN DE LA SOLUCIÓN DE PARALELIZACIÓN ---
       
       // Save network metadata
       await this.saveNetworkMetadata();
@@ -568,7 +592,9 @@ export class Network extends EventEmitter {
    */
   private async createAndStartNode(
     nodeConfig: NodeConfig,
-    identity?: NodeIdentity
+    identity?: NodeIdentity,
+    // Añadimos un parámetro opcional para los bootnodes
+    explicitBootnodes?: string[]
   ): Promise<BesuNode> {
     const nodePath = path.join(this.dataDir, 'nodes', nodeConfig.name);
     
@@ -589,18 +615,25 @@ export class Network extends EventEmitter {
       );
     }
     
-    // Get bootnodes (enode URLs of existing validators)
-    const bootnodes: string[] = [];
-    for (const [name, node] of this.nodes) {
-      if (node.isValidator() && node.getStatus() === 'RUNNING') {
-        try {
-          const enode = await node.getEnodeUrl();
-          bootnodes.push(enode);
-        } catch (err) {
-          this.log.warn(`Could not get enode URL for ${name}`);
+    // --- LÓGICA DE BOOTNODES MEJORADA ---
+    let bootnodes: string[] = [];
+    if (explicitBootnodes) {
+      // Si nos pasan bootnodes explícitamente, los usamos.
+      bootnodes = explicitBootnodes;
+    } else {
+      // Si no, los calculamos como antes (para el primer nodo).
+      for (const [name, node] of this.nodes) {
+        if (node.isValidator() && node.getStatus() === 'RUNNING') {
+          try {
+            const enode = await node.getEnodeUrl();
+            bootnodes.push(enode);
+          } catch (err) {
+            this.log.warn(`Could not get enode URL for ${name}`);
+          }
         }
       }
     }
+    // --- FIN DE LA MEJORA ---
     
     // Create node instance
     const node = new BesuNode(

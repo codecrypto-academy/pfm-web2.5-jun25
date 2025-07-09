@@ -205,7 +205,7 @@ export class DockerManager {
   async networkExists(name: string): Promise<boolean> {
     try {
       const networks = await this.docker.listNetworks({
-        filters: { name: [name] }
+        filters: { label: ['besu-sdk=true'] }
       });
       return networks.some(net => net.Name === name);
     } catch (error) {

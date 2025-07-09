@@ -258,16 +258,25 @@ export function validateNodeConfig(node: NodeConfig, subnet: string): void {
   // Validate IP address
   validateNodeIp(node.ip, subnet);
   
-  // Validate RPC configuration
-  if (node.rpc && node.rpcPort) {
-    validateRpcPort(node.rpcPort);
-  } else if (node.rpcPort && !node.rpc) {
-    throw new ConfigurationValidationError(
-      'rpcPort',
-      'Cannot specify RPC port without enabling RPC',
-      node.rpcPort
-    );
+  // *** INICIO DE LA SOLUCIÓN para rpcPort ***
+  // Primero, validar si rpcPort está presente (no undefined/null) y es un número válido.
+  // IMPORTANTE: Un rpcPort de 0 se considera un valor "presente" aquí y se intenta validar.
+  if (node.rpcPort !== undefined && node.rpcPort !== null) {
+    // Si no es un número, o no es un entero, o está fuera de rango, validateRpcPort lanzará un error.
+    // Convertir a número si es necesario (por si viene como string desde JSON)
+    const portAsNumber = typeof node.rpcPort === 'string' ? parseInt(node.rpcPort, 10) : node.rpcPort;
+    validateRpcPort(portAsNumber);
+
+    // Segundo, si rpcPort está presente (y ya se validó su valor) pero rpc no está habilitado
+    if (!node.rpc) {
+      throw new ConfigurationValidationError(
+        'rpcPort',
+        'Cannot specify RPC port without enabling RPC (set rpc: true)',
+        node.rpcPort
+      );
+    }
   }
+  // *** FIN DE LA SOLUCIÓN para rpcPort ***
 }
 
 /**
@@ -297,24 +306,54 @@ export function validateNodeOptions(options: NodeOptions): void {
     );
   }
   
-  // Basic IP format validation (full validation requires subnet context)
-  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  if (!ipRegex.test(options.ip)) {
-    throw new ConfigurationValidationError(
-      'ip',
-      'Must be a valid IPv4 address',
-      options.ip
-    );
+  // *** INICIO DE LA SOLUCIÓN ***
+  // Reutiliza validateNodeIp para la validación completa del formato IP y los octetos.
+  // Se pasa '0.0.0.0/0' como subnet dummy, ya que en este punto no tenemos el contexto de la red,
+  // pero queremos la validación intrínseca de la IP (formato y rango de octetos).
+  try {
+    validateNodeIp(options.ip, '0.0.0.0/0'); 
+  } catch (error) {
+    // Si validateNodeIp lanza un error, lo re-lanzamos con el contexto correcto para NodeOptions
+    if (error instanceof ConfigurationValidationError) {
+      // Mantenemos el mensaje original pero aseguramos que el campo sea 'ip' para NodeOptions
+      throw new ConfigurationValidationError('ip', error.message, options.ip);
+    }
+    throw error; // Re-lanza otros errores
   }
+  // *** FIN DE LA SOLUCIÓN ***
   
-  if (options.rpc && options.rpcPort) {
-    validateRpcPort(options.rpcPort);
-  } else if (options.rpcPort && !options.rpc) {
-    throw new ConfigurationValidationError(
-      'rpcPort',
-      'Cannot specify RPC port without enabling RPC',
-      options.rpcPort
-    );
+  // *** INICIO DE LA SOLUCIÓN para rpcPort (análogo a validateNodeConfig) ***
+  if (options.rpcPort !== undefined && options.rpcPort !== null) {
+    const portAsNumber = typeof options.rpcPort === 'string' ? parseInt(options.rpcPort, 10) : options.rpcPort;
+    validateRpcPort(portAsNumber);
+
+    if (!options.rpc) {
+      throw new ConfigurationValidationError(
+        'rpcPort',
+        'Cannot specify RPC port without enabling RPC (set rpc: true)',
+        options.rpcPort
+      );
+    }
+  }
+  // *** FIN DE LA SOLUCIÓN para rpcPort ***
+  
+  // Validate initialBalance if provided
+  if (options.initialBalance !== undefined) {
+    if (typeof options.initialBalance !== 'string' || !/^\d+(\.\d+)?$/.test(options.initialBalance)) {
+      throw new ConfigurationValidationError(
+        'initialBalance',
+        'Must be a string representing a positive number (e.g., "100" or "1.5")',
+        options.initialBalance
+      );
+    }
+    const balance = parseFloat(options.initialBalance);
+    if (isNaN(balance) || balance < 0) {
+      throw new ConfigurationValidationError(
+        'initialBalance',
+        'Must be a positive number',
+        options.initialBalance
+      );
+    }
   }
 }
 
@@ -402,7 +441,15 @@ function ipToNumber(octets: number[]): number {
  * @throws ConfigurationValidationError if invalid
  */
 function validateRpcPort(port: number): void {
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  // Aquí la validación de tipo 'number' es crucial antes del rango
+  if (typeof port !== 'number' || !Number.isInteger(port)) {
+    throw new ConfigurationValidationError(
+      'rpcPort',
+      'Must be an integer',
+      port
+    );
+  }
+  if (port < 1 || port > 65535) { // 0 es inválido según esta regla
     throw new ConfigurationValidationError(
       'rpcPort',
       'Must be an integer between 1 and 65535',

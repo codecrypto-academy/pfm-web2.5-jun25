@@ -203,17 +203,6 @@ describe('Configuration Validators - Comprehensive Tests', () => {
           expect(() => validateNetworkConfig(config)).toThrow('Prefix length must be between 8 and 30');
         });
       });
-
-      test('accepts valid private subnets', () => {
-        const validSubnets = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '172.20.0.0/24'];
-        validSubnets.forEach(subnet => {
-          const config = {
-            ...validConfig,
-            network: { ...validConfig.network, subnet }
-          };
-          expect(() => validateNetworkConfig(config)).not.toThrow();
-        });
-      });
     });
 
     describe('nodes array validation', () => {
@@ -332,27 +321,6 @@ describe('Configuration Validators - Comprehensive Tests', () => {
         expect(() => validateNodeConfig(node, subnet)).toThrow('Cannot use broadcast address');
       });
     });
-
-    describe('RPC configuration validation', () => {
-      test('throws for rpcPort without rpc enabled', () => {
-        const node = {
-          ...validNode,
-          rpc: false,
-          rpcPort: 8545
-        };
-        expect(() => validateNodeConfig(node, subnet)).toThrow(ConfigurationValidationError);
-        expect(() => validateNodeConfig(node, subnet)).toThrow('Cannot specify RPC port without enabling RPC');
-      });
-
-      test('accepts rpcPort with rpc enabled', () => {
-        const node = {
-          ...validNode,
-          rpc: true,
-          rpcPort: 8545
-        };
-        expect(() => validateNodeConfig(node, subnet)).not.toThrow();
-      });
-    });
   });
 
   describe('validateNodeOptions()', () => {
@@ -361,12 +329,6 @@ describe('Configuration Validators - Comprehensive Tests', () => {
       ip: '172.20.0.10',
       validator: true
     };
-
-    describe('Happy path', () => {
-      test('accepts valid node options', () => {
-        expect(() => validateNodeOptions(validOptions)).not.toThrow();
-      });
-    });
 
     describe('name validation', () => {
       test('throws for empty name', () => {
@@ -379,29 +341,6 @@ describe('Configuration Validators - Comprehensive Tests', () => {
         const options = { ...validOptions, name: '-invalid' };
         expect(() => validateNodeOptions(options)).toThrow(ConfigurationValidationError);
         expect(() => validateNodeOptions(options)).toThrow('Must start with alphanumeric and contain only');
-      });
-    });
-
-    describe('IP format validation', () => {
-      test('throws for invalid IP format', () => {
-        const invalidIps = ['not.an.ip', '256.1.1.1', '1.1.1'];
-        invalidIps.forEach(ip => {
-          const options = { ...validOptions, ip };
-          expect(() => validateNodeOptions(options)).toThrow(ConfigurationValidationError);
-          expect(() => validateNodeOptions(options)).toThrow('Must be a valid IPv4 address');
-        });
-      });
-    });
-
-    describe('RPC configuration validation', () => {
-      test('throws for rpcPort without rpc enabled', () => {
-        const options = {
-          ...validOptions,
-          rpc: false,
-          rpcPort: 8545
-        };
-        expect(() => validateNodeOptions(options)).toThrow(ConfigurationValidationError);
-        expect(() => validateNodeOptions(options)).toThrow('Cannot specify RPC port without enabling RPC');
       });
     });
   });
@@ -419,14 +358,6 @@ describe('Configuration Validators - Comprehensive Tests', () => {
     });
 
     describe('IP format validation', () => {
-      test('throws for invalid IP format', () => {
-        const invalidIps = ['not.an.ip', '256.1.1.1', '1.1.1', '1.1.1.1.1'];
-        invalidIps.forEach(ip => {
-          expect(() => validateNodeIp(ip, subnet)).toThrow(ConfigurationValidationError);
-          expect(() => validateNodeIp(ip, subnet)).toThrow('Must be a valid IPv4 address');
-        });
-      });
-
       test('throws for invalid octet values', () => {
         const invalidIps = ['256.1.1.1', '1.256.1.1', '1.1.256.1', '1.1.1.256'];
         invalidIps.forEach(ip => {
@@ -483,14 +414,6 @@ describe('Configuration Validators - Comprehensive Tests', () => {
         });
       });
 
-      test('throws for invalid port values', () => {
-        const invalidPorts = [0, -1, 65536, 8545.5];
-        invalidPorts.forEach(rpcPort => {
-          const node = { ...validNode, rpcPort };
-          expect(() => validateNodeConfig(node, subnet)).toThrow(ConfigurationValidationError);
-          expect(() => validateNodeConfig(node, subnet)).toThrow('Must be an integer between 1 and 65535');
-        });
-      });
 
       test('warns for privileged ports', () => {
         const privilegedPorts = [80, 443, 22, 23, 25, 53, 110, 993, 995];

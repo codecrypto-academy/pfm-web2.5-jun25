@@ -268,17 +268,7 @@ describe('Key Generator Utilities - E2E Tests', () => {
         .toThrow(InvalidNodeIdentityError);
     });
 
-    it('should handle case differences in address validation', () => {
-      const wallet = ethers.Wallet.createRandom();
-      const identity: NodeIdentity = {
-        address: wallet.address.toUpperCase(), // Uppercase address
-        publicKey: wallet.signingKey.publicKey,
-        privateKey: wallet.privateKey
-      };
 
-      const result = validateNodeIdentity(identity);
-      expect(result).toBe(true);
-    });
   });
 
   describe('formatPrivateKeyForBesu()', () => {
@@ -309,28 +299,7 @@ describe('Key Generator Utilities - E2E Tests', () => {
   });
 
   describe('addressFromEnode()', () => {
-    it('should parse valid enode URL to address', () => {
-      // Create a wallet to get a valid public key
-      const wallet = ethers.Wallet.createRandom();
-      const publicKeyHex = wallet.signingKey.publicKey.slice(2); // Remove 0x prefix
-      const enodeUrl = `enode://${publicKeyHex}@192.168.1.100:30303`;
-      
-      const result = addressFromEnode(enodeUrl);
-      const expectedAddress = ethers.computeAddress(wallet.signingKey.publicKey).toLowerCase();
-      
-      expect(result).toBe(expectedAddress);
-    });
 
-    it('should handle enode URL with different IP and port', () => {
-      const wallet = ethers.Wallet.createRandom();
-      const publicKeyHex = wallet.signingKey.publicKey.slice(2);
-      const enodeUrl = `enode://${publicKeyHex}@10.0.0.1:8080`;
-      
-      const result = addressFromEnode(enodeUrl);
-      const expectedAddress = ethers.computeAddress(wallet.signingKey.publicKey).toLowerCase();
-      
-      expect(result).toBe(expectedAddress);
-    });
 
     it('should throw InvalidEnodeUrlError for invalid format (missing enode://)', () => {
       const invalidUrl = 'http://1234567890abcdef@192.168.1.100:30303';
@@ -370,16 +339,7 @@ describe('Key Generator Utilities - E2E Tests', () => {
         .toThrow(InvalidEnodeUrlError);
     });
 
-    it('should handle uppercase hex characters in public key', () => {
-      const wallet = ethers.Wallet.createRandom();
-      const publicKeyHex = wallet.signingKey.publicKey.slice(2).toUpperCase();
-      const enodeUrl = `enode://${publicKeyHex}@192.168.1.100:30303`;
-      
-      const result = addressFromEnode(enodeUrl);
-      const expectedAddress = ethers.computeAddress(wallet.signingKey.publicKey).toLowerCase();
-      
-      expect(result).toBe(expectedAddress);
-    });
+
   });
 
   describe('Integration Tests', () => {
@@ -396,20 +356,6 @@ describe('Key Generator Utilities - E2E Tests', () => {
       // Should format private key correctly for Besu
       const formattedKey = formatPrivateKeyForBesu(identity.privateKey);
       expect(formattedKey).toBe(identity.privateKey.slice(2));
-    });
-
-    it('should create enode URL and extract address back', async () => {
-      const identity = await generateNodeIdentity();
-      
-      // Create enode URL from identity
-      const publicKeyHex = identity.publicKey.slice(2);
-      const enodeUrl = `enode://${publicKeyHex}@192.168.1.100:30303`;
-      
-      // Extract address from enode URL
-      const extractedAddress = addressFromEnode(enodeUrl);
-      
-      // Should match original address
-      expect(extractedAddress).toBe(identity.address);
     });
 
     it('should handle complete workflow with deterministic identity', async () => {

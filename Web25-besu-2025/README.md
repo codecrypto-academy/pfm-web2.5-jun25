@@ -46,7 +46,7 @@ Interfaz gráfica desarrollada con Next.js 13 que incluye:
 - Incluye la librería lib-docker compilada en `lib-besu`
 
 #### Servidor MCP (`/web/mcp-server`)
-- Contiene un servidor MCP (Model Context Protocol
+- Contiene un servidor MCP (Model Context Protocol)
 - Implementa el modelo de contexto para la gestión de redes Besu
 - Gestiona la creación y la gestión de redes Besu
 - Permite la interacción con la IA para automatización de tareas

@@ -1,0 +1,9 @@
+{
+    "id": "besu-local",
+    "name": "Besu Local",
+    "rpcUrl": "http://127.0.0.1:8545",
+    "chainId": 1337,
+    "currencySymbol": "ETH",
+    "explorerUrl": "",
+    "color": "blue-500"
+} 

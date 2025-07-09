@@ -7,7 +7,7 @@ interface BalanceContextType {
   balanceWei: string | null;
   loading: boolean;
   error: string | null;
-  fetchBalance: (address: string) => Promise<void>;
+  fetchBalance: (address: string, networkId: string) => Promise<void>;
 }
 
 const BalanceContext = createContext<BalanceContextType | undefined>(undefined);
@@ -18,12 +18,12 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchBalance = useCallback(async (address: string) => {
-    if (!address) return;
+  const fetchBalance = useCallback(async (address: string, networkId: string) => {
+    if (!address || !networkId) return;
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/balance?address=${encodeURIComponent(address)}`);
+      const response = await fetch(`/api/balance?address=${encodeURIComponent(address)}&networkId=${networkId}`);
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch balance');

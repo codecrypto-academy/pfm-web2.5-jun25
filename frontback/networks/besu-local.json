@@ -1,0 +1,11 @@
+{
+  "id": "besu-network",
+  "name": "Besu Network",
+  "rpcUrl": "http://localhost:9999",
+  "chainId": 123999,
+  "privateKey": "process.env.PRIVATE_KEY",
+  "theme": {
+    "primary": "blue-dark",
+    "secondary": "blue-main"
+  }
+} 

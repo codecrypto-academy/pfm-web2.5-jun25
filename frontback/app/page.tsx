@@ -1,66 +1,37 @@
 'use client';
 
-import NetworkStatus from './components/NetworkStatus';
-import FaucetPanel from './components/FaucetPanel';
-import BalanceChecker from './components/BalanceChecker';
-import TransferPanel from './components/TransferPanel';
 import BlockExplorer from './components/BlockExplorer';
+import BalanceChecker from './components/BalanceChecker';
+import FaucetPanel from './components/FaucetPanel';
+import NetworkStatus from './components/NetworkStatus';
+import NetworkSelector from './components/NetworkSelector';
+import ManageNetworksModal from './components/ManageNetworksModal';
 
-export default function Dashboard() {
+export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Besu Network Dashboard
-          </h1>
-          <p className="text-gray-600 mt-2">
-            Manage your private Hyperledger Besu blockchain network
-          </p>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Network Status */}
-          <div className="lg:col-span-1">
-            <NetworkStatus />
+    <div className="min-h-screen bg-blue-accent text-gray-800">
+      <header className="bg-white shadow-md p-4">
+        <div className="container mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-blue-dark">BesuChain Explorer</h1>
+          <div className="flex items-center space-x-4">
+            <NetworkSelector />
+            <ManageNetworksModal />
           </div>
-
-          {/* Middle Column - Actions */}
-          <div className="lg:col-span-1 space-y-6">
+        </div>
+      </header>
+      
+      <main className="container mx-auto p-4 md:p-6 lg:p-8">
+        <div className="grid grid-cols-1 gap-6">
+          <NetworkStatus />
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <FaucetPanel />
             <BalanceChecker />
-            <TransferPanel />
           </div>
 
-          {/* Right Column - Block Explorer */}
-          <div className="lg:col-span-1">
-            <BlockExplorer />
-          </div>
+          <BlockExplorer />
         </div>
-      </div>
-
-      {/* Footer */}
-      <div className="bg-white border-t mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <div className="text-sm text-gray-600">
-              Besu Network MVP Dashboard - For testing and development
-            </div>
-            <div className="flex space-x-4 text-sm">
-              <div className="text-gray-600">
-                <span className="font-medium">Status:</span> Connected
-              </div>
-              <div className="text-gray-600">
-                <span className="font-medium">Environment:</span> Development
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

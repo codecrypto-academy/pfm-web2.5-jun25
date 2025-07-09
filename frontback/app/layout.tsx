@@ -1,6 +1,7 @@
 import { Inter } from 'next/font/google';
-import './globals.css';
+import '../styles/globals.css';
 import { BalanceProvider } from './context/BalanceContext';
+import { NetworkProvider } from './context/NetworkContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -17,9 +18,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <BalanceProvider>
-          {children}
-        </BalanceProvider>
+        <NetworkProvider>
+          <BalanceProvider>
+            {children}
+          </BalanceProvider>
+        </NetworkProvider>
       </body>
     </html>
   );

@@ -1,26 +1,30 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useNetwork } from '../context/NetworkContext';
 
 interface Block {
   number: number;
   timestamp: number;
-  gasUsed: string;
-  gasLimit: string;
-  miner: string;
   transactionCount: number;
+  gasUsed: string;
+  miner: string;
   hash: string;
-  parentHash: string;
+  gasLimit: string;
 }
 
 export default function BlockExplorer() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { selectedNetwork } = useNetwork();
 
-  const fetchBlocks = async () => {
+  const fetchBlocks = useCallback(async () => {
+    if (!selectedNetwork) return;
+
+    setLoading(true);
     try {
-      const response = await fetch('/api/blocks?limit=10');
+      const response = await fetch(`/api/blocks?networkId=${selectedNetwork.id}&limit=10`);
       if (!response.ok) {
         throw new Error('Failed to fetch blocks');
       }
@@ -32,23 +36,32 @@ export default function BlockExplorer() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedNetwork]);
 
   useEffect(() => {
     fetchBlocks();
-    const interval = setInterval(fetchBlocks, 15000); // Refresh every 15 seconds
+    const interval = setInterval(fetchBlocks, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchBlocks]);
 
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleString();
   };
 
-  if (loading) {
+  if (!selectedNetwork) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4">Recent Blocks</h2>
-        <div className="text-gray-500">Loading blocks...</div>
+        <h2 className="text-xl font-bold mb-4">Latest Blocks</h2>
+        <p className="text-gray-500">Please select a network to see the latest blocks.</p>
+      </div>
+    );
+  }
+  
+  if (loading && blocks.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-bold mb-4">Latest Blocks</h2>
+        <div className="text-gray-500">Loading...</div>
       </div>
     );
   }
@@ -56,7 +69,7 @@ export default function BlockExplorer() {
   if (error) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4">Recent Blocks</h2>
+        <h2 className="text-xl font-bold mb-4">Latest Blocks</h2>
         <div className="text-red-500">Error: {error}</div>
         <button 
           onClick={fetchBlocks}
@@ -80,54 +93,34 @@ export default function BlockExplorer() {
         </button>
       </div>
 
-      {blocks.length === 0 ? (
-        <div className="text-gray-500">No blocks found</div>
-      ) : (
-        <div className="space-y-3">
-          {blocks.map((block) => (
-            <div key={block.number} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center space-x-2">
-                  <div className="text-lg font-semibold">Block #{block.number}</div>
-                  <div className="text-sm text-gray-500">
-                    {block.transactionCount} tx{block.transactionCount !== 1 ? 's' : ''}
-                  </div>
-                </div>
-                <div className="text-sm text-gray-500">
-                  {formatTimestamp(block.timestamp)}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="font-medium">Hash:</span>{' '}
-                  <span className="font-mono text-gray-600">
-                    {block.hash.substring(0, 20)}...
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium">Gas Used:</span>{' '}
-                  <span className="text-gray-600">
-                    {parseInt(block.gasUsed).toLocaleString()}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium">Miner:</span>{' '}
-                  <span className="font-mono text-gray-600">
-                    {block.miner ? `${block.miner.substring(0, 20)}...` : 'N/A'}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium">Gas Limit:</span>{' '}
-                  <span className="text-gray-600">
-                    {parseInt(block.gasLimit).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Block</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transactions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Miner</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gas Used</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gas Limit</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {blocks.map(block => (
+              <tr key={block.hash}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{block.number}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatTimestamp(block.timestamp)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{block.transactionCount}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate" title={block.miner ?? 'N/A'}>
+                  {block.miner ? `${block.miner.substring(0, 8)}...${block.miner.substring(block.miner.length - 6)}` : 'N/A'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(block.gasUsed).toLocaleString()}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{Number(block.gasLimit).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

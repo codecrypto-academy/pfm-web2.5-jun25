@@ -1,63 +1,49 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { getNetworkConfig } from '@/lib/network';
 
-export async function GET(request: NextRequest) {
-  try {
+export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
-    const limitStr = searchParams.get('limit') || '10';
-    const fromBlockStr = searchParams.get('fromBlock');
-    
-    const limit = parseInt(limitStr);
-    if (isNaN(limit) || limit <= 0 || limit > 100) {
-      return NextResponse.json({ error: 'Limit must be between 1 and 100' }, { status: 400 });
+    const networkId = searchParams.get('networkId');
+    const limit = parseInt(searchParams.get('limit') || '10', 10);
+
+    if (!networkId) {
+        return NextResponse.json({ error: 'networkId is required' }, { status: 400 });
     }
 
-    // Get environment configuration
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || 'http://localhost:9999';
+    const networkConfig = getNetworkConfig(networkId);
+    if (!networkConfig) {
+        return NextResponse.json({ error: "Invalid network ID" }, { status: 400 });
+    }
 
-    // Create provider
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    
-    // Get current block number
-    const currentBlock = await provider.getBlockNumber();
-    
-    // Determine starting block
-    const fromBlock = fromBlockStr ? parseInt(fromBlockStr) : Math.max(0, currentBlock - limit + 1);
-    
-    // Get blocks
-    const blocks = [];
-    for (let i = Math.max(0, fromBlock); i <= currentBlock && blocks.length < limit; i++) {
-      try {
-        const block = await provider.getBlock(i);
-        if (block) {
-          blocks.push({
-            number: block.number,
-            timestamp: block.timestamp,
-            gasUsed: block.gasUsed?.toString() || '0',
-            gasLimit: block.gasLimit?.toString() || '0',
-            miner: block.miner || '',
-            transactionCount: block.transactions?.length || 0,
-            hash: block.hash || '',
-            parentHash: block.parentHash || ''
-          });
+    try {
+        const provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl, undefined, { staticNetwork: true });
+        const latestBlockNumber = await provider.getBlockNumber();
+        const blocks = [];
+
+        for (let i = 0; i < limit; i++) {
+            const blockNumber = latestBlockNumber - i;
+            if (blockNumber < 0) {
+                break; // No hay más bloques que buscar
+            }
+            const block = await provider.getBlock(blockNumber);
+            if (block) {
+                blocks.push({
+                    number: block.number,
+                    timestamp: block.timestamp,
+                    transactionCount: block.transactions.length, // Corregido
+                    miner: block.miner,
+                    gasUsed: ethers.formatUnits(block.gasUsed, 'wei'),
+                    gasLimit: ethers.formatUnits(block.gasLimit, 'wei'), // Añadido
+                    hash: block.hash, // Añadido
+                });
+            }
         }
-      } catch (error) {
-        // Skip blocks that can't be fetched
-        console.warn(`Failed to fetch block ${i}:`, error);
-      }
+        
+        return NextResponse.json({ blocks });
+
+    } catch (error: any) {
+        console.error('Block explorer error:', error);
+        return NextResponse.json({ error: error.message || 'Failed to fetch blocks' }, { status: 500 });
     }
-
-    return NextResponse.json({
-      blocks: blocks.reverse(), // Most recent first
-      currentBlock,
-      totalBlocks: blocks.length
-    });
-
-  } catch (error) {
-    console.error('Blocks error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to get blocks',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
-  }
 }

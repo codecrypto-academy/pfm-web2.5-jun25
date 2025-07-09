@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useBalance } from '../context/BalanceContext';
+import { useNetwork } from '../context/NetworkContext';
 
 export default function FaucetPanel() {
   const [toAddress, setToAddress] = useState('');
@@ -10,9 +11,14 @@ export default function FaucetPanel() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const { fetchBalance } = useBalance();
+  const { selectedNetwork } = useNetwork();
 
   const handleFaucet = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedNetwork) {
+      setError('No network selected');
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
@@ -26,6 +32,7 @@ export default function FaucetPanel() {
         body: JSON.stringify({
           toAddress,
           amount: parseFloat(amount),
+          networkId: selectedNetwork.id,
         }),
       });
 
@@ -36,7 +43,7 @@ export default function FaucetPanel() {
       }
 
       setResult(data);
-      await fetchBalance(toAddress); // Refresh balance after faucet transaction
+      await fetchBalance(toAddress, selectedNetwork.id); // Refresh balance after faucet transaction
       setToAddress('');
       setAmount('1');
     } catch (err) {
@@ -88,7 +95,7 @@ export default function FaucetPanel() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !selectedNetwork}
           className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:bg-gray-400"
         >
           {loading ? 'Sending...' : 'Send Tokens'}

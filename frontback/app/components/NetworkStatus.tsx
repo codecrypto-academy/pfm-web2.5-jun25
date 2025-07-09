@@ -2,25 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useBalance } from '../context/BalanceContext';
+import { useNetwork } from '../context/NetworkContext';
 
 interface NetworkStatusData {
-  network: {
-    chainId: number;
-    name: string;
-    rpcUrl: string;
-  };
-  blockchain: {
-    blockNumber: number;
-    blockTimestamp: number;
-    gasUsed: string;
-    transactionCount: number;
-    peerCount: number;
-  };
-  account: {
-    address: string;
-    balance: string;
-    balanceWei: string;
-  };
+  isHealthy: boolean;
+  chainId: number;
+  blockNumber: number;
+  gasPrice: string;
+  lastBlockTimestamp: number;
 }
 
 export default function NetworkStatus() {
@@ -28,29 +17,39 @@ export default function NetworkStatus() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { balance, fetchBalance } = useBalance();
+  const { selectedNetwork } = useNetwork();
 
   const fetchStatus = useCallback(async () => {
+    if (!selectedNetwork) return;
+
+    setLoading(true);
     try {
-      const response = await fetch('/api/network/status');
+      const response = await fetch(`/api/network/status?networkId=${selectedNetwork.id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch network status');
       }
       const data = await response.json();
       setStatus(data);
-      if (data?.account?.address) {
-        fetchBalance(data.account.address);
-      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  }, [fetchBalance]);
+  }, [selectedNetwork, fetchBalance]);
 
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  if (!selectedNetwork) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-bold mb-4">Network Status</h2>
+        <div className="text-gray-500">Please select a network.</div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -99,30 +98,30 @@ export default function NetworkStatus() {
         <div className="space-y-3">
           <div>
             <div className="text-sm font-medium text-gray-700">Chain ID</div>
-            <div className="text-lg">{status.network.chainId}</div>
+            <div className="text-lg">{status.chainId}</div>
           </div>
           <div>
             <div className="text-sm font-medium text-gray-700">Block Number</div>
-            <div className="text-lg">{status.blockchain.blockNumber}</div>
+            <div className="text-lg">{status.blockNumber}</div>
           </div>
           <div>
-            <div className="text-sm font-medium text-gray-700">Peers</div>
-            <div className="text-lg">{status.blockchain.peerCount}</div>
+            <div className="text-sm font-medium text-gray-700">Gas Price</div>
+            <div className="text-lg">{status.gasPrice} Gwei</div>
           </div>
         </div>
 
         <div className="space-y-3">
           <div>
+            <div className="text-sm font-medium text-gray-700">Network</div>
+            <div className="text-sm font-mono text-gray-600">{selectedNetwork.name}</div>
+          </div>
+          <div>
             <div className="text-sm font-medium text-gray-700">RPC URL</div>
-            <div className="text-sm font-mono text-gray-600">{status.network.rpcUrl}</div>
+            <div className="text-sm font-mono text-gray-600">{selectedNetwork.rpcUrl}</div>
           </div>
           <div>
-            <div className="text-sm font-medium text-gray-700">Validator Address</div>
-            <div className="text-sm font-mono text-gray-600">{status.account.address}</div>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-gray-700">Validator Balance</div>
-            <div className="text-lg">{balance ? `${parseFloat(balance).toFixed(4)} ETH` : 'Loading...'}</div>
+            <div className="text-sm font-medium text-gray-700">Last Block Time</div>
+            <div className="text-lg">{new Date(status.lastBlockTimestamp * 1000).toLocaleString()}</div>
           </div>
         </div>
       </div>

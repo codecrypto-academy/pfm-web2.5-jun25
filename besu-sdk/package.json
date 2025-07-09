@@ -1,0 +1,26 @@
+{
+  "name": "besu-sdk",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "watch": "tsc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dockerode": "^4.0.7",
+    "ethers": "^6.15.0"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.42",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.10",
+    "jest": "^30.0.4",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.8.3"
+  }
+}

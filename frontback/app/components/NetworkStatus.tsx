@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useBalance } from '../context/BalanceContext';
 
 interface NetworkStatusData {
   network: {
@@ -26,8 +27,9 @@ export default function NetworkStatus() {
   const [status, setStatus] = useState<NetworkStatusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { balance, fetchBalance } = useBalance();
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       const response = await fetch('/api/network/status');
       if (!response.ok) {
@@ -35,19 +37,20 @@ export default function NetworkStatus() {
       }
       const data = await response.json();
       setStatus(data);
+      if (data?.account?.address) {
+        fetchBalance(data.account.address);
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchBalance]);
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 10000); // Refresh every 10 seconds
-    return () => clearInterval(interval);
-  }, []);
+  }, [fetchStatus]);
 
   if (loading) {
     return (
@@ -119,7 +122,7 @@ export default function NetworkStatus() {
           </div>
           <div>
             <div className="text-sm font-medium text-gray-700">Validator Balance</div>
-            <div className="text-lg">{parseFloat(status.account.balance).toFixed(4)} ETH</div>
+            <div className="text-lg">{balance ? `${parseFloat(balance).toFixed(4)} ETH` : 'Loading...'}</div>
           </div>
         </div>
       </div>

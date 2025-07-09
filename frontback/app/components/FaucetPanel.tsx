@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useBalance } from '../context/BalanceContext';
 
 export default function FaucetPanel() {
   const [toAddress, setToAddress] = useState('');
@@ -8,6 +9,7 @@ export default function FaucetPanel() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const { fetchBalance } = useBalance();
 
   const handleFaucet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +36,7 @@ export default function FaucetPanel() {
       }
 
       setResult(data);
+      await fetchBalance(toAddress); // Refresh balance after faucet transaction
       setToAddress('');
       setAmount('1');
     } catch (err) {

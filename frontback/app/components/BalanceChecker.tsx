@@ -1,33 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useBalance } from '../context/BalanceContext';
 
 export default function BalanceChecker() {
   const [address, setAddress] = useState('');
-  const [balance, setBalance] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { balance, balanceWei, loading, error, fetchBalance } = useBalance();
 
   const handleCheckBalance = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setBalance(null);
-
-    try {
-      const response = await fetch(`/api/balance?address=${encodeURIComponent(address)}`);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to get balance');
-      }
-
-      setBalance(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
+    fetchBalance(address);
   };
 
   return (
@@ -72,9 +54,9 @@ export default function BalanceChecker() {
         <div className="mt-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded">
           <div className="font-semibold mb-2">Balance Information</div>
           <div className="text-sm space-y-1">
-            <div><strong>Address:</strong> {balance.address}</div>
-            <div><strong>Balance:</strong> {parseFloat(balance.balance).toFixed(6)} ETH</div>
-            <div><strong>Wei:</strong> {balance.balanceWei}</div>
+            <div><strong>Address:</strong> {address}</div>
+            <div><strong>Balance:</strong> {parseFloat(balance).toFixed(6)} ETH</div>
+            <div><strong>Wei:</strong> {balanceWei}</div>
           </div>
         </div>
       )}

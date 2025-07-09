@@ -1,0 +1,10 @@
+<svg width="100" height="100" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <g fill="#ffffff">
+    <!-- Hoja izquierda -->
+    <path d="M10 32 C20 20, 28 16, 32 16 L32 24 C26 24, 20 28, 14 32 Z" />
+    <!-- Hoja derecha -->
+    <path d="M54 32 C44 20, 36 16, 32 16 L32 24 C38 24, 44 28, 50 32 Z" />
+    <!-- Mango central -->
+    <rect x="30" y="24" width="4" height="36" rx="1" />
+  </g>
+</svg>

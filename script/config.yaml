@@ -20,7 +20,6 @@ network:
 
 docker:
   image: "hyperledger/besu:latest"
-  user_permissions: true  # Use --user $(id -u):$(id -g)
 
 nodes:
   # ⚠️ Be careful: using a validator can work. A high N, if tolerated by the machine, actually contributes to robustness — but setting it to 2 makes synchronization extremely difficult. The nodes have trouble agreeing on block timing down to the millisecond, which can lead to unstable behavior in edge cases.
@@ -100,5 +99,5 @@ automatedTests:
 # Environment file generation
 envFile:
   generate: true
-  path: "./env_forwarding/.env"
+  path: "../frontback/env_forwarding/.env"
   includeWarning: true

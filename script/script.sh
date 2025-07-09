@@ -376,10 +376,8 @@ load_config() {
     
     # --- [ Docker Configuration ] ---
     DOCKER_IMAGE=$(yq eval '.docker.image // "hyperledger/besu:latest"' "$CONFIG_FILE")
-    DOCKER_USER_PERMISSIONS=$(yq eval '.docker.user_permissions // true' "$CONFIG_FILE")
     
     log_debug "Docker Image: $DOCKER_IMAGE"
-    log_debug "Docker User Permissions: $DOCKER_USER_PERMISSIONS"
     
     # --- [ RPC Configuration ] ---
     RPC_TIMEOUT=$(yq eval '.rpc.timeout // 30000' "$CONFIG_FILE")
@@ -1323,12 +1321,6 @@ generate_node_identities() {
     log_check "Creating nodes directory: $nodes_dir"
     mkdir -p "$nodes_dir"
     
-    # Track if we need to apply user permissions
-    local apply_permissions=0
-    if [[ "$DOCKER_USER_PERMISSIONS" == "true" ]]; then
-        apply_permissions=1
-        log_debug "User permission mapping enabled"
-    fi
     
     # Generate identity for each node
     for i in "${!NODE_NAMES[@]}"; do
@@ -1337,7 +1329,13 @@ generate_node_identities() {
         
         log_check "Generating identity for node: $node_name"
         
-        # Create node directory
+        # Remove any existing node directory to avoid Docker mount issues
+        if [[ -d "$node_dir" ]]; then
+            log_debug "Removing existing node directory: $node_dir"
+            rm -rf "$node_dir"
+        fi
+        
+        # Create fresh node directory
         mkdir -p "$node_dir"
         
         # Run Besu in ephemeral container to generate keys
@@ -1350,28 +1348,22 @@ generate_node_identities() {
 
         local export_addr_cmd="docker run --rm"
         
-        # Add user mapping if enabled
-        if [[ $apply_permissions -eq 1 ]]; then
-            export_addr_cmd+=" -u $(id -u):$(id -g)"
-        fi
         
         export_addr_cmd+=" -v \"${node_dir}:/data\""
         export_addr_cmd+=" $DOCKER_IMAGE"
         export_addr_cmd+=" --data-path=/data public-key export-address --to=/data/address"
         
         log_debug "Exporting address (this creates the private key)..."
+        log_debug "Command: $export_addr_cmd"
         if ! eval "$export_addr_cmd" >/dev/null 2>&1; then
             log_error "Failed to export address for node: $node_name"
+            log_error "This might be a Docker Desktop + WSL2 issue. Try running: docker system prune -f"
             return 1
         fi
         
         # Step 2: Export the public key
         local export_pub_cmd="docker run --rm"
         
-        # Add user mapping if enabled
-        if [[ $apply_permissions -eq 1 ]]; then
-            export_pub_cmd+=" -u $(id -u):$(id -g)"
-        fi
         
         export_pub_cmd+=" -v \"${node_dir}:/data\""
         export_pub_cmd+=" $DOCKER_IMAGE"
@@ -1435,13 +1427,6 @@ generate_node_identities() {
         if [[ $missing_files -gt 0 ]]; then
             log_error "Failed to generate all required files for node: $node_name"
             return 1
-        fi
-        
-        # Apply correct permissions if needed
-        if [[ $apply_permissions -eq 1 ]]; then
-            # Ensure files are readable by current user
-            chmod 600 "${node_dir}/key" 2>/dev/null || true
-            chmod 644 "${node_dir}/key.pub" "${node_dir}/address" 2>/dev/null || true
         fi
         
         log_success "Identity generated for node: $node_name"
@@ -2058,11 +2043,6 @@ launch_nodes() {
         # Mount genesis file to /data/genesis.json inside the container
         docker_cmd+=" -v ${genesis_file}:/data/genesis.json:ro"
         
-        # User permissions if enabled
-        if [[ "$DOCKER_USER_PERMISSIONS" == "true" ]]; then
-            docker_cmd+=" --user $(id -u):$(id -g)"
-            log_debug "Using user permissions: $(id -u):$(id -g)"
-        fi
         
         # Docker image
         docker_cmd+=" ${DOCKER_IMAGE}"

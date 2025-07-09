@@ -1,0 +1,1 @@
+Paso1. Poner a correr script.sh con la direeccion relativa de fronaback en config.yaml para que deposite aqui su nodo RPC en .env dentro d e env_forwarding en frontback

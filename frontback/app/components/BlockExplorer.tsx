@@ -142,9 +142,6 @@ export default function BlockExplorer() {
             className="transition-all duration-1000 ease-in-out"
           />
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-xs font-medium text-white">{Math.round(progress)}%</span>
-        </div>
       </div>
     );
   };

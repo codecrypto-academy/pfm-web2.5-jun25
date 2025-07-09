@@ -42,7 +42,14 @@ export default function FaucetPanel() {
         throw new Error(data.error || 'Failed to send tokens');
       }
 
-      setResult(data);
+      // Guardar información antes de resetear
+      const transactionInfo = {
+        ...data,
+        toAddress,
+        amount: parseFloat(amount)
+      };
+      
+      setResult(transactionInfo);
       await fetchBalance(toAddress, selectedNetwork.id); // Refresh balance after faucet transaction
       setToAddress('');
       setAmount('1');
@@ -112,10 +119,10 @@ export default function FaucetPanel() {
         <div className="mt-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
           <div className="font-semibold mb-2">Transaction Sent!</div>
           <div className="text-sm space-y-1">
-            <div><strong>Hash:</strong> {result.transaction.hash}</div>
-            <div><strong>To:</strong> {result.transaction.to}</div>
-            <div><strong>Value:</strong> {result.transaction.value} ETH</div>
-            <div><strong>Block:</strong> {result.transaction.blockNumber}</div>
+            <div><strong>Hash:</strong> {result.txHash}</div>
+            <div><strong>To:</strong> {result.toAddress}</div>
+            <div><strong>Value:</strong> {result.amount} ETH</div>
+            <div><strong>Status:</strong> {result.success ? 'Success' : 'Failed'}</div>
           </div>
         </div>
       )}

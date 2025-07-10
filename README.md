@@ -4,6 +4,12 @@ A comprehensive TypeScript-based solution for managing Hyperledger Besu blockcha
 
 ## ✨ Features
 
+### Monorepo Architecture
+- 🧩 **Multi-Project Workspace**: Includes SDK, REST API backend, modern web frontend, and modular scripts
+- 🔗 **Integrated Components**: All parts work together or independently for maximum flexibility
+- 🧪 **Comprehensive Testing**: Unit, integration, and end-to-end tests across all modules
+
+
 ### Key Generation
 - 🔑 Generate secp256k1 private/public key pairs (Ethereum compatible)
 - 🏠 Generate Ethereum addresses from public keys
@@ -12,6 +18,39 @@ A comprehensive TypeScript-based solution for managing Hyperledger Besu blockcha
 - ⚡ Optimized performance with EC instance reuse and concurrent file operations
 - 📦 Yarn-based dependency management
 - 🛡️ Type-safe with comprehensive TypeScript types
+
+### REST API & Web Interface
+- 🌐 **Next.js REST API**: Full-featured API for network and node lifecycle management
+- 🖥️ **Modern Web UI**: React + Mantine-based frontend for visual network management
+- 🧑‍💻 **Dynamic Configuration**: User-controlled chain IDs, subnets, ports, node types, and counts
+- 🗂️ **File-based & Extensible Storage**: JSON persistence, ready for DB migration
+- 🧩 **SDK Integration**: All API and UI features built on the TypeScript SDK
+- 🛡️ **Robust Error Handling**: Validation, conflict detection, and clear error responses
+
+### Besu Network Management
+- 🦭 **Podman-based Scripts**: Secure, macOS-optimized network orchestration (Podman replaces Docker in scripts)
+- 🐳 **Docker SDK**: SDK uses Dockerode for cross-platform container management
+- 🧩 **Modular Bash Scripts**: Setup, start, stop, test, and manage networks with granular control
+- ⚙️ **Configuration-driven**: Centralized config files for easy customization
+- 🔍 **Comprehensive Logging**: Color-coded logs, health checks, and status utilities
+- 🧪 **Network Testing**: Built-in connectivity and RPC testing tools
+
+### Developer Experience
+- 🏗️ **TypeScript First**: Full type coverage, modern async/await, and advanced language features
+- 🧪 **Jest Testing**: Unit and integration tests for SDK, scripts, and web
+- 🧰 **Make/Yarn/CLI**: Flexible commands for every workflow
+- 🧑‍💻 **Extensible**: Easy to add new node types, consensus mechanisms, or storage backends
+
+### Security & Performance
+- 🔒 **Private Key Management**: Local, plain-text for dev; extensible for secure storage
+- ⚡ **Concurrent Operations**: Fast file and container management
+- 🛡️ **Race Condition Prevention**: Sequenced startup and health checks
+
+### UI/UX
+- 🎨 **Mantine UI**: Beautiful, accessible, and responsive web interface
+- 🔄 **Live Status**: Real-time network and node status in the frontend
+
+---
 
 ### Besu Network Management
 - 🦭 **Podman-based**: Uses Podman instead of Docker for better security and macOS compatibility
@@ -23,6 +62,7 @@ A comprehensive TypeScript-based solution for managing Hyperledger Besu blockcha
 - 🔍 **Comprehensive Logging**: Color-coded logs with different severity levels
 - 🧪 **Network Testing**: Built-in connectivity and RPC testing utilities
 - 📦 **Yarn-based dependency management**
+
 
 ## 🚀 Getting Started
 
@@ -51,7 +91,8 @@ brew install make
 
 ## 🚀 Quick Start (Workspace)
 
-This is now a **multi-project workspace** with independent components:
+
+This is a **multi-project monorepo** with independent, but integrated, components:
 
 ```bash
 # Install all dependencies for all projects
@@ -60,10 +101,11 @@ yarn install:all
 # Build all projects
 yarn build:all
 
-# Start backend API (port 3000)
+
+# Start backend REST API (port 3000)
 yarn start:backend
 
-# Start frontend dev server (port 5173) 
+# Start frontend dev server (port 5173)
 yarn dev:frontend
 
 # Network operations (from any directory)
@@ -73,43 +115,31 @@ yarn network:status    # Check status
 yarn network:stop      # Stop network
 ```
 
+
 ## 📖 Usage
 
-### Multi-Project Architecture
 
-The project is now organized into multiple independent components:
+### Monorepo Components
 
-#### 1. Network SDK (TypeScript Library)
-```bash
-cd network-sdk
-yarn install
-yarn build
+#### 1. Network SDK (`network-sdk/`)
+- TypeScript library for Docker-based Besu network management
+- Provides: `DockerManager`, `GenesisGenerator`, `KeyGenerator`, and full type definitions
+- Can be used standalone or as a dependency in other projects
 
-# Use in other projects
-import { NetworkManager, KeyGenerator } from 'network-sdk';
-```
+#### 2. Backend REST API (`web/`)
+- Next.js-based REST API for full network and node lifecycle management
+- Exposes endpoints for creating, listing, updating, and deleting networks/nodes
+- File-based storage (JSON), ready for DB migration
 
-#### 2. Backend (REST API)
-```bash
-cd backend
-yarn install
-yarn build
-yarn start  # Runs on http://localhost:3000
-```
+#### 3. Frontend Web Interface (`web/`)
+- Modern React UI (Mantine) for visual network management
+- Features: create/delete networks, add/remove nodes, live status, error feedback
 
-#### 3. Frontend (Web Interface)
-```bash
-cd frontend
-yarn install
-yarn dev    # Runs on http://localhost:5173
-```
+#### 4. Scripts & CLI (`scripts/`)
+- Modular Bash and TypeScript scripts for Podman-based orchestration
+- Makefile for common workflows (`make setup`, `make start`, etc.)
+- Granular control: setup, start, stop, test, logs, reset, and more
 
-#### 4. Scripts (Shell/Bash Operations)
-```bash
-cd scripts
-make setup  # Complete network setup
-make start  # Start network
-```
 
 ### Legacy Key Generation (Direct CLI)
 
@@ -135,6 +165,7 @@ yarn createKeys ./output-directory
 # Generate keys with enode URL
 yarn createKeysAndEnode 192.168.1.100 42007 ./output-directory
 ```
+
 
 ### Besu Network Management
 
@@ -189,6 +220,7 @@ cd network
 ./besu-network.sh status
 ```
 
+
 ## 📁 Output Files
 
 ### Key Generation Output
@@ -212,80 +244,38 @@ The network manager creates a complete Besu network setup:
   - `miner-node/` - Miner node keys and data
   - `rpc-node/` - RPC node keys and data
 
+
 ## 🏗️ Project Structure
+
 
 ```
 pfm-web2.5/
-├── package.json              # Root project configuration
-├── tsconfig.json             # TypeScript configuration  
+├── package.json              # Root project config (Yarn workspaces)
+├── tsconfig.json             # TypeScript config
 ├── README.md                 # Project documentation
 ├── LICENSE                   # MIT license
-├── .gitignore               # Git ignore rules
-├── yarn.lock                # Yarn lockfile
-├── dist/                    # Compiled JavaScript output
-├── network-sdk/             # TypeScript SDK for network operations
-│   ├── package.json         # SDK dependencies
-│   ├── tsconfig.json        # SDK TypeScript config
-│   ├── README.md           # SDK documentation
-│   ├── src/
-│   │   ├── index.ts         # Main SDK export
-│   │   ├── network/         # Network management classes
-│   │   │   ├── index.ts     # Network exports
-│   │   │   └── NetworkManager.ts # Core network management
-│   │   ├── crypto/          # Key generation utilities
-│   │   │   ├── index.ts     # Crypto exports
-│   │   │   └── KeyGenerator.ts # Cryptographic operations
-│   │   └── types/           # TypeScript type definitions
-│   │       ├── index.ts     # Type exports
-│   │       ├── network.ts   # Network types
-│   │       └── crypto.ts    # Crypto types
-│   └── dist/               # Compiled SDK
-├── backend/                # REST API server
-│   ├── package.json        # Backend dependencies
-│   ├── tsconfig.json       # Backend TypeScript config
-│   ├── src/
-│   │   ├── app.ts          # Express application
-│   │   └── routes/         # API route handlers
-│   │       ├── network.ts  # Network API endpoints
-│   │       └── keys.ts     # Key generation endpoints
-│   └── dist/               # Compiled backend
-├── frontend/               # Web interface
-│   ├── package.json        # Frontend dependencies
-│   ├── vite.config.ts      # Vite configuration
-│   ├── index.html          # Main HTML file
-│   ├── src/
-│   │   ├── main.ts         # Frontend TypeScript
-│   │   └── style.css       # Styling
-│   └── dist/               # Built frontend
-└── scripts/                # Shell scripts and configurations (renamed from network/)
-    ├── createKeys.ts        # Original TypeScript key generator
-    ├── besu-network.sh      # Main network orchestrator script
-    ├── Makefile            # Convenient make commands
-    ├── README.md           # Scripts documentation
-    ├── config/
-    │   └── network.conf    # Network configuration
-    ├── lib/
-    │   └── common.sh       # Shared utilities and functions
-    ├── bash/               # Bash scripts (renamed from scripts/)
-    │   ├── setup-network.sh     # Podman network setup
-    │   ├── generate-keys.sh     # Cryptographic key generation
-    │   ├── generate-config.sh   # Genesis and TOML config generation
-    │   ├── start-network.sh     # Container startup
-    │   ├── stop-network.sh      # Container shutdown
-    │   ├── test-network.sh      # Network testing utilities
-    │   └── network-utils.sh     # Status, logs, testing utilities
-    └── besu-network/           # Generated network data (created at runtime)
-        ├── genesis.json        # Genesis block configuration
-        ├── config.toml         # Node configuration
-        ├── bootnode-config.toml # Bootnode configuration
-        ├── bootnode/           # Bootnode keys and database
-        ├── miner-node/         # Miner node keys and database
-        └── rpc-node/           # RPC node keys and database
+├── yarn.lock                 # Yarn lockfile
+├── network-sdk/              # TypeScript SDK (Docker-based)
+│   ├── src/                  # SDK source (DockerManager, GenesisGenerator, KeyGenerator, types)
+│   └── dist/                 # Compiled SDK
+├── web/                      # Next.js REST API & frontend (React + Mantine)
+│   ├── src/app/              # API routes & UI pages
+│   ├── src/lib/              # Storage, config, and network utilities
+│   └── dist/                 # Built frontend
+├── scripts/                  # Podman-based scripts & CLI
+│   ├── besu-network.sh       # Main orchestrator
+│   ├── bash/                 # Modular bash scripts (setup, start, stop, test, etc.)
+│   ├── config/               # Network config
+│   ├── lib/                  # Shared shell utilities
+│   └── besu-network/         # Generated network data
+└── ...
 ```
 
-## 🔧 Scripts
 
-### Yarn Scripts
+## 🔧 Scripts & Commands
+
+
+### Yarn Scripts (Monorepo)
 
 - `yarn build` - Compile TypeScript to JavaScript
 - `yarn dev <command>` - Run in development mode with tsx
@@ -295,7 +285,8 @@ pfm-web2.5/
 - `yarn start` - Start the compiled key generator
 - `yarn prepare` - Pre-build hook (runs on install)
 
-### Make Commands (Network Management)
+
+### Make Commands (Podman Network Management)
 
 - `make help` - Show all available commands
 - `make install` - Install prerequisites (macOS)
@@ -309,6 +300,7 @@ pfm-web2.5/
 - `make clean` - Stop and clean up containers
 - `make reset` - Complete network reset (destructive!)
 
+
 ## 🆕 Modern Features Used
 
 - **Arrow Functions**: All functions use modern arrow syntax
@@ -321,6 +313,7 @@ pfm-web2.5/
 - **Promise.all**: Concurrent file operations
 - **Optional Chaining**: Safe property access
 
+
 ## 🎯 Optimizations
 
 1. **EC Instance Reuse**: Single elliptic curve instance for better performance
@@ -328,6 +321,7 @@ pfm-web2.5/
 3. **Type Safety**: Full TypeScript type coverage
 4. **Memory Efficiency**: Optimized string and buffer operations
 5. **Error Handling**: Comprehensive error management with proper typing
+
 
 ## 📦 Dependencies
 
@@ -347,6 +341,7 @@ pfm-web2.5/
 - `jq` - JSON processor (optional, for log formatting)
 - `curl` - HTTP client (for network testing)
 
+
 ## 🔒 Cryptography
 
 This tool uses the secp256k1 elliptic curve, the same cryptographic standard used by:
@@ -357,6 +352,7 @@ This tool uses the secp256k1 elliptic curve, the same cryptographic standard use
 - Most blockchain networks
 
 Generated keys are compatible with standard Ethereum tooling and networks.
+
 
 ## 🌐 Network Configuration
 
@@ -371,7 +367,19 @@ The Besu network is configured with:
   - Miner Node (block production)
   - RPC Node (API access)
 
-## 🧪 Testing
+
+## 🧪 Testing & Developer Experience
+
+### Automated & Manual Testing
+- 🧪 **Jest**: Unit and integration tests for SDK, scripts, and web
+- 🧪 **API Test Scripts**: Automated REST API tests (see `web/`)
+- 🧪 **Manual Testing**: cURL, Postman, and web UI
+
+### Developer Experience
+- 🧰 **TypeScript everywhere**: Full type safety and modern language features
+- 🧰 **Prettier & ESLint**: Consistent code style
+- 🧰 **Make/Yarn/CLI**: Flexible for every workflow
+- 🧰 **Extensible**: Add new node types, consensus, or storage backends easily
 
 The network includes comprehensive testing utilities:
 
@@ -386,7 +394,8 @@ curl -X POST \
   http://localhost:4200
 ```
 
-## 🔍 Troubleshooting
+
+## 🔍 Troubleshooting & Contributing
 
 ### Common Issues
 
@@ -394,6 +403,7 @@ curl -X POST \
 2. **Podman not running**: Start Podman machine with `podman machine start`
 3. **Container startup issues**: Check logs with `make logs`
 4. **Network connectivity**: Verify Podman network with `podman network ls`
+
 
 ### Debugging Commands
 
@@ -409,6 +419,19 @@ podman logs besu-rpc
 # Inspect network
 podman network inspect besu-network
 
+
 # Clean reset if needed
 make reset
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+- Test with `make setup` and `yarn build:all` from a clean state
+- Add/extend tests for new features
+- Update documentation for any changes
+- Open issues or PRs for bugs, improvements, or questions
+
+---
 ```

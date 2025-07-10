@@ -42,7 +42,7 @@ import {
   BesuNetwork,
   BesuNetworkConfig,
   BesuNodeDefinition,
-} from "./src/index";
+} from "./src/create-besu-networks";
 
 // Configurar la red
 const networkConfig: BesuNetworkConfig = {
@@ -52,18 +52,61 @@ const networkConfig: BesuNetworkConfig = {
   consensus: "clique",
   gasLimit: "0x1fffffffffffff",
   blockTime: 5,
+  signerAccounts: [
+    {
+      address: "0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9",
+      weiAmount: "50000000000000000000000", // 50,000 ETH
+      minerNode: "miner1",
+    },
+  ],
 };
 
 const besuNetwork = new BesuNetwork(networkConfig);
 
 // Definir cualquier cantidad y tipo de nodos
 const nodes: BesuNodeDefinition[] = [
-  { name: "bootnode", ip: "172.24.0.20", rpcPort: 8545, type: "bootnode" },
-  { name: "miner1", ip: "172.24.0.21", rpcPort: 8546, type: "miner" },
-  { name: "miner2", ip: "172.24.0.22", rpcPort: 8547, type: "miner" },
-  { name: "rpc1", ip: "172.24.0.23", rpcPort: 8548, type: "rpc" },
-  { name: "rpc2", ip: "172.24.0.24", rpcPort: 8549, type: "rpc" },
-  { name: "observer", ip: "172.24.0.25", rpcPort: 8550, type: "node" },
+  {
+    name: "bootnode",
+    ip: "172.24.0.20",
+    rpcPort: 8545,
+    p2pPort: 30303,
+    type: "bootnode",
+  },
+  {
+    name: "miner1",
+    ip: "172.24.0.21",
+    rpcPort: 8546,
+    p2pPort: 30304,
+    type: "miner",
+  },
+  {
+    name: "miner2",
+    ip: "172.24.0.22",
+    rpcPort: 8547,
+    p2pPort: 30305,
+    type: "miner",
+  },
+  {
+    name: "rpc1",
+    ip: "172.24.0.23",
+    rpcPort: 8548,
+    p2pPort: 30306,
+    type: "rpc",
+  },
+  {
+    name: "rpc2",
+    ip: "172.24.0.24",
+    rpcPort: 8549,
+    p2pPort: 30307,
+    type: "rpc",
+  },
+  {
+    name: "observer",
+    ip: "172.24.0.25",
+    rpcPort: 8550,
+    p2pPort: 30308,
+    type: "node",
+  },
 ];
 
 // Crear la red con flexibilidad total
@@ -77,75 +120,38 @@ await besuNetwork.create({
 await besuNetwork.start();
 ```
 
-### Configuración Avanzada con Nuevos Parámetros
+### Configuración Avanzada con signerAccounts
 
 ```typescript
-// Configuración extendida con cuentas predefinidas
-const extendedNetworkConfig: BesuNetworkConfig = {
-  name: "mi-red-extendida",
-  chainId: 1337,
-  subnet: "172.24.0.0/16",
+// Configuración con cuentas firmantes para consenso PoA
+const advancedNetworkConfig: BesuNetworkConfig = {
+  name: "mi-red-avanzada",
+  chainId: 1338,
+  subnet: "172.25.0.0/16",
   consensus: "clique",
-  gasLimit: "0x1fffffffffffff",
-  blockTime: 5,
-  mainIp: "172.24.0.1", // IP principal de la red
-  accounts: [
-    // Lista de cuentas con balance inicial
+  gasLimit: "0x47E7C4",
+  blockTime: 3,
+  signerAccounts: [
     {
       address: "0x742d35Cc6354C6532C4c0a1b9AAB6ff119B4a4B9",
-      weiAmount: "100000000000000000000000", // 100,000 ETH en wei
+      weiAmount: "100000000000000000000000", // 100,000 ETH
+      minerNode: "miner1",
     },
     {
       address: "0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1",
-      weiAmount: "50000000000000000000000", // 50,000 ETH en wei
-    },
-    {
-      address: "0x4B20993Bc481177ec7E8f571ceCaE8A9e22C02db",
-      weiAmount: "25000000000000000000000", // 25,000 ETH en wei
+      weiAmount: "50000000000000000000000", // 50,000 ETH
+      minerNode: "miner2",
     },
   ],
-};
-
-// Estas cuentas serán automáticamente financiadas en el génesis con los balances especificados
-```
-
-### Configuración con Cuenta Firmante (Signer Account)
-
-```typescript
-// Configuración con cuenta firmante principal
-const signerNetworkConfig: BesuNetworkConfig = {
-  name: "mi-red-signer",
-  chainId: 2025,
-  subnet: "172.25.0.0/16",
-  consensus: "clique",
-  gasLimit: "0x1fffffffffffff",
-  blockTime: 3,
-  signerAccount: {
-    // Cuenta principal del firmante (tiene prioridad)
-    address: "0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1",
-    weiAmount: "1000000000000000000000000", // 1,000,000 ETH en wei
-  },
   accounts: [
-    // Cuentas adicionales
-    {
-      address: "0x627306090abaB3A6e1400e9345bC60c78a8BEf57",
-      weiAmount: "100000000000000000000", // 100 ETH en wei
-    },
-    {
-      address: "0xf17f52151EbEF6C7334FAD080c5704D77216b732",
-      weiAmount: "50000000000000000000", // 50 ETH en wei
-    },
-    // Si esta dirección fuera igual a signerAccount, se ignoraría este balance
     {
       address: "0x4B20993Bc481177ec7E8f571ceCaE8A9e22C02db",
-      weiAmount: "25000000000000000000", // 25 ETH en wei
+      weiAmount: "25000000000000000000000", // 25,000 ETH
     },
   ],
 };
 
-// El signerAccount siempre tiene prioridad sobre las cuentas en el array accounts
-// mainIp se usa para generar IPs automáticamente para nodos
-const besuExtended = new BesuNetwork(extendedNetworkConfig);
+const besuAdvanced = new BesuNetwork(advancedNetworkConfig);
 ```
 
 ### Método 2: Métodos de Conveniencia
@@ -190,6 +196,16 @@ interface BesuNodeDefinition {
 }
 ```
 
+### SignerAccount
+
+```typescript
+interface SignerAccount {
+  address: string;
+  weiAmount: string;
+  minerNode?: string; // Nombre del nodo miner asociado (opcional)
+}
+```
+
 ### BesuNetworkCreateOptions (Nueva API)
 
 ```typescript
@@ -197,7 +213,7 @@ interface BesuNetworkCreateOptions {
   nodes: BesuNodeDefinition[]; // Lista de nodos a crear
   initialBalance?: string; // Balance inicial (wei)
   autoResolveSubnetConflicts?: boolean; // Resolver conflictos automáticamente
-  minerAddress?: string; // Dirección específica del miner principal
+  autoGenerateSignerAccounts?: boolean; // Generar cuentas firmantes automáticamente (por defecto: true)
 }
 ```
 
@@ -212,15 +228,16 @@ interface BesuNetworkConfig {
   gasLimit: string; // Límite de gas (en hex)
   blockTime?: number; // Tiempo entre bloques en segundos
   mainIp?: string; // IP principal de la red (opcional)
-  signerAccount?: { address: string; weiAmount: string }; // Cuenta principal del firmante (con balance inicial en wei)
+  signerAccounts?: SignerAccount[]; // Lista de cuentas firmantes/validadores (para consenso PoA/IBFT2)
   accounts?: Array<{ address: string; weiAmount: string }>; // Lista de cuentas con balance inicial (en wei)
 }
 ```
 
 **Nota importante sobre las cuentas:**
 
-- `signerAccount`: Es la cuenta principal con privilegios especiales. Su balance tiene prioridad sobre cualquier configuración en `accounts`.
-- `accounts`: Array de cuentas adicionales. Si una dirección aparece tanto en `signerAccount` como en `accounts`, se usa el balance de `signerAccount`.
+- `signerAccounts`: Lista de cuentas firmantes con privilegios especiales para consenso PoA. Cada cuenta puede asociarse a un nodo miner específico.
+- `accounts`: Array de cuentas adicionales con balance inicial.
+- `autoGenerateSignerAccounts`: Si está habilitado (por defecto), se generan automáticamente claves criptográficas para las cuentas firmantes.
 - Todas las direcciones deben ser válidas (formato 0x + 40 caracteres hexadecimales).
 
 ### BesuNodeConfig
@@ -346,6 +363,34 @@ Elimina completamente la red (contenedores, red Docker y archivos).
 await besuNetwork.destroy();
 ```
 
+#### `updateNetworkConfig(network, updates)` - **Nueva Funcionalidad**
+
+Actualiza la configuración de una red existente sin afectar el genesis.
+
+```typescript
+import { updateNetworkConfig } from "./src/update-besu-networks";
+
+// Actualizar configuración de red existente
+await updateNetworkConfig(network, {
+  subnet: "172.60.0.0/16", // Nueva subnet
+  gasLimit: "0x5F5E100", // Nuevo gas limit
+  blockTime: 15, // Nuevo block time
+  nodes: [
+    // Actualizar IPs de nodos
+    { name: "bootnode1", ip: "172.60.0.20" },
+    { name: "miner1", ip: "172.60.0.21" },
+    { name: "rpc1", ip: "172.60.0.22" },
+  ],
+});
+```
+
+**Características de updateNetworkConfig:**
+
+- ✅ **Actualización de subnet**: Requiere especificar nuevas IPs para todos los nodos
+- ✅ **Validación robusta**: Verifica que las IPs estén en la nueva subnet
+- ✅ **Recreación de red Docker**: Automáticamente recrea la infraestructura
+- ✅ **Preservación de genesis**: No modifica la configuración del blockchain existente
+
 #### `BesuNetwork.fundMnemonic(mnemonic, amount, count?, rpcUrl?)`
 
 Transfiere fondos a cuentas derivadas de un mnemonic.
@@ -427,22 +472,16 @@ getAllNodeConfigs(): Array<{...}>                   // Configuraciones completas
 // Información de red
 getNetworkInfo(rpcUrl?: string): Promise<any>        // Info de blockchain
 getBalance(address: string, rpcUrl?: string): Promise<bigint> // Balance de cuenta
+getNetworkConnectivity(): Promise<Array<{...}>>     // Estado de conectividad de nodos
 
-// Gestión de cuentas
-updateNetworkAccounts(updates: {                     // Actualizar cuentas de red existente
-  signerAccount?: { address: string; weiAmount: string };
-  accounts?: Array<{ address: string; weiAmount: string }>;
-}): Promise<void>
+// Gestión dinámica de nodos (nuevas funcionalidades)
+addNode(nodeConfig: BesuNodeDefinition): Promise<void>     // Agregar nodo dinámicamente
+removeNode(nodeName: string): Promise<void>                // Remover nodo existente
+updateNode(nodeName: string, updates: {...}): Promise<void> // Actualizar propiedades de nodo
 
-// Método estático para actualizar por nombre de red
-BesuNetwork.updateNetworkAccountsByName(             // Actualizar cuentas por nombre
-  networkName: string,
-  updates: {
-    signerAccount?: { address: string; weiAmount: string };
-    accounts?: Array<{ address: string; weiAmount: string }>;
-  },
-  baseDir?: string
-): Promise<void>
+// Gestión de signerAccounts
+getMinerSignerAssociations(): Array<{...}>          // Asociaciones miner-signerAccount
+updateSignerAccounts(signerAccounts: SignerAccount[]): Promise<void> // Actualizar cuentas firmantes
 ```
 
 ### Gestión de Cuentas de Red
@@ -596,20 +635,23 @@ npm test -- --testNamePattern="Basic Network Creation"
 npm test -- --testNamePattern="should create a simple Besu network"
 npm test -- --testNamePattern="Node Update and Synchronization"
 npm test -- --testNamePattern="Account Management Tests"
-npm test -- --testNamePattern="Multi-Miner Network Expansion"
+npm test -- --testNamePattern="Change Besu Network Configuration Tests"
 
 # ✅ Ejecutar por archivo de test específico
 
-npm test _test_/besu.test.ts
-npm test _test_/signer-update-new.test.ts
-npm test _test_/multi-miner-expansion.test.ts
+npm test _test_/create-besu-networks.test.ts
 npm test _test_/update-existing-nodes.test.ts
+npm test _test_/adding-miners.test.ts
+npm test _test_/adding-bootnode-rpc.test.ts
+npm test _test_/removing-node.test.ts
+npm test _test_/change-config-besu.test.ts
+npm test _test_/toml-update.test.ts
 
 # ✅ Ejecutar un test específico por nombre completo
 
 npm test -- --testNamePattern="should add nodes to existing network and validate integration"
-npm test -- --testNamePattern="should fail validation when adding second miner with its own signerAccount"
-npm test -- --testNamePattern="should successfully add two new miners with their respective signerAccounts"
+npm test -- --testNamePattern="should update signerAccounts and regenerate TOML files"
+npm test -- --testNamePattern="Update network configuration with subnet, gasLimit, blockTime and node IPs"
 
 ````
 
@@ -617,9 +659,9 @@ npm test -- --testNamePattern="should successfully add two new miners with their
 
 Esta librería incluye tests comprehensivos que validan diferentes aspectos de la funcionalidad de redes Besu:
 
-#### Tests Principales (`_test_/besu.test.ts`)
+#### Tests Principales (`_test_/create-besu-networks.test.ts`)
 
-**Propósito**: Validar funciones básicas de creación de redes y gestión de cuentas.
+**Propósito**: Validar funciones básicas de creación de redes, gestión de cuentas y validaciones.
 
 ```bash
 # Test básico de creación de red
@@ -628,8 +670,37 @@ npm test -- --testNamePattern="should create a simple Besu network"
 # Test de gestión de cuentas
 npm test -- --testNamePattern="Account Management Tests"
 
-# Test de validaciones
-npm test -- --testNamePattern="Should validate updateNetworkAccountsByName"
+# Test de validaciones de nodos
+npm test -- --testNamePattern="Node Validation Tests"
+```
+
+#### Tests de Actualización de Configuración (`_test_/change-config-besu.test.ts`)
+
+**Propósito**: Validar la funcionalidad de `updateNetworkConfig` para cambios de subnet, gasLimit, blockTime y nodos.
+
+```bash
+# Test de actualización completa de configuración
+npm test -- --testNamePattern="Update network configuration with subnet, gasLimit, blockTime and node IPs"
+
+# Test de validaciones de actualización
+npm test -- --testNamePattern="Validation errors for updateNetworkConfig"
+```
+
+**¿Qué valida?**
+
+- ✅ Cambio de subnet con actualización de IPs de todos los nodos
+- ✅ Actualización de gasLimit y blockTime
+- ✅ Validación de que los nodos existen en la red
+- ✅ Validación de que las IPs están en la nueva subnet
+- ❌ Detectar errores cuando falta el array de nodos para cambio de subnet
+
+#### Tests de Actualización de Nodos Existentes (`_test_/update-existing-nodes.test.ts`)
+
+**Propósito**: Validar funcionalidad de actualización de propiedades de nodos existentes.
+
+```bash
+# Ejecutar tests de actualización de nodos
+npm test _test_/update-existing-nodes.test.ts
 ````
 
 #### Tests de Actualización de Nodos (`_test_/signer-update-new.test.ts`)

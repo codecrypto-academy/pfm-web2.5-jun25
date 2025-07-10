@@ -31,11 +31,11 @@ export default function AIManagement() {
 
       setInput('');
     } catch (error) {
-      console.error('Erreur:', error);
+      console.error('Error:', error);
       setMessages(prev => [
         ...prev,
         { role: 'user', content: message },
-        { role: 'assistant', content: 'Erreur lors du traitement de votre demande.' }
+        { role: 'assistant', content: 'Error while processing your request.' }
       ]);
     } finally {
       setIsLoading(false);

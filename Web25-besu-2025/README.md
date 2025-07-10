@@ -28,6 +28,30 @@ Se proporciona una solución completa para gestionar redes Besu utilizando conte
    - Almacenan la blockchain completa
    - Sincronizan con otros nodos
 
+## Introducción al Proyecto
+
+### Descripción del funcionamiento de la aplicación
+Es una aplicación web desarrollada en Next.JS, que permite gestionar redes y nodos Besu Hyperledger. 
+El front end (directorio de la app) se hizo en React, se usó Tailwind para los visuales y la librería framer-motion para las animaciones. 
+En el front-end, la página ai-manager hace una petición POST /api/ai-chat al backend. El backend (directorio lib) ha sido desarrollado en NodeJS. 
+Está dividido en dos partes. La primera, una API REST, utiliza la biblioteca lib-besu, que permite la creación y gestión de redes y nodos Besu, y se conecta a una base de datos MongoDB. 
+La biblioteca lib-besu utiliza redes y contenedores Docker. La segunda parte del backend utiliza la librería OpenAI para poder utilizar IA en nuestro sitio y se conecta a un servidor MCP. 
+Utiliza la librería OpenAI para enviar prompts al servidor MCP. 
+Estas peticiones contienen las instrucciones y condiciones necesarias para que la IA gestione las redes de Besu.
+Para enviar estas peticiones al servidor MCP, la segunda parte del backend recibe la petición POST /api/ai-chat y, a continuación, ejecuta las acciones decididas por OpenAI a través de la API HTTP MCP (petición POST a /api/mcp).
+El servidor MCP también está escrito en NodeJS. El servidor MCP debe estar ejecutándose en otro proceso para que esta parte funcione. 
+Espera a recibir una petición POST a /api/mcp. En cuanto la recibe, utiliza una de las herramientas que tiene disponibles. Esta es la lista:
+Esta es la lista: create_besu_network, remove_besu_network, add_besu_node, remove_besu_node, start_besu_network, stop_besu_network, get_besu_balance, list_networks.
+Estas herramientas llaman a funciones de BesuManager. También hay una en el backend de la aplicación web. 
+La única diferencia entre los dos BesuManagers es el rango de puertos utilizado para el puerto bootnode y el puerto de los primeros firmantes, para que no haya problemas al crear nuevas redes. 
+Este BesuManager también utiliza la librería lib-besu y se conecta a la base de datos MongoDB.
+
+### Escema General
+
+```mermaid
+{% include_relative web/data/besu_architecture.mermaid %}
+```
+
 ## Estructura del Proyecto
 
 ### 1. Aplicación Web (`/web`)

@@ -223,7 +223,11 @@ const main = async (): Promise<void> => {
 };
 
 // Modern self-executing async function with proper error handling
-main().catch((error) => {
-  console.error('💥 Unhandled error:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('💥 Unhandled error:', error);
+    process.exit(1);
+  });
+}
+
+export { generateKeys, createKeysAndEnode, createKeys, validateArgs, writeFiles };

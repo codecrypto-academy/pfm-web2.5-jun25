@@ -64,8 +64,8 @@ npm run dev
 
 ### Installation Verification
 
-1. Access `http://localhost:3000` to verify the application is running
-2. Verify Docker connection at `http://localhost:3000/api/networks`
+1. Access `http://localhost:3000` (or the port shown in the terminal) to verify the application is running
+2. Verify Docker connection at `http://localhost:3000/api/networks` (adjust port if different)
 
 ## Usage Guide
 

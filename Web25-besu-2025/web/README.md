@@ -94,7 +94,7 @@ touch .env.local
 
 Contenido de .env.local:
 ```env
-MONGODB_URI=mongodb://admin:password123@localhost:27017/besuNetworks
+MONGODB_URI=mongodb://admin:password123@localhost:27017/besuNetworks?authSource=admin
 MONGODB_DB=besuNetworks
 ```
 
@@ -186,7 +186,7 @@ type NetworkStatus =
 ### 1. Problemas de Base de Datos
 ```bash
 # Verificar conexión
-mongosh mongodb://admin:password123@localhost:27017/besuNetworks
+mongosh mongodb://admin:password123@localhost:27017/besuNetworks?authSource=admin
 
 # Verificar índices
 db.networks.getIndexes()

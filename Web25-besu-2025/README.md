@@ -196,7 +196,21 @@ graph LR
    node --version
    ```
 
-2. **Configuración del Proyecto**
+2. **Instalación automatizada del proyecto con install.sh**
+   ```bash
+   # Clonar el repositorio
+   git clone --branch pfm-2.5-besu https://github.com/codecrypto-academy/CarreteroSamuel.git
+
+   # Entrar al directorio del proyecto
+   cd CarreteroSamuel/Web25-besu-2025
+   
+   # Ejecutar el script de instalación
+   ./scripts/install.sh
+   ```
+
+3. **Configuración del Proyecto**
+   Si no ha usado el script de instalación, debe configurar manualmente el proyecto:
+
    ```bash
    # Clonar repositorio
    git clone --branch pfm-2.5-besu https://github.com/codecrypto-academy/CarreteroSamuel.git
@@ -213,7 +227,7 @@ graph LR
    cd 
    ```
 
-3. **Compilación y Despliegue de lib-docker**
+4. **Compilación y Despliegue de lib-docker**
    
    Cuando se realizan cambios en la librería lib-docker, es necesario recompilarla y actualizar su versión en la aplicación web:
    ```bash
@@ -223,15 +237,15 @@ graph LR
    # Compilar la librería
    npm run build
    ```
-   # Copiar los archivos compilados a la aplicación web y al servidor MCP
+   ## Copiar los archivos compilados a la aplicación web y al servidor MCP
 
-   ## En Windows
+   ### En Windows
    ```bash
    xcopy /E /I /Y dist ..\web\src\lib\lib-besu
    xcopy /E /I /Y dist ..\web\mcp-server\dist\lib-besu
    ```
 
-   ## En Linux/Mac
+   ### En Linux/Mac
    ```bash
    cp -r dist/* ../web/src/lib/lib-besu/
    cp -r dist/* ../web/mcp-server/dist/lib-besu/
@@ -239,7 +253,7 @@ graph LR
    
    Este proceso actualiza la librería en la aplicación web con los últimos cambios realizados.
 
-4. **Iniciar Servicios**
+5. **Iniciar Servicios**
    ```bash
 
    cd scripts
@@ -257,7 +271,7 @@ graph LR
    npm run dev
    ```
 
-5. **Gestión de Firmantes con besu-ethers-toolkit.js**
+6. **Gestión de Firmantes con besu-ethers-toolkit.js**
 
    Los nodos validadores que son creados son firmantes por defecto. Para añadir o eliminar firmantes, se utiliza el script `besu-ethers-toolkit.js` que interactúa con la red Besu a través de JSON-RPC.
 

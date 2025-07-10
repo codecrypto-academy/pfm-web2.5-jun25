@@ -34,7 +34,7 @@ const CreateNetworkFormModal: React.FC<CreateNetworkFormModalProps> = ({
   register,
   handleSubmit,
 }) => (
-  <form onSubmit={handleSubmit(onSubmit)}>
+  <form data-testid="form" onSubmit={handleSubmit(onSubmit)}>
     <Stack>
       <Group grow wrap="wrap">
         <TextInput

@@ -28,7 +28,7 @@ const AddNodeFormModal: React.FC<AddNodeFormModalProps> = ({
   register,
   handleSubmit,
 }) => (
-  <form onSubmit={handleSubmit(onSubmit)}>
+  <form data-testid="form" onSubmit={handleSubmit(onSubmit)}>
     <Stack>
       <Controller
         name="name"

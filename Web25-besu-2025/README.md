@@ -107,7 +107,7 @@ Interfaz gráfica desarrollada con Next.js 13 que incluye:
 - Implementado en TypeScript
 - APIs para gestión de redes y nodos
 - Integración con MongoDB para persistencia
-- Incluye la librería lib-docker compilada en `lib-besu`
+- Incluye la librería besu_docker_lib compilada en `lib-besu`
 
 #### Servidor MCP (`/web/mcp-server`)
 - Contiene un servidor MCP (Model Context Protocol)
@@ -127,7 +127,7 @@ Interfaz gráfica desarrollada con Next.js 13 que incluye:
 - Direcciones Ethereum asociadas
 - Necesarios para la inicialización de la red
 
-### 2. Biblioteca Docker (`/lib-docker`)
+### 2. Biblioteca Docker (`/besu_docker_lib`)
 Librería TypeScript para gestión de infraestructura:
 - Creación y gestión de redes Docker
 - Gestión del ciclo de vida de nodos Besu
@@ -220,38 +220,37 @@ graph LR
    npm install
    cd mcp-server
    npm install
-   cd ../../lib-docker 
+   cd ../../besu_docker_lib 
    npm install
    cd ../scripts 
    npm install
    cd 
    ```
 
-4. **Compilación y Despliegue de lib-docker**
+4. **Compilación y publicación de besu_docker_lib**
    
-   Cuando se realizan cambios en la librería lib-docker, es necesario recompilarla y actualizar su versión en la aplicación web:
+   Cuando se realizan cambios en la librería besu_docker_lib, es necesario recompilarla y publicar la nueva versión para que la aplicación web y el servidor MCP la utilicen.:
    ```bash
-   # Entrar al directorio lib-docker
-   cd lib-docker
+   # Entrar al directorio besu_docker_lib
+   cd besu_docker_lib
 
    # Compilar la librería
    npm run build
-   ```
-   ## Copiar los archivos compilados a la aplicación web y al servidor MCP
 
-   ### En Windows
-   ```bash
-   xcopy /E /I /Y dist ..\web\src\lib\lib-besu
-   xcopy /E /I /Y dist ..\web\mcp-server\dist\lib-besu
-   ```
+   # Conectarse a NPM
+   npm login
 
-   ### En Linux/Mac
-   ```bash
-   cp -r dist/* ../web/src/lib/lib-besu/
-   cp -r dist/* ../web/mcp-server/dist/lib-besu/
+   # Cambiar la versión
+   # para un patch (1.0.1)
+   npm version patch
+   # para un minor (1.1.0)
+   npm version minor
+   # para un major (2.0.0)
+   npm version major
+
+   # Publicar la librería en NPM
+   npm publish --access public
    ```
-   
-   Este proceso actualiza la librería en la aplicación web con los últimos cambios realizados.
 
 5. **Iniciar Servicios**
    ```bash
@@ -391,7 +390,7 @@ El servidor MCP es responsable de gestionar la comunicación entre la interfaz w
   - Permite añadir condiciones y reglas complejas de forma sencilla
 
   **Cómo se compila:**
-   - Asegúrese de que la librería `lib-docker` está compilada y actualizada en el directorio `web/mcp-server/dist/lib-besu/`.
+   - Asegúrese de que la librería `besu_docker_lib` está compilada y actualizada en el directorio `web/mcp-server/dist/lib-besu/`.
    - La librería se compila al ejecutar `npm run build` en el directorio `web/mcp-server`.
 
 - **Cómo se ejecuta:**
@@ -404,10 +403,10 @@ El servidor MCP es responsable de gestionar la comunicación entre la interfaz w
 
 ## Mejoras Potenciales
 
-1. **Publicación de lib-docker en NPM**
-   - Publicar la librería lib-docker como un paquete npm público
+1. **Publicación de besu_docker_lib en NPM**
+   - Publicar la librería besu_docker_lib como un paquete npm público
    - Esto permitiría:
-     - Instalación directa con `npm install @besu/lib-docker`
+     - Instalación directa con `npm install @besu/besu_docker_lib`
      - Gestión de versiones más eficiente
      - Actualizaciones automáticas con `npm update`
      - Eliminación de la necesidad de copiar manualmente los archivos compilados

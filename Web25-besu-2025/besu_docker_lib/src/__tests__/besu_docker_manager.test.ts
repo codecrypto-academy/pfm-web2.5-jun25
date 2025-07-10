@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { CryptoLib, DockerNetwork, executeCommand, FileService } from '../index';
+import { CryptoLib, DockerNetwork, executeCommand, FileService } from '../besu_docker_manager';
 import { describe, it, expect, beforeEach, afterEach, jest, beforeAll, afterAll } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
@@ -360,7 +360,7 @@ describe('DockerNetwork', () => {
             console.log('Bootnode agregado e iniciado');
 
             // Agregar miner
-            await dockerNetwork.addMiner('miner', '19551');
+            await dockerNetwork.addMiner('miner', '18555');
             await sleep(20000);
             console.log('Miner agregado e iniciado');
 
@@ -480,11 +480,11 @@ describe('Prueba completa', () => {
         //console.log('\x1b[34m%s\x1b[0m', '=== Lanzando nodos en testNetwork2 ===');
         await dockerNetwork2.addBootnode('bootnode', '18545', '192.168.23.20');
         await sleep(10000);
-        await dockerNetwork2.addMiner('miner', '18546', "");
+        await dockerNetwork2.addMiner('miner', '18555', "");
         await sleep(10000);
-        await dockerNetwork2.addRpc('rpc', '18547', "");
+        await dockerNetwork2.addRpc('rpc18547', '18547', "");
         await sleep(10000);
-        await dockerNetwork2.addRpc('rpc2', '18548', "");
+        await dockerNetwork2.addRpc('rpc18548', '18548', "");
         await sleep(10000);
 
         // test the network with transactions
@@ -503,9 +503,9 @@ describe('Prueba completa', () => {
         await sleep(15000);
         await dockerNetwork.addBootnode('bootnode', '18550', '172.20.0.10');
         await sleep(10000);
-        await dockerNetwork.addMiner('miner', '18551', "172.20.0.11");
+        await dockerNetwork.addMiner('miner', '18556', "172.20.0.11");
         await sleep(10000);
-        await dockerNetwork.addMiner('miner2', '18552', "172.20.0.12");
+        await dockerNetwork.addMiner('miner18552', '18552', "172.20.0.12");
         await sleep(10000);
         await dockerNetwork.addRpc('rpc', '18553', "172.20.0.13");
         await sleep(10000);

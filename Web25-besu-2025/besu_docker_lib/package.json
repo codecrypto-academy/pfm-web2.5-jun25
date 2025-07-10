@@ -1,17 +1,20 @@
 {
-  "name": "crypto-lib",
+  "name": "@scarretero/besu-docker-manager",
   "version": "1.0.0",
-  "description": "Librería criptográfica con ethers y elliptic",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "description": "Library for managing Besu node networks using Docker",
+  "main": "dist/besu_docker_manager.js",
+  "types": "dist/besu_docker_manager.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
+    "besu",
+    "docker",
     "crypto",
     "ethereum",
     "elliptic"
@@ -33,5 +36,18 @@
     "jest": "^29.5.0",
     "ts-jest": "^29.1.0",
     "typescript": "^5.0.4"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codecrypto-academy/CarreteroSamuel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codecrypto-academy/CarreteroSamuel/issues"
+  },
+  "homepage": "https://github.com/codecrypto-academy/CarreteroSamuel#readme",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ]
 }

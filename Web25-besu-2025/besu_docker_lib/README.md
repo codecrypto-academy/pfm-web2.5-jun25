@@ -48,7 +48,7 @@ interface ContainerConfig {
 ```
 
 ```
-lib-docker/
+besu_docker_lib/
 ├── src/
 │   ├── index.ts           # Punto de entrada principal
 │   └── __tests__/        # Tests
@@ -139,11 +139,23 @@ rpc-http-api=["ETH","NET","IBFT"]
 }
 ```
 
+## Conditiones de funcionamiento
+
+Para que la biblioteca funcione correctamente, asegúrese de que:
+- Docker está instalado y en ejecución
+- El usuario tiene permisos para ejecutar comandos Docker
+- El puerto del primer nodo miner de cada red tiene que estar en el rango 18555-18564 o 28555-28564
+
 ## Tests
 
 Ejecutar los tests:
 ```bash
 npm test
+```
+
+Ejecutar un test específico:
+```bash
+npm test -- -t "nombre_del_test"
 ```
 
 ## API

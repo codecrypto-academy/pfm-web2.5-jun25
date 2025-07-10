@@ -9,14 +9,14 @@ exports.startBesuNetwork = startBesuNetwork;
 exports.stopBesuNetwork = stopBesuNetwork;
 exports.getBesuBalance = getBesuBalance;
 // Importe de la biblioteca lib-besu que maneja las redes y nodos de Besu
-const index_1 = require("./lib-besu/index");
+const besu_docker_manager_1 = require("@scarretero/besu-docker-manager");
 const bootnodePort = 28545; // Puerto inicial para el bootnode
 const signerPort = 28555; // Puerto inicial para el nodo que firma
 async function createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccount = '', listOfNodes, prefundedAccounts = [], nbrNetwork = 0) {
     try {
         const prefundedAddresses = prefundedAccounts.map(acc => acc.address);
         const prefundedValues = prefundedAccounts.map(acc => acc.amount);
-        const dockerNetwork = await index_1.DockerNetwork.create(name, chainId, subnet, [], signerAccount, prefundedAddresses, prefundedValues);
+        const dockerNetwork = await besu_docker_manager_1.DockerNetwork.create(name, chainId, subnet, [], signerAccount, prefundedAddresses, prefundedValues);
         await dockerNetwork.addBootnode('bootnode', (bootnodePort + nbrNetwork).toString(), bootnodeIP);
         const subnetParts = subnet.split('/');
         const baseIP = subnetParts[0].split('.');
@@ -44,7 +44,7 @@ async function createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccoun
 }
 async function removeBesuNetwork(name) {
     try {
-        await index_1.DockerNetwork.removeDockerNetwork(name);
+        await besu_docker_manager_1.DockerNetwork.removeDockerNetwork(name);
         return { success: true };
     }
     catch (error) {
@@ -61,7 +61,7 @@ async function getBesuNetwork(name) {
 }
 async function addBesuNode(networkName, nodeName, nodeType, port, ip) {
     try {
-        const network = new index_1.DockerNetwork(networkName);
+        const network = new besu_docker_manager_1.DockerNetwork(networkName);
         switch (nodeType) {
             case 'bootnode':
                 await network.addBootnode(nodeName, port, ip ?? '');
@@ -84,7 +84,7 @@ async function addBesuNode(networkName, nodeName, nodeType, port, ip) {
 }
 async function removeBesuNode(networkName, nodeName) {
     try {
-        const network = new index_1.DockerNetwork(networkName);
+        const network = new besu_docker_manager_1.DockerNetwork(networkName);
         await network.removeNode(nodeName);
         return { success: true };
     }
@@ -94,7 +94,7 @@ async function removeBesuNode(networkName, nodeName) {
 }
 async function startBesuNetwork(name) {
     try {
-        const network = new index_1.DockerNetwork(name);
+        const network = new besu_docker_manager_1.DockerNetwork(name);
         await network.start();
         return { success: true };
     }
@@ -104,7 +104,7 @@ async function startBesuNetwork(name) {
 }
 async function stopBesuNetwork(name) {
     try {
-        const network = new index_1.DockerNetwork(name);
+        const network = new besu_docker_manager_1.DockerNetwork(name);
         await network.stop();
         return { success: true };
     }
@@ -114,7 +114,7 @@ async function stopBesuNetwork(name) {
 }
 async function getBesuBalance(networkName, address) {
     try {
-        const network = new index_1.DockerNetwork(networkName);
+        const network = new besu_docker_manager_1.DockerNetwork(networkName);
         return await network.getBalance(address);
     }
     catch (error) {

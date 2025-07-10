@@ -1,5 +1,5 @@
 // Importe de la biblioteca lib-besu que maneja las redes y nodos de Besu
-import { DockerNetwork } from './lib-besu/index';
+import { DockerNetwork } from '@scarretero/besu-docker-manager';
 
 const bootnodePort  = 28545; // Puerto inicial para el bootnode
 const signerPort    = 28555; // Puerto inicial para el nodo que firma

@@ -9,18 +9,18 @@ yarn-debug.log*
 yarn-error.log*
 
 # Dependency directories
-lib-docker/node_modules/
+besu_docker_lib/node_modules/
 scripts/node_modules/
 
 # Build output
-lib-docker/dist/
+besu_docker_lib/dist/
 
 # Coverage
 coverage/
-lib-docker/coverage/
+besu_docker_lib/coverage/
 
 # Jest
-lib-docker/jest-coverage/
+besu_docker_lib/jest-coverage/
 
 # TypeScript
 *.tsbuildinfo
@@ -37,7 +37,7 @@ lib-docker/jest-coverage/
 .vscode/
 
 # Ignore test output
-lib-docker/test/
+besu_docker_lib/test/
 
 # Ignore script output
 scripts/tests/
@@ -47,6 +47,7 @@ Thumbs.db
 
 # Ignore networks directories except Keypair
 networks/!
+web/networks/*/
 !web/networks/Keypair/
-lib-docker/networks/
+besu_docker_lib/networks/
 scripts/networks/

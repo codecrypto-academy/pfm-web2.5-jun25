@@ -7,8 +7,8 @@ CHAIN_ID=1337
 NODE_COUNT=3
 BASE_PORT=8545
 P2P_BASE_PORT=30303
-DATA_DIR="../data"
-CONFIG_DIR="../config"
+DATA_DIR="./data"
+CONFIG_DIR="./config"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
@@ -160,6 +160,9 @@ start_nodes() {
     
     log "Starting bootnode (node 0) on ports RPC:$RPC_PORT P2P:$P2P_PORT"
     
+    # Get the address for node 0 to use as coinbase
+    NODE0_ADDRESS=$(cat "$DATA_DIR/node0/address" 2>/dev/null || echo "0xfe3b557e8fb62b89f4916b721be55ceb828dbd73")
+    
     docker run -d \
             --name $NODE_NAME \
             --network $NETWORK_NAME \
@@ -184,7 +187,8 @@ start_nodes() {
             --max-peers=25 \
             --sync-mode=FULL \
             --miner-enabled \
-            --miner-coinbase=0xfe3b557e8fb62b89f4916b721be55ceb828dbd73 \
+            --miner-coinbase=$NODE0_ADDRESS \
+            --node-private-key-file=/data/key \
             --logging=INFO || error_exit "Failed to start bootnode (node 0)"
     
     # Wait for bootnode to start and get its enode
@@ -226,6 +230,9 @@ start_nodes() {
         
         log "Starting node $i on ports RPC:$RPC_PORT P2P:$P2P_PORT with bootnode"
         
+        # Get the address for this node to use as coinbase
+        NODE_ADDRESS=$(cat "$DATA_DIR/node$i/address" 2>/dev/null || echo "0xfe3b557e8fb62b89f4916b721be55ceb828dbd73")
+        
         docker run -d \
                 --name $NODE_NAME \
                 --network $NETWORK_NAME \
@@ -250,7 +257,7 @@ start_nodes() {
                 --max-peers=25 \
                 --sync-mode=FULL \
                 --miner-enabled \
-                --miner-coinbase=0xfe3b557e8fb62b89f4916b721be55ceb828dbd73 \
+                --miner-coinbase=$NODE_ADDRESS \
                 --logging=INFO \
                 $BOOTNODES || error_exit "Failed to start node $i"
         

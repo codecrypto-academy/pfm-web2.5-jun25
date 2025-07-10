@@ -7,52 +7,97 @@
 
 const { ethers } = require('ethers');
 
-// Configuración usando la ÚNICA cuenta con fondos reales
+const fs = require('fs');
+const path = require('path');
+
+// Configuración usando claves extraídas de archivos generados
 const CONFIG = {
     rpcUrl: 'http://localhost:8545',
     chainId: 1337,
-    // ⚠️ NOTA: Esta es una clave privada de ejemplo/desarrollo
-    // En producción, NUNCA hardcodees claves privadas
-    privateKey: 'fe3b557e8fb62b89f4916b721be55ceb828dbd73', // Necesitamos encontrar la clave real
-    fromAddress: '0xfe3b557e8fb62b89f4916b721be55ceb828dbd73', // La ÚNICA con fondos
     toAddress: '0x39ff8ba4e087e5319a2330fc7bc4d0e3479bc581', // node0
-    amount: '1.0' // ETH to send
+    amount: '1.0', // ETH to send
+    dataDir: './data', // Directorio donde están los archivos de nodos
+    configDir: './config' // Directorio donde está genesis.json
 };
 
-// Claves privadas comunes de desarrollo (para testing)
-const DEVELOPMENT_KEYS = [
-    '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', // Account 0
-    '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d', // Account 1
-    '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a', // Account 2
-    '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6', // Account 3
-    '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a', // Account 4
-    '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba', // Account 5
-    '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e', // Account 6
-    '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356', // Account 7
-    '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97', // Account 8
-    '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6'  // Account 9
-];
+/**
+ * Extrae las cuentas desde los archivos generados por el script
+ * Lee las claves privadas y direcciones de los directorios de nodos
+ */
+function extractAccountsFromFiles() {
+    const accounts = [];
+    
+    try {
+        // Buscar archivos de nodos en el directorio data
+        const dataPath = path.resolve(__dirname, CONFIG.dataDir);
+        
+        if (!fs.existsSync(dataPath)) {
+            console.log(`❌ Directorio de datos no encontrado: ${dataPath}`);
+            return [];
+        }
+        
+        // Leer directorios de nodos (node0, node1, etc.)
+        const nodeDirectories = fs.readdirSync(dataPath)
+            .filter(dir => dir.startsWith('node'))
+            .sort();
+        
+        for (const nodeDir of nodeDirectories) {
+            const nodePath = path.join(dataPath, nodeDir);
+            const keyFile = path.join(nodePath, 'key');
+            const addressFile = path.join(nodePath, 'address');
+            
+            if (fs.existsSync(keyFile) && fs.existsSync(addressFile)) {
+                 let privateKey = fs.readFileSync(keyFile, 'utf8').trim();
+                 // Asegurar que la clave privada tenga el prefijo 0x
+                 if (!privateKey.startsWith('0x')) {
+                     privateKey = '0x' + privateKey;
+                 }
+                 const address = fs.readFileSync(addressFile, 'utf8').trim().toLowerCase();
+                
+                accounts.push({
+                    nodeDir: nodeDir,
+                    address: address,
+                    privateKey: privateKey
+                });
+            }
+        }
+        
+        console.log(`✅ Extraídas ${accounts.length} cuentas desde archivos de nodos`);
+        return accounts;
+        
+    } catch (error) {
+        console.error('❌ Error extrayendo cuentas desde archivos:', error.message);
+        return [];
+    }
+}
 
-async function findWorkingKey() {
-    console.log('🔍 Buscando clave privada que corresponda a la cuenta con fondos...');
+async function findAccountWithFunds() {
+    console.log('🔍 Buscando cuenta con fondos desde archivos de nodos...');
     
     const provider = new ethers.JsonRpcProvider(CONFIG.rpcUrl);
-    const targetAddress = CONFIG.fromAddress.toLowerCase();
+    const accounts = extractAccountsFromFiles();
     
-    // Probar claves de desarrollo comunes
-    for (let i = 0; i < DEVELOPMENT_KEYS.length; i++) {
+    if (accounts.length === 0) {
+        console.log('❌ No se pudieron extraer cuentas desde archivos');
+        return null;
+    }
+    
+    // Verificar balance de cada cuenta extraída
+    for (const account of accounts) {
         try {
-            const wallet = new ethers.Wallet(DEVELOPMENT_KEYS[i]);
-            if (wallet.address.toLowerCase() === targetAddress) {
-                console.log(`✅ ¡Encontrada! Clave ${i}: ${DEVELOPMENT_KEYS[i]}`);
-                return DEVELOPMENT_KEYS[i];
+            const balance = await provider.getBalance(account.address);
+            console.log(`${account.nodeDir} (${account.address}): ${ethers.formatEther(balance)} ETH`);
+            
+            if (balance > 0n) {
+                console.log(`✅ ¡Encontrada cuenta con fondos! Nodo: ${account.nodeDir}`);
+                return account;
             }
         } catch (error) {
-            // Ignorar errores de claves inválidas
+            console.log(`❌ Error verificando ${account.nodeDir}:`, error.message);
         }
     }
     
-    console.log('❌ No se encontró la clave privada correspondiente');
+    console.log('❌ Ninguna cuenta extraída desde archivos tiene fondos');
     return null;
 }
 
@@ -69,44 +114,36 @@ async function main() {
         const blockNumber = await provider.getBlockNumber();
         console.log(`✅ Connected! Current block: ${blockNumber}`);
         
-        // Verificar balance de la cuenta objetivo
-        console.log('\n💰 Checking target account balance...');
-        const targetBalance = await provider.getBalance(CONFIG.fromAddress);
-        console.log(`Target account (${CONFIG.fromAddress}): ${ethers.formatEther(targetBalance)} ETH`);
+        // Buscar cuenta con fondos desde el mnemonic del proyecto
+        console.log('\n💰 Buscando cuenta con fondos...');
+        const fundedAccount = await findAccountWithFunds();
         
-        if (targetBalance === 0n) {
-            throw new Error('❌ Target account has no funds!');
-        }
-        
-        // Buscar clave privada
-        const workingKey = await findWorkingKey();
-        if (!workingKey) {
-            console.log('\n💡 SOLUCIÓN ALTERNATIVA:');
-            console.log('1. La cuenta 0xfe3b557e8fb62b89f4916b721be55ceb828dbd73 tiene fondos');
-            console.log('2. Pero no tenemos su clave privada');
-            console.log('3. Opciones:');
-            console.log('   a) Buscar la clave en los archivos de configuración de Besu');
-            console.log('   b) Usar una cuenta de desarrollo conocida');
-            console.log('   c) Transferir fondos desde esta cuenta a una cuenta conocida');
+        if (!fundedAccount) {
+            console.log('\n💡 INFORMACIÓN:');
+            console.log('1. No se encontraron cuentas con fondos en los archivos de nodos');
+            console.log('2. Asegúrate de que la red Besu esté ejecutándose con el genesis correcto');
+            console.log('3. Ejecuta primero el script.sh para generar los nodos y sus claves');
             
-            // Mostrar cómo transferir fondos usando Besu CLI
-            console.log('\n🔧 Para transferir fondos usando Besu CLI:');
-            console.log('besu --rpc-http-enabled --rpc-http-host=0.0.0.0 --rpc-http-port=8545 \\');
-            console.log('     --data-path=./data/node0 \\');
-            console.log('     --genesis-file=./config/genesis.json');
+            // Mostrar todas las cuentas extraídas para referencia
+            console.log('\n📋 Cuentas extraídas desde archivos:');
+            const allAccounts = extractAccountsFromFiles();
+            allAccounts.forEach(account => {
+                console.log(`  ${account.nodeDir}: ${account.address}`);
+            });
             
             return;
         }
         
-        // Usar la clave encontrada
-        const wallet = new ethers.Wallet(workingKey, provider);
-        console.log(`📝 Using wallet: ${wallet.address}`);
+        // Usar la cuenta encontrada
+        const wallet = new ethers.Wallet(fundedAccount.privateKey, provider);
+        console.log(`📝 Usando cuenta ${fundedAccount.nodeDir}: ${wallet.address}`);
         
-        // Verificar balance
+        // Verificar balances actuales
         const fromBalance = await provider.getBalance(wallet.address);
         const toBalance = await provider.getBalance(CONFIG.toAddress);
         
-        console.log(`\nFrom (${wallet.address}): ${ethers.formatEther(fromBalance)} ETH`);
+        console.log(`\n💰 Balances actuales:`);
+        console.log(`From (${wallet.address}): ${ethers.formatEther(fromBalance)} ETH`);
         console.log(`To   (${CONFIG.toAddress}): ${ethers.formatEther(toBalance)} ETH`);
         
         // Preparar transacción

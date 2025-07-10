@@ -351,7 +351,7 @@ main() {
     success "✅ All basic network tests passed!"
     echo ""
     echo "📚 Next steps:"
-    echo "   • For real transactions: node real_transaction.js"
+    echo "   • For real transactions: node real_transaction_working.js"
     echo ""
 }
 

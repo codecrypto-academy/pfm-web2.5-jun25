@@ -222,12 +222,6 @@ const main = async (): Promise<void> => {
   }
 };
 
-// Modern self-executing async function with proper error handling
-if (require.main === module) {
-  main().catch((error) => {
-    console.error('💥 Unhandled error:', error);
-    process.exit(1);
-  });
-}
+// No entrypoint logic here! CLI entrypoint will be in a separate file.
 
-export { generateKeys, createKeysAndEnode, createKeys, validateArgs, writeFiles };
+export { generateKeys, createKeysAndEnode, createKeys, validateArgs, writeFiles, main };

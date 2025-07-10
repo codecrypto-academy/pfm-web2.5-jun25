@@ -2,14 +2,14 @@
   "name": "scripts",
   "version": "1.0.0",
   "description": "Besu Network Scripts & Key Generator",
-  "main": "dist/createKeys.js",
+  "main": "dist/cli.js",
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/createKeys.js",
+    "start": "node dist/cli.js",
     "dev": "tsx createKeys.ts",
-    "createKeysAndEnode": "yarn build && node dist/createKeys.js createKeysAndEnode",
-    "createKeys": "yarn build && node dist/createKeys.js createKeys",
+    "createKeysAndEnode": "yarn build && node dist/cli.js createKeysAndEnode",
+    "createKeys": "yarn build && node dist/cli.js createKeys",
     "clean": "rm -rf dist",
     "prepare": "yarn build",
     "test": "jest"

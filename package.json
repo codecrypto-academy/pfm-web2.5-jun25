@@ -22,5 +22,10 @@
     "ethers": "^6.15.0",
     "keccak256": "^1.0.6",
     "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.0.4",
+    "ts-jest": "^29.4.0"
   }
 }

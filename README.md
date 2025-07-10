@@ -1,167 +1,167 @@
 # Hyperledger Besu Network Manager
 
-Sistema de gestión automática para redes blockchain privadas basado en Hyperledger Besu con protocolo Clique (Proof of Authority).
+Automated management system for private blockchain networks based on Hyperledger Besu with Clique (Proof of Authority) consensus protocol.
 
-Este proyecto implementa una solución completa para la creación y administración de redes blockchain privadas, eliminando la configuración manual y los conflictos de recursos mediante gestión automática de contenedores Docker.
+This project implements a complete solution for creating and managing private blockchain networks, eliminating manual configuration and resource conflicts through automated Docker container management.
 
-## Descripción Técnica
+## Technical Description
 
-El sistema proporciona una interfaz web desarrollada en Next.js que permite crear y gestionar redes Hyperledger Besu de forma automática. Utiliza Docker para la containerización de nodos y implementa algoritmos de asignación dinámica para evitar conflictos de puertos, direcciones IP y nombres de recursos.
+The system provides a web interface developed in Next.js that allows creating and managing Hyperledger Besu networks automatically. It uses Docker for node containerization and implements dynamic allocation algorithms to avoid port conflicts, IP addresses, and resource naming.
 
-## Stack Tecnológico
+## Tech Stack
 
 - **Frontend**: Next.js 15, React, TypeScript
 - **Backend**: Node.js, Dockerode API
 - **Blockchain**: Hyperledger Besu
-- **Protocolo de Consenso**: Clique (Proof of Authority)
-- **Containerización**: Docker Engine, Docker Networks
-- **Interfaz**: Tailwind CSS
+- **Consensus Protocol**: Clique (Proof of Authority)
+- **Containerization**: Docker Engine, Docker Networks
+- **UI**: Tailwind CSS
 
-## Requisitos del Sistema
+## System Requirements
 
 ```bash
-# Verificar versiones mínimas
+# Verify minimum versions
 node --version    # >= 18.0.0
 npm --version     # >= 8.0.0
 docker --version  # >= 20.0.0
 ```
 
-### Configuración de Docker
+### Docker Configuration
 
-**El proyecto funciona en múltiples entornos:**
+**The project works in multiple environments:**
 
-#### Windows (Recomendado)
-- **Docker Desktop** ejecutándose en Windows
-- Ejecutar la aplicación directamente desde **PowerShell** o **Command Prompt**
-- La biblioteca dockerode se conecta automáticamente a Docker Desktop
+#### Windows (Recommended)
+- **Docker Desktop** running on Windows
+- Run the application directly from **PowerShell** or **Command Prompt**
+- The dockerode library automatically connects to Docker Desktop
 
-#### WSL2 (Alternativo)
-- Docker Desktop con integración WSL2 habilitada
-- Ejecutar la aplicación desde WSL2 Ubuntu/Debian
-- Verificar que Docker funciona: `docker ps`
+#### WSL2 (Alternative)
+- Docker Desktop with WSL2 integration enabled
+- Run the application from WSL2 Ubuntu/Debian
+- Verify Docker works: `docker ps`
 
 #### Linux/macOS
-- Docker Engine instalado y ejecutándose
-- Socket Docker disponible en `/var/run/docker.sock`
+- Docker Engine installed and running
+- Docker socket available at `/var/run/docker.sock`
 
-## Instalación
+## Installation
 
-### Configuración del Entorno
+### Environment Setup
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/codecrypto-academy/web25-besu-2025.git
+# Clone the repository
+git clone https://github.com/rubencrxz/web25-besu-2025.git
 
-# Navegar al directorio del proyecto
+# Navigate to project directory
 cd web25-besu-2025/web
 
-# Instalar dependencias (usar --legacy-peer-deps si hay conflictos)
+# Install dependencies (use --legacy-peer-deps if conflicts arise)
 npm install --legacy-peer-deps
 
-# Iniciar el servidor de desarrollo
+# Start development server
 npm run dev
 ```
 
-### Verificación de la Instalación
+### Installation Verification
 
-1. Acceder a `http://localhost:3000` para verificar que la aplicación está funcionando
-2. Verificar conexión Docker en `http://localhost:3000/api/networks`
+1. Access `http://localhost:3000` to verify the application is running
+2. Verify Docker connection at `http://localhost:3000/api/networks`
 
-## Guía de Uso
+## Usage Guide
 
-### Interfaz Web
+### Web Interface
 
-#### Creación de Redes
+#### Network Creation
 
-1. Acceder al dashboard principal
-2. Seleccionar "Nueva Red"
-3. Introducir nombre identificativo
-4. Confirmar creación
+1. Access the main dashboard
+2. Select "New Network"
+3. Enter identifying name
+4. Confirm creation
 
-El sistema asignará automáticamente una subred única y generará un nombre de red sin conflictos.
+The system will automatically assign a unique subnet and generate a conflict-free network name.
 
-#### Despliegue de Nodos
+#### Node Deployment
 
-1. Seleccionar red existente
-2. Hacer clic en "Añadir Nodo"
-3. Especificar tipo de nodo:
-   - **Nodo Minero**: Valida transacciones y produce bloques
-   - **Nodo RPC**: Proporciona endpoints para aplicaciones externas
-4. Confirmar despliegue
+1. Select existing network
+2. Click "Add Node"
+3. Specify node type:
+   - **Miner Node**: Validates transactions and produces blocks
+   - **RPC Node**: Provides endpoints for external applications
+4. Confirm deployment
 
-La aplicación asignará automáticamente puertos RPC únicos, direcciones IP internas y nombres de contenedor.
+The application will automatically assign unique RPC ports, internal IP addresses, and container names.
 
-### Deployment Mediante Script
+### Script-Based Deployment (WSL Recommended for Windows)
 
-Para usuarios que prefieren despliegue via línea de comandos:
+For users who prefer command-line deployment:
 
 ```bash
-# Navegar al directorio de scripts
+# Navigate to scripts directory
 cd script/
 
-# Otorgar permisos de ejecución (Linux/macOS/WSL)
+# Grant execution permissions (Linux/macOS/WSL)
 chmod +x script.sh
 
-# Ejecutar deployment automático
+# Execute automatic deployment
 ./script.sh
 ```
 
-**Nota**: El script bash requiere un entorno Unix (Linux, macOS, WSL). Para Windows nativo, usar la interfaz web.
+**Note**: The bash script requires a Unix environment (Linux, macOS, WSL). For native Windows, use the web interface.
 
-## Testing de Funcionalidad
+## Functionality Testing
 
-### Verificación de Conectividad
+### Connectivity Verification
 
 ```bash
-# Comprobar respuesta del nodo (ejemplo con puerto 8545)
+# Check node response (example with port 8545)
 curl -X POST \
   -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
   http://localhost:8545
 ```
 
-## Arquitectura del Sistema
+## System Architecture
 
-### Gestión de Recursos
+### Resource Management
 
-El sistema implementa los siguientes mecanismos de asignación automática:
+The system implements the following automatic allocation mechanisms:
 
-- **Puertos RPC**: Rango 8545-8600, asignación secuencial
-- **Puertos P2P**: Rango 30303-30400, asignación dinámica
-- **Subredes Docker**: Rango 172.20.0.0/16 - 172.50.0.0/16
-- **Nombres de Contenedor**: Prefijo tipológico + hash criptográfico
+- **RPC Ports**: Range 8545-8600, sequential assignment
+- **P2P Ports**: Range 30303-30400, dynamic assignment
+- **Docker Subnets**: Range 172.20.0.0/16 - 172.50.0.0/16
+- **Container Names**: Typological prefix + cryptographic hash
 
-### Protocolo de Consenso
+### Consensus Protocol
 
-- **Algoritmo**: Clique (Proof of Authority)
-- **Tiempo de Bloque**: Aproximadamente 15 segundos
-- **Finalidad**: Determinística tras confirmación
-- **Network ID**: Único por red desplegada
+- **Algorithm**: Clique (Proof of Authority)
+- **Block Time**: Approximately 15 seconds
+- **Finality**: Deterministic after confirmation
+- **Network ID**: Unique per deployed network
 
-## Resolución de Problemas
+## Troubleshooting
 
-### Docker no se conecta
+### Docker Connection Issues
 
 ```bash
-# Verificar que Docker está ejecutándose
+# Verify Docker is running
 docker ps
 
-# En Windows: Reiniciar Docker Desktop
-# En WSL: sudo service docker start
-# En Linux/macOS: sudo systemctl start docker
+# On Windows: Restart Docker Desktop
+# On WSL: sudo service docker start
+# On Linux/macOS: sudo systemctl start docker
 ```
 
-### Conflictos de dependencias NPM
+### NPM Dependency Conflicts
 
 ```bash
-# Limpiar e instalar con legacy peer deps
+# Clean and install with legacy peer deps
 rm -rf node_modules package-lock.json
 npm install --legacy-peer-deps
 ```
 
-### Puertos ocupados
+### Port Conflicts
 
-El sistema asigna puertos automáticamente, pero si hay conflictos:
+The system assigns ports automatically, but if conflicts occur:
 
-- Verificar puertos ocupados: `netstat -an | findstr :8545` (Windows) o `lsof -i :8545` (Unix)
-- El sistema saltará automáticamente a puertos disponibles
+- Check occupied ports: `netstat -an | findstr :8545` (Windows) or `lsof -i :8545` (Unix)
+- The system will automatically skip to available ports

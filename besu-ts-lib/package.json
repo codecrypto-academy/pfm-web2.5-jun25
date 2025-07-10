@@ -1,5 +1,5 @@
 {
-  "name": "@jviejo/docker-manager",
+  "name": "@devisrael/docker-manager",
   "version": "1.0.0",
   "description": "A TypeScript library to manage Docker containers and networks using dockerode",
   "main": "dist/index.js",
@@ -16,7 +16,7 @@
     "network",
     "dockerode"
   ],
-  "author": "",
+  "author": "@devisrael",
   "license": "ISC",
   "dependencies": {
     "dockerode": "^3.3.5"

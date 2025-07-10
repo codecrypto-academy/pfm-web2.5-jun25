@@ -1,5 +1,5 @@
 {
-  "name": "@devisrael/docker-manager",
+  "name": "devisrael-docker-manager",
   "version": "1.0.0",
   "description": "A TypeScript library to manage Docker containers and networks using dockerode",
   "main": "dist/index.js",

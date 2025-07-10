@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  besu-api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - BESU_DATA_PATH=/app/besu-networks
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./besu-networks:/app/besu-networks
+    depends_on:
+      - docker
+    networks:
+      - besu-api-network
+
+  # Servicio para asegurar que Docker esté disponible
+  docker:
+    image: docker:dind
+    privileged: true
+    networks:
+      - besu-api-network
+
+networks:
+  besu-api-network:
+    driver: bridge

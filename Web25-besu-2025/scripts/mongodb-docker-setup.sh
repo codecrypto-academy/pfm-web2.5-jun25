@@ -22,6 +22,8 @@ db.networks.insertMany([
     },
     "name": "PrebaRedBesu",
     "chainId": 1337,
+    "subnet": "192.168.0.0/24",
+    "ip": "192.168.0.10",
     "signerAddress": "0x3B2F47B0134033afCa05c02a81cD81c9eEd5e957",
     "accounts": [
       {
@@ -100,6 +102,8 @@ db.networks.insertMany([
     },
     "name": "RedBesu",
     "chainId": 1338,
+    "subnet": "10.0.0.0/16",
+    "ip": "10.0.0.10",
     "signerAddress": "0x890DA66c41345142719A9349d19ab0f48F08D449",
     "accounts": [
       {

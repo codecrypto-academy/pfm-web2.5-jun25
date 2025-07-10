@@ -1,19 +1,18 @@
-#!/bin/bash
 # Script de instalación automática para el sistema de gestión de redes Hyperledger Besu
 
 # 1. Instalar dependencias en cada subproyecto
 echo "📦 Instalando dependencias en /web..."
 cd web
-npm install
+npm install --legacy-peer-deps
 
 echo "📦 Instalando dependencias en /web/mcp-server..."
 cd mcp-server
-npm install
+npm install --legacy-peer-deps
 
 # 2. Configurar MongoDB usando Docker
 echo "🐳 Iniciando MongoDB en Docker..."
 cd ../../scripts
-./besu-ethers-toolkit.js
+./mongodb-docker-setup.sh
 
 # 3. Crear archivos de entorno para la web y scripts
 echo "📝 Configurando variables de entorno..."

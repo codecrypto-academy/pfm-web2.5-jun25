@@ -1,0 +1,35 @@
+{
+  "name": "besu-network-scripts",
+  "version": "1.0.0",
+  "description": "Scripts para configurar y gestionar una red privada de Hyperledger Besu",
+  "main": "transfer.js",
+  "type": "module",
+  "scripts": {
+    "start": "node transfer.js",
+    "generate-accounts": "node generateAccounts.mjs",
+    "create-keys": "node createPrivatePublicKeys.mjs",
+    "setup-network": "./script.sh",
+    "transfer": "node transfer.js http://localhost:8545"
+  },
+  "keywords": [
+    "besu",
+    "ethereum",
+    "blockchain",
+    "private-network",
+    "hyperledger"
+  ],
+  "author": "Dariel Frias",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.14.4",
+    "fs": "^0.0.1-security",
+    "elliptic": "^6.5.4",
+    "keccak256": "^1.0.6"
+  },
+  "devDependencies": {
+    "jq": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

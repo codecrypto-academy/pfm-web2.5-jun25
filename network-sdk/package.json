@@ -26,7 +26,8 @@
     "format": "prettier --write src/**/*.ts",
     "prepublishOnly": "yarn clean && yarn build",
     "version": "yarn format && git add -A src",
-    "postversion": "git push && git push --tags"
+    "postversion": "git push && git push --tags",
+    "test": "jest"
   },
   "keywords": [
     "besu",
@@ -62,12 +63,15 @@
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.23",
+    "@types/jest": "^30.0.0",
     "@types/keccak": "^3.0.5",
     "@types/node": "^20.14.2",
     "@typescript-eslint/eslint-plugin": "^7.13.0",
     "@typescript-eslint/parser": "^7.13.0",
     "eslint": "^8.57.0",
+    "jest": "^30.0.4",
     "prettier": "^3.3.2",
+    "ts-jest": "^29.4.0",
     "tsx": "^4.15.7",
     "typescript": "^5.4.5"
   },

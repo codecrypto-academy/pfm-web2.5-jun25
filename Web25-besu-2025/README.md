@@ -31,6 +31,7 @@ Se proporciona una solución completa para gestionar redes Besu utilizando conte
 ## Introducción al Proyecto
 
 ### Descripción del funcionamiento de la aplicación
+
 Es una aplicación web desarrollada en Next.JS, que permite gestionar redes y nodos Besu Hyperledger. 
 El front end (directorio de la app) se hizo en React, se usó Tailwind para los visuales y la librería framer-motion para las animaciones. 
 En el front-end, la página ai-manager hace una petición POST /api/ai-chat al backend. El backend (directorio lib) ha sido desarrollado en NodeJS. 
@@ -49,7 +50,45 @@ Este BesuManager también utiliza la librería lib-besu y se conecta a la base d
 ### Escema General
 
 ```mermaid
-{% include_relative web/data/besu_architecture.mermaid %}
+graph TD
+    A[Frontend Next.js] --> B[Page ai-manager]
+    A --> B2[Page actions]
+    B --> C[POST /api/ai-chat]
+    B2 --> C2[API REST Endpoints]
+    
+    C --> D[Backend NodeJS]
+    C2 --> D
+    D --> E[API REST + BesuManager1]
+    D --> F[IA Integration + OpenAI]
+    
+    E --> G[lib-besu]
+    E --> H[MongoDB]
+    G --> I[Docker Networks]
+    
+    F --> J[POST /api/mcp]
+    J --> K[Serveur MCP]
+    
+    K --> P[create_besu_network]
+    K --> Q[remove_besu_network]
+    K --> R[add_besu_node]
+    K --> S[remove_besu_node]
+    K --> T[start_besu_network]
+    K --> U[stop_besu_network]
+    K --> V[get_besu_balance]
+    K --> W[list_networks]
+    
+    P --> L[BesuManager2]
+    Q --> L
+    R --> L
+    S --> L
+    T --> L
+    U --> L
+    V --> L
+    W --> L
+    
+    L --> M[lib-besu]
+    L --> N[MongoDB]
+    M --> O[Docker Networks]
 ```
 
 ## Estructura del Proyecto

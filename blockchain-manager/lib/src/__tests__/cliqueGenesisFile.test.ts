@@ -2,17 +2,25 @@ import fs from 'fs';
 import path from 'path';
 import { createCliqueGenesisFile, generateCliqueGenesisFile, generateExtraData, generatePreAllocatedAccounts } from "../services/cliqueGenesisFile";
 
-jest.mock("fs");
-const mockedFs = fs as jest.Mocked<typeof fs>;
-
 
 describe('cliqueGenesisFile', () => {
+    let existsSyncSpy: jest.SpyInstance;
+    let mkdirSyncSpy: jest.SpyInstance;
+    let writeFileSyncSpy: jest.SpyInstance;
     beforeEach(() => {
         jest.clearAllMocks();
 
-        mockedFs.existsSync.mockReturnValue(true);
-        mockedFs.mkdirSync.mockReturnValue(undefined);
-        mockedFs.writeFileSync.mockReturnValue(undefined);
+        existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+        mkdirSyncSpy = jest.spyOn(fs, 'mkdirSync').mockReturnValue(undefined);
+        writeFileSyncSpy = jest.spyOn(fs, 'writeFileSync').mockReturnValue(undefined);
+
+    });
+
+    afterEach(() => {
+        // After each test, restore the original implementation of the spied functions
+        existsSyncSpy.mockRestore();
+        mkdirSyncSpy.mockRestore();
+        writeFileSyncSpy.mockRestore();
     });
 
     it('should create directory and write genesis file', () => {
@@ -22,17 +30,19 @@ describe('cliqueGenesisFile', () => {
         };
 
         const mockNetworkPath = path.join(process.cwd(), 'mock-network');
+        const expectedGenesisContent = generateCliqueGenesisFile(config);
 
         createCliqueGenesisFile(mockNetworkPath, config);
 
-        expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
-            path.join(mockNetworkPath, 'genesis.json'),
-            expect.any(String)
+        expect(existsSyncSpy).toHaveBeenCalledWith(mockNetworkPath);
+        expect(writeFileSyncSpy).toHaveBeenCalledWith(
+            expect.any(String),
+            JSON.stringify(expectedGenesisContent)
         );
     });
 
     it('should create directory when it does not exist', () => {
-        mockedFs.existsSync.mockReturnValue(false);
+        existsSyncSpy.mockReturnValue(false);
 
         const config = {
             chainId: 123,
@@ -43,7 +53,7 @@ describe('cliqueGenesisFile', () => {
 
         createCliqueGenesisFile(mockNetworkPath, config);
 
-        expect(mockedFs.mkdirSync).toHaveBeenCalledWith(mockNetworkPath, { recursive: true });
+        expect(mkdirSyncSpy).toHaveBeenCalledWith(mockNetworkPath, { recursive: true });
     });
 
     it('should write correct genesis content', () => {
@@ -57,7 +67,7 @@ describe('cliqueGenesisFile', () => {
         createCliqueGenesisFile(mockNetworkPath, config);
 
         const expectedGenesisContent = generateCliqueGenesisFile(config);
-        expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
+        expect(writeFileSyncSpy).toHaveBeenCalledWith(
             expect.any(String),
             JSON.stringify(expectedGenesisContent)
         );
@@ -294,8 +304,4 @@ describe('generatePreAllocatedAccounts', () => {
         const result = generatePreAllocatedAccounts([account]);
         expect(result).toHaveProperty('dd8655f39bee863dba4c5210cf6e4a02e76173e0');
     });
-
-
-
-
 });

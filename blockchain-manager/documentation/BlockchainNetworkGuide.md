@@ -47,18 +47,36 @@ Para asegurar que la red esté funcionando correctamente después de ejecutar `d
 docker ps --filter "label=network=besu-network"
 
 # Ver información detallada de la red (ejecutar desde el directorio raíz)
-node blockchain-manager/script/index.mjs network-info
+node blockchain-manager/script/blockchain-utilities.mjs network-info
 
 # Verificar el estado de la red y las conexiones entre pares
-node blockchain-manager/script/index.mjs network-status
+node blockchain-manager/script/blockchain-utilities.mjs network-status
+```
+
+#### Validación Automatizada con `test-blockchain.sh`
+
+El script `./blockchain-manager/script/test-blockchain.sh` proporciona una validación completa y automatizada de la red. Este script realiza los siguientes pasos:
+
+-   **Recreación de la Blockchain**: Ejecuta `./docker.sh` para asegurar un entorno de red limpio y recién creado.
+-   **Espera de Sincronización**: Espera 60 segundos para permitir que los nodos de la red se sincronicen.
+-   **Verificación de Información de Red**: Utiliza `node blockchain-utilities.mjs network-info` para obtener información general de la red.
+-   **Verificación de Estado de Red**: Utiliza `node blockchain-utilities.mjs network-status` para comprobar la salud de la red y las conexiones entre pares.
+-   **Obtención de Balance del Minero**: Recupera la dirección y la clave privada del nodo minero y luego verifica su balance inicial.
+-   **Transferencia de Fondos Individual**: Crea una nueva dirección y transfiere 20 unidades de la moneda desde la cuenta del minero a esta nueva dirección.
+-   **Transferencia a Múltiples Cuentas**: Ejecuta una transferencia de fondos a un rango de cuentas predefinidas utilizando `node blockchain-utilities.mjs transfer-funds` para simular transacciones masivas.
+
+Para ejecutar esta secuencia de prueba completa:
+
+```bash
+./blockchain-manager/script/test-blockchain.sh
 ```
 
 ### 3. Comandos Disponibles del Script (`script/index.mjs`)
 
-Los siguientes comandos se pueden ejecutar directamente usando `node blockchain-manager/script/index.mjs` (después de ejecutar `docker.sh`):
+Los siguientes comandos se pueden ejecutar directamente usando `node blockchain-manager/script/blockchain-utilities.mjs` (después de ejecutar `docker.sh`):
 
 ```bash
-node blockchain-manager/script/index.mjs [comando] [parámetros]
+node blockchain-manager/script/blockchain-utilities.mjs [comando] [parámetros]
 
 Comandos disponibles:
     create-keys <ip>                    - Crea claves de nodo para la dirección IP dada.
@@ -168,7 +186,7 @@ docker ps --filter "label=network=besu-network"
 
 ### 2. Verificar Transferencias en MetaMask
 
-1.  Ejecuta: `node blockchain-manager/script/index.mjs show-accounts` (si usas `docker.sh`) o inspecciona los archivos de identidad generados por `lib` para obtener las claves privadas.
+1.  Ejecuta: `node blockchain-manager/script/blockchain-utilities.mjs show-accounts` (si usas `docker.sh`) o inspecciona los archivos de identidad generados por `lib` para obtener las claves privadas.
 2.  Importa las cuentas que desees verificar en MetaMask utilizando las claves privadas.
 3.  Cambia a las cuentas de destino (ej. cuentas 1-10) y verifica que cada una tenga los fondos transferidos.
 
@@ -176,13 +194,13 @@ docker ps --filter "label=network=besu-network"
 
 ```bash
 # Ver balance de cuenta específica (reemplaza [DIRECCION] con la dirección real)
-node blockchain-manager/script/index.mjs balance 0x[DIRECCION]
+node blockchain-manager/script/blockchain-utilities.mjs balance 0x[DIRECCION]
 
 # Ver información de red
-node blockchain-manager/script/index.mjs network-info
+node blockchain-manager/script/blockchain-utilities.mjs network-info
 ```
 
-**Nota**: Los comandos `balance` y `network-info` utilizan el `script/index.mjs` y se conectarán a un nodo RPC (por defecto, el puerto 8545). Asegúrate de que un nodo RPC esté activo y accesible en ese puerto.
+**Nota**: Los comandos `balance` y `network-info` utilizan el `script/blockchain-utilities.mjs` y se conectarán a un nodo RPC (por defecto, el puerto 8545). Asegúrate de que un nodo RPC esté activo y accesible en ese puerto.
 
 ---
 

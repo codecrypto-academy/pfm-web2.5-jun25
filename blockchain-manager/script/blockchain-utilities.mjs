@@ -229,6 +229,13 @@ async function main() {
                 process.exit(1);
             }
             break;
+
+        case 'create-address':
+            const mnemonic = "test test test test test test test test test test test junk";
+    
+            const HDNodeWallet = deriveWalletFromMnemonic(mnemonic, 0);
+            console.log(HDNodeWallet.address);
+            break;
             
         case 'transfer':
             const fromPrivateKey = args[1];

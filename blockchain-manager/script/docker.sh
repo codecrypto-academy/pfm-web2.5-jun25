@@ -25,7 +25,7 @@ echo "➡️ Network created"
 cd networks/besu-network
 mkdir -p bootnode
 cd bootnode
-node ../../../index.mjs create-keys $BOOTNODE_IP
+node ../../../blockchain-utilities.mjs create-keys $BOOTNODE_IP
 cd ../../..
 
 echo "➡️ Bootnode files created"
@@ -48,7 +48,7 @@ fi
 cd networks/besu-network
 mkdir -p miner
 cd miner
-node ../../../index.mjs create-keys ${MINER_IP}
+node ../../../blockchain-utilities.mjs create-keys ${MINER_IP}
 cd ../../..
 
 echo "➡️ Miner files created"
@@ -140,7 +140,7 @@ docker run -d \
   --config-file=/data/config.toml \
   --data-path=/data/bootnode/data \
   --node-private-key-file=/data/bootnode/key.priv \
-  --genesis-file=/data/genesis.json
+  --genesis-file=/data/genesis.json >/dev/null || true
 
 echo "➡️ Bootnode node created"
 
@@ -161,7 +161,7 @@ docker run -d \
   --miner-enabled=true \
   --miner-coinbase="$(cat networks/besu-network/miner/address)" \
   --min-gas-price=0 \
-  --bootnodes="${BOOTNODE_ENODE}"
+  --bootnodes="${BOOTNODE_ENODE}" >/dev/null || true
 
 echo "➡️ Miner node created"
 
@@ -181,7 +181,7 @@ for port in 8545 8546 8547 8548; do
       --config-file=/data/config.toml \
       --data-path=/data/rpc${port}/data \
       --genesis-file=/data/genesis.json \
-      --bootnodes="${BOOTNODE_ENODE}"
+      --bootnodes="${BOOTNODE_ENODE}" >/dev/null || true
     
     echo "➡️ RPC node on port ${port} created"
 done

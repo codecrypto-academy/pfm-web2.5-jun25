@@ -41,37 +41,37 @@ Los pasos son los siguientes:
 ### 2. Verificar Estado de la Red
 ```bash
 # Verificar que la red esté funcionando
-node script/index.mjs network-status
+node script/blockchain-utilities.mjs network-status
 
 # Ver información detallada de la red
-node script/index.mjs network-info
+node script/blockchain-utilities.mjs network-info
 ```
 
 ### 3. Mostrar Información de Cuentas
 ```bash
 # Mostrar cuentas 0-10 con claves privadas para MetaMask
-node script/index.mjs show-accounts
+node script/blockchain-utilities.mjs show-accounts
 
 # Mostrar solo cuentas 1-5
-node script/index.mjs show-accounts 1 5
+node script/blockchain-utilities.mjs show-accounts 1 5
 ```
 
 ### 4. Realizar Transferencias
 ```bash
 # Transferir 1 ETH a las cuentas 1-10 desde la cuenta 0
-node script/index.mjs transfer-funds
+node script/blockchain-utilities.mjs transfer-funds
 
 # Transferir 2 ETH a las cuentas 1-5 desde la cuenta 0
-node script/index.mjs transfer-funds 0 1 5 2
+node script/blockchain-utilities.mjs transfer-funds 0 1 5 2
 
 # Transferir 0.5 ETH a las cuentas 1-10 desde la cuenta 0
-node script/index.mjs transfer-funds 0 1 10 0.5
+node script/blockchain-utilities.mjs transfer-funds 0 1 10 0.5
 ```
 
 ### 5. Verificar Balances
 ```bash
 # Verificar balance de una cuenta específica
-node script/index.mjs balance 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+node script/blockchain-utilities.mjs balance 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 ```
 
 ## 📋 Detalles de la Configuración
@@ -113,11 +113,11 @@ node script/index.mjs balance 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 docker ps --filter "name=besu-network"
 
 # Verificar estado de red
-node script/index.mjs network-status
+node script/blockchain-utilities.mjs network-status
 ```
 
 ### 2. Verificar transferencias en MetaMask
-1. Ejecutar: `node script/index.mjs show-accounts`
+1. Ejecutar: `node script/blockchain-utilities.mjs show-accounts`
 2. Importar cuentas usando las claves privadas mostradas
 3. Cambiar a las cuentas 1-10
 4. Verificar que cada una tenga los fondos transferidos
@@ -125,16 +125,16 @@ node script/index.mjs network-status
 ### 3. Verificar via comandos
 ```bash
 # Ver balance de cuenta específica
-node script/index.mjs balance 0x[DIRECCION]
+node script/blockchain-utilities.mjs balance 0x[DIRECCION]
 
 # Ver información de red
-node script/index.mjs network-info
+node script/blockchain-utilities.mjs network-info
 ```
 
 ## 🛠️ Comandos Disponibles
 
 ```bash
-node script/index.mjs [comando] [parámetros]
+node script/blockchain-utilities.mjs [comando] [parámetros]
 
 Comandos disponibles:
     create-keys <ip>                    - Create node keys for given IP address

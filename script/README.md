@@ -271,6 +271,9 @@ testTransactions:
     *   `chainId`: Unique identifier for your network.
     *   `blockPeriodSeconds`: Target time between blocks. `15` is a balanced value.
 
+*   **`network`**: Defines the Docker network settings.
+    *   `label`: A key-value pair used to tag all Docker resources (containers, networks) created by this script. This allows for easy identification and cleanup.
+
 *   **`nodes`**: The list of nodes that will make up the network.
     *   `roles`: A list defining the node's function.
         *   `validator`: The node is an authorized authority to create (mine) blocks. Its address will be included in the genesis `extraData`.

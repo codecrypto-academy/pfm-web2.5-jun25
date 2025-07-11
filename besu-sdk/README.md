@@ -1,126 +1,24 @@
 # Besu SDK: Professional TypeScript SDK for Hyperledger Besu Networks
 
-> Although the initial idea was to wrap modular Bash scripts with `child_process`, the original script was monolithic, offering no reuse value. Switching to Dockerode enables true cross-platform support, stable API interactions, and robust testing — all essential for building a professional SDK.
-
-This TypeScript SDK provides a modern, type-safe API for managing local Hyperledger Besu networks using Clique (PoA) consensus. Built with Dockerode for direct Docker API interaction, it offers a professional, cross-platform solution that works seamlessly on Windows, macOS, and Linux.
-
-The SDK serves as a programmatic alternative to `docker-compose`, specifically tailored for Besu blockchain networks. It enables complete automation of network creation, management, and teardown through a clean, robust, and fully testable codebase.
-
-## 1. Overview
-
-> **💡 Pro Tip**: For a deeper understanding of the SDK's design decisions and implementation details, consider reading through the scripts paying special attention to the lightbulb tips (💡) scattered throughout - they provide valuable insights into the technical choices and trade-offs that shaped this SDK.
-
-The original project utilized a monolithic Bash script (`/script/script.sh`) to automate the deployment of private Hyperledger Besu networks using Docker. Its capabilities included:
-
-*   Configuration via YAML files.
-*   Generation of cryptographic keys and `genesis.json`.
-*   Launching various node types (validators, bootnodes, RPC).
-*   Running integration tests with `ethers.js`.
-*   Support for PoA (Clique) consensus.
-*   Real-time monitoring and an interactive post-deployment menu.
-
-While effective for a PoC, Bash scripts present significant limitations in portability and professional deployment. This TypeScript library aims to solve these issues by offering:
-
-*   **True Cross-Platform Support**: Native Windows, macOS, and Linux compatibility through Dockerode's direct API interaction.
-*   **Professional Testing**: Full unit and integration test support with mockable Docker interactions.
-*   **Type Safety**: Complete TypeScript coverage with strict typing for robust development.
-*   **Modern API Design**: Fluent builder pattern, event-driven architecture, and predictable state management.
-
-## 2. Core Design: Direct Docker API Integration
-
-The SDK leverages **Dockerode** for direct interaction with the Docker daemon, providing a robust and cross-platform solution. This approach offers several advantages:
-
-*   **Native API Access**: Direct communication with Docker's API ensures stability and feature completeness.
-*   **Cross-Platform Compatibility**: Works identically on Windows, macOS, and Linux without shell script dependencies.
-*   **Enhanced Error Handling**: Structured responses and typed errors replace fragile text parsing.
-*   **Superior Testing**: Easy mocking of Docker operations for comprehensive unit tests.
-
-**Architecture Highlights:**
-*   The SDK encapsulates all Docker operations within a dedicated `DockerManager` service.
-*   Network state is managed through a finite state machine (FSM) for predictable behavior.
-*   All node operations are orchestrated through a central `Network` class that ensures consistency.
-
-## 3. Getting Started
-
-The library is located in the `besu-sdk/` directory. This directory serves a dual purpose: it's a shared Node.js environment for other project scripts in this repository and the development home for this library.
-
-### 3.1. Installation
-
-1.  Navigate to the library directory:
-    ```bash
-    cd besu-sdk/
-    ```
-
-2.  If `package.json` does not exist, initialize a new Node.js project:
-    ```bash
-    npm init -y
-    ```
-
-3.  Install all required dependencies. This command will install production dependencies like `dockerode`, `ethers` and development dependencies like `typescript`, `jest`, `ts-jest`, and their associated types.
-    ```bash
-    npm install
-    ```
-    > **Note for new contributors:** You only need to run `npm install` to set up the project. The SDK uses Dockerode for Docker interaction and ethers.js for blockchain operations.
-
-### 3.2. First-Time Configuration
-
-If you are setting up the project from scratch, run these commands to generate the necessary configuration files:
-
-*   **TypeScript Configuration:** Creates `tsconfig.json`, which defines how your TypeScript code is compiled.
-    ```bash
-    npx tsc --init
-    ```
-
-*   **Jest Configuration:** Creates `jest.config.js`, configuring Jest to run tests written in TypeScript via `ts-jest`.
-    ```bash
-    npx ts-jest config:init
-    ```
-
-## 4. Development Workflow
-
-Ensure your `package.json` contains the following scripts for building and testing the library:
-
-```json
-"scripts": {
-  "build": "tsc",
-  "test": "jest"
-}
-```
-
-### 4.1. Building the Library
-
-The build command compiles all TypeScript source files into JavaScript.
-
-*   **Command:**
-    ```bash
-    npm run build
-    ```
-*   **Action:** Uses `tsconfig.json` to compile files from `src/` and outputs the resulting `.js` and `.d.ts` (declaration) files to the `dist/` directory.
-
-
-### To be used at "frontback"
-
-There's no mistery in this. The file is imported as 
-
-### To be used somewhere else
-
-
-# Besu Network Automation SDK
-
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
 ![Jest](https://img.shields.io/badge/Jest-C21325?style=for-the-badge&logo=jest&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)
 
-A professional-grade, type-safe TypeScript library for programmatically creating, managing, and tearing down private Hyperledger Besu networks using Docker.
+> Although the initial idea was to wrap modular Bash scripts with `child_process`, the original script was monolithic, offering no reuse value. Switching to Dockerode enables true cross-platform support, stable API interactions, and robust testing — all essential for building a professional SDK.
+>
+> 💡 **Pro Tip:** The source code is annotated with lightbulb emojis (💡) to highlight key architectural patterns and important implementation details.
 
-> **Pro Tip:** The source code is annotated with 💡 lightbulb emojis to highlight key architectural patterns and important implementation details.
+This TypeScript SDK provides a modern, type-safe API for managing local Hyperledger Besu networks using Clique (PoA) consensus. Built with Dockerode for direct Docker API interaction, it offers a professional, cross-platform solution that works seamlessly on Windows, macOS, and Linux.
 
-## Core Features
+The SDK serves as a programmatic alternative to `docker-compose`, specifically tailored for Besu blockchain networks. It enables complete automation of network creation, management, and teardown through a clean, robust, and fully testable codebase.
+
+## 1. Core Features
 
 -   **Fluent Builder API**: A chainable, declarative interface (`BesuNetworkBuilder`) for constructing complex network topologies with ease.
 -   **Fine-Grained Control**: Configure over 20 distinct parameters, from `chainId` and `blockPeriodSeconds` to Docker image tags and network subnets.
 -   **Deterministic Generation**: Provide an optional `identitySeed` to deterministically generate node keys and addresses, ensuring reproducible network states for testing.
+    > WARNING: Never use predictable seeds or reuse seeds in production environments.
 -   **Robust Lifecycle Management**:
     -   Strict state machine using a `NetworkStatus` enum for nodes and the network.
     -   Built-in readiness probes (`waitForNodeReady`) to wait for RPC services to become available.
@@ -129,31 +27,96 @@ A professional-grade, type-safe TypeScript library for programmatically creating
 -   **Advanced Networking**: Supports creating new Docker networks or attaching to pre-existing ones, with automatic subnet collision detection.
 -   **Comprehensive Testing**: Includes a test suite with **136 test cases** built with Jest.
 
-## Installation
+## 2. Architectural Concepts and Design Decisions
 
-### Local Development / Monorepo Integration
+### 2.1. Direct Docker API Integration with Dockerode
+The SDK leverages **Dockerode** for direct interaction with the Docker daemon. This approach offers several advantages over wrapping shell scripts:
+*   **Native API Access**: Direct communication with Docker's API ensures stability and feature completeness.
+*   **Cross-Platform Compatibility**: Works identically on Windows, macOS, and Linux without shell script dependencies.
+*   **Enhanced Error Handling**: Structured responses and typed errors replace fragile text parsing.
+*   **Superior Testing**: Easy mocking of Docker operations for comprehensive unit tests.
 
-For use within this project or a similar monorepo structure, install it using a relative file path. This creates a symbolic link, allowing changes in the SDK to be immediately reflected in the consuming project.
+### 2.2. The "One Network, One Blockchain" Principle
+The SDK is designed on a strict "one network, one blockchain" principle.
+A `Network` instance must manage only ONE blockchain (a single `chainId`).
+Running multiple `chainId`s on one Docker network is a critical anti-pattern that breaks peer discovery. To manage multiple blockchains, create separate `Network` instances; the SDK will correctly isolate them and prevent subnet collisions.
 
-From the consuming directory (e.g., `frontback/`):
+### 2.3. NetworkBuilder vs. Network
+The SDK distinguishes between configuration-time and run-time operations:
+-   **`BesuNetworkBuilder`**: Used to define the network's properties *before* it's created (e.g., `withChainId`, `withNode`). It also includes the `SystemValidator`.
+-   **`Network`**: Represents an active, running network. Its methods are for interacting with the network *after* it has been built (e.g., `addNode`, `getNode`).
+
+### 2.4. The Role of SystemValidator
+You might see the `SystemValidator` in the `NetworkBuilder` and think it's unnecessary. However, it acts as a pre-flight check to ensure the host system is ready (Docker is running, etc.). Skipping it doesn't cause a direct error, but it exposes you to hard-to-diagnose failures if the underlying environment isn't configured correctly. Think of it as a pilot's checklist before takeoff.
+
+### 2.5. Node Management and Encapsulation
+Nodes are managed exclusively through the `Network` instance. You never create a `BesuNode` directly. This ensures that all nodes are correctly associated with a network and its lifecycle.
+
+### 2.6. BesuNode vs. Network: Who Does What?
+-   **`BesuNode` is selfish**: It only cares about itself. Each `BesuNode` instance that is RPC-enabled has its own unique `rpcUrl`. When you call `myRpcNode.getRpcProvider()`, it creates an `ethers.JsonRpcProvider` that points *only* to that node's URL. It knows nothing about other nodes.
+-   **`Network` is the orchestra conductor**: It knows about all the nodes. The `network.getProvider()` method gives you a provider to interact with the network, typically by picking a healthy RPC node.
+
+### 2.7. Understanding RPC, JSON-RPC, and Ethers.js
+-   When you start a Besu node with RPC enabled, it starts an HTTP web server waiting for requests in the **JSON-RPC 2.0** format.
+-   You could use a generic HTTP client like `curl` to send these JSON-RPC requests manually.
+-   **`ethers.js`** is a specialized client library. Instead of using `curl`, it uses native JavaScript HTTP capabilities to create a `provider` object (`ethers.JsonRpcProvider(rpcNodeUrl)`). This provider abstracts away the raw `curl` commands, giving you pre-defined methods to interact with the node.
+
+### 2.8. Naming Conventions and Defaults
+-   **Container Name**: `besu-[network.name]-[node.name]`
+-   **Network Name**: If no name is provided, a default one is generated: `besu-network-<timestamp>`
+
+### 2.9. Data Directory Management
+For better organization, you can specify an external data directory using `withDataDirectory(dir: string)`. This keeps generated node keys and blockchain data outside your project directory.
+```typescript
+const builder = new BesuNetworkBuilder()
+  .withDataDirectory('../sdk-testnets'); // Recommended
+```
+
+### 2.10. How `validateChainIdUnique` Works
+This function does **not** check against running Docker containers. Instead, it validates that the `chainId` is unique among all networks managed by the SDK that have their configuration persisted on the file system.
+
+## 3. Installation and Usage
+
+### 3.1. Installation
+This SDK is designed for local use within this monorepo. Install it from a consuming project (e.g., `frontback/`) using a relative path. This creates a symlink, so changes in the SDK are immediately available.
 ```bash
+# From the consuming directory (e.g., frontback/)
 npm install ../besu-sdk
 ```
 
-This will add the following entry to your `package.json`:
-```json
-"dependencies": {
-  "besu-sdk": "file:../besu-sdk"
-}
+### 3.2. Peer Dependencies
+This SDK does not bundle `ethers`. It must be provided by the host project. Ensure your project's `package.json` includes `ethers` as a dependency.
+
+## 4. Development Workflow
+
+### 4.1. Building
+To compile TypeScript source files into JavaScript, run:
+```bash
+npm run build
 ```
 
-### Peer Dependencies
+### 4.2. Reflecting Changes in Other Projects
+When you make a change in `besu-sdk` and want it to be effective in another project that uses it (like `frontback`), you must follow these steps:
+```bash
+# 1. Navigate to the SDK directory and rebuild it
+cd ../besu-sdk
+npm run build
 
-This SDK does not bundle `ethers`. It must be provided by the host project to avoid version conflicts and reduce package size. Ensure your project's `package.json` includes `ethers`.
+# 2. Navigate to the consuming project and reinstall the dependency
+cd ../frontback
+npm install # This updates the symlinked package with the new build
+```
 
-**`besu-sdk/package.json`:**
+### 4.3. Testing
+The project includes scripts for running unit and end-to-end tests.
+
+-   `npm test`: Runs ALL tests in `src/` (including `unit/` and `e2e/`).
+-   `npm run test:unit`: Runs only tests in `src/__tests__/unit/`.
+
+You may need to add these scripts to your `package.json`:
 ```json
-"peerDependencies": {
-  "ethers": "^6.7.0"
+"scripts": {
+  "build": "tsc",
+  "test": "jest",
 }
 ```

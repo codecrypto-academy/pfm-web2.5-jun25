@@ -22,7 +22,11 @@ docker:
   image: "hyperledger/besu:latest"
 
 nodes:
-  # ⚠️ Be careful: using a validator can work. A high N, if tolerated by the machine, actually contributes to robustness — but setting it to 2 makes synchronization extremely difficult. The nodes have trouble agreeing on block timing down to the millisecond, which can lead to unstable behavior in edge cases.
+  # ⚠️ Be careful: using a validator can work.
+  # A high N, if tolerated by the machine, actually contributes to robustness.
+  # But setting it to 2 makes synchronization extremely difficult.
+  # The nodes have trouble agreeing on block timing down to the millisecond
+  # Which can lead to unstable behavior in edge cases.
 
   # MULTI-ROLE NODE: Bootnode + Validator/Signer + RPC
     # - Bootnode: P2P meeting point for discovery (enode URL)

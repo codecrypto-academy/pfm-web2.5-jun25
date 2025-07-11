@@ -1,0 +1,13 @@
+{
+  "id": "deleteme",
+  "name": "DELETEME",
+  "rpcUrl": "http://localhost:9999",
+  "chainId": 123999,
+  "privateKey": "",
+  "theme": {
+    "primary": "blue-dark",
+    "secondary": "blue-light"
+  },
+  "nodes": [],
+  "prefunds": []
+}

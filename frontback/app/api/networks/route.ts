@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { NetworkConfig } from '../../types';
+import { getAllNetworks, getNetwork } from '../../../lib/networkManager';
+import { initializeDefaultNetwork, getDefaultNetworkInfo } from '../../../lib/initializeDefaultNetwork';
 
 export async function GET() {
+    // Inicializar la red por defecto desde el .env
+    await initializeDefaultNetwork();
+    
     const networksDir = path.join(process.cwd(), 'app', 'networks');
     let configs: NetworkConfig[] = [];
 
@@ -22,22 +27,41 @@ export async function GET() {
         // No es un error fatal, podemos continuar sin redes preconfiguradas
     }
 
-    // Si las variables de entorno para una red por defecto existen, la creamos
-    if (process.env.NEXT_PUBLIC_RPC_URL) {
+    // Agregar la red por defecto si está disponible
+    if (process.env.RPC_URL) {
+        const defaultNetworkInfo = getDefaultNetworkInfo();
+        // Crear la configuración de red compatible con el tipo NetworkConfig
         const defaultNetwork: NetworkConfig = {
-            id: 'besu-local-env',
-            name: 'Besu (local, env)',
-            rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
+            id: defaultNetworkInfo.id,
+            name: defaultNetworkInfo.name,
+            rpcUrl: defaultNetworkInfo.rpcUrl,
+            chainId: defaultNetworkInfo.chainId,
             privateKey: process.env.PRIVATE_KEY || '',
-            chainId: 1337,
             theme: {
                 primary: 'blue-dark',
-                secondary: 'blue-light',
+                secondary: 'blue-light'
             }
         };
         
         // La añadimos al principio de la lista
         configs.unshift(defaultNetwork);
+    }
+
+    // También agregar el env fallback si existe
+    if (process.env.NEXT_PUBLIC_RPC_URL) {
+        const envNetwork: NetworkConfig = {
+            id: 'besu-local-env',
+            name: 'Besu (local, env)',
+            rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
+            chainId: 1337,
+            privateKey: '',
+            theme: {
+                primary: 'blue-dark',
+                secondary: 'blue-light'
+            }
+        };
+        
+        configs.push(envNetwork);
     }
 
     return NextResponse.json(configs);

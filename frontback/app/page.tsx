@@ -6,6 +6,7 @@ import FaucetPanel from './components/FaucetPanel';
 import NetworkStatus from './components/NetworkStatus';
 import NetworkSelector from './components/NetworkSelector';
 import ManageNetworksModal from './components/ManageNetworksModal';
+import NodeManagement from './components/NodeManagement';
 
 export default function Home() {
   return (
@@ -41,8 +42,9 @@ export default function Home() {
           </div>
 
           {/* Columna Derecha */}
-          <div className="space-y-6">
+          <div className="space-y-6 overflow-visible">
             <BalanceChecker />
+            <NodeManagement />
           </div>
         </div>
       </main>

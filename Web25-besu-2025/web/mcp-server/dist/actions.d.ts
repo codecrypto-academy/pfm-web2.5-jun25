@@ -14,10 +14,10 @@ export declare function createBesuNetwork(name: string, chainId: number, subnet:
     ip: string;
     name: string;
     port: number;
-}[], prefundedAccounts?: {
+}[], prefundedAccounts: {
     address: string;
     amount: string;
-}[], nbrNetwork?: number): Promise<{
+}[] | undefined, autoSigner: boolean, nbrNetwork?: number): Promise<{
     success: boolean;
     error?: undefined;
 } | {
@@ -67,6 +67,7 @@ export declare function getNetworksForLocalStorage(): Promise<{
     ip: string;
     chainId: number;
     signerAccount: string;
+    autoSigner: boolean;
     prefundedAccounts: {
         address: string;
         amount: string;

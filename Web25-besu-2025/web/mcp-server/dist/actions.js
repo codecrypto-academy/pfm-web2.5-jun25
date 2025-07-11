@@ -98,7 +98,7 @@ async function deleteNodeAction(networkId, nodeName) {
     return success;
 }
 // Besu Network actions
-async function createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccount, listOfNodes, prefundedAccounts = [], nbrNetwork = 0) {
+async function createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccount, listOfNodes, prefundedAccounts = [], autoSigner, nbrNetwork = 0) {
     try {
         // Prepare all nodes with correct types and IDs
         const nodes = listOfNodes.map(node => ({
@@ -119,13 +119,14 @@ async function createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccoun
             ip: bootnodeIP,
             signerAddress: signerAccount,
             accounts: prefundedAccounts.map(acc => ({ address: acc.address, balance: acc.amount })),
-            nodes
+            nodes,
+            autoSigner
         });
         if (!network) {
             throw new Error('Failed to create network in database');
         }
         // Create the actual Besu network
-        const result = await besuManager.createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccount, listOfNodes, prefundedAccounts, nbrNetwork);
+        const result = await besuManager.createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccount, listOfNodes, prefundedAccounts, autoSigner, nbrNetwork);
         return result;
     }
     catch (error) {
@@ -241,6 +242,7 @@ async function getNetworksForLocalStorage() {
             ip: network.ip,
             chainId: network.chainId,
             signerAccount: network.signerAddress,
+            autoSigner: network.autoSigner || false, // Default to false if not present
             prefundedAccounts: network.accounts.map(acc => ({
                 address: acc.address,
                 amount: acc.balance

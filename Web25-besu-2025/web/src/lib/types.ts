@@ -19,6 +19,7 @@ export interface Network {
   subnet: string;
   ip: string;
   signerAddress: string;
+  autoSigner?: boolean;
   accounts: {
     address: string;
     balance: string;

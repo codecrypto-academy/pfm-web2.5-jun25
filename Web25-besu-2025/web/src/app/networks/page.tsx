@@ -97,7 +97,7 @@ export default function NetworksPage() {
   // Add a CSS rule to the body element to increase the minimum width of the browser window
   React.useEffect(() => {
     const prevMinWidth = document.body.style.minWidth;
-    document.body.style.minWidth = '520px'; // default value 500px + 20px
+    document.body.style.minWidth = '600px'; // default value 500px + 100px
     return () => { document.body.style.minWidth = prevMinWidth; };
   }, []);
 
@@ -176,10 +176,11 @@ export default function NetworksPage() {
               {networks.map((network) => (
                 <div key={network.id} className="border rounded-lg p-4 shadow bg-gray-50 mb-6">
                   <div className="font-bold text-lg mb-2">{network.network}</div>
-                  <div><b>IP:</b> {network.ip}</div>
                   <div><b>ChainID:</b> {network.chainId}</div>
-                  <div><b>Signer:</b> {network.signerAccount}</div>
+                  <div><b>IP:</b> {network.ip}</div>
                   <div><b>CIDR (Subnet):</b> {network.cidr}</div>
+                  <div><b>Signer:</b> {network.signerAccount}</div>
+                  <div><b>Auto-Signer:</b> {network.autoSigner ? 'Enabled' : 'Disabled'}</div>
                   <div><b>Prefunded:</b> {network.prefundedAccounts.length}</div>
                   <div className="mb-2">
                     <b>Prefunded accounts:</b>
@@ -238,6 +239,7 @@ function NetworkForm({ initial, onSave, onCancel, isEditing }: {
     return "1337";
   });
   const [signerAccount, setSignerAccount] = useState(initial?.signerAccount || "");
+  const [autoSigner, setAutoSigner] = useState(initial?.autoSigner ?? false);
   const [prefundedAccounts, setPrefundedAccounts] = useState<PrefundedAccount[]>(
     initial?.prefundedAccounts?.length
       ? initial.prefundedAccounts
@@ -387,7 +389,7 @@ function NetworkForm({ initial, onSave, onCancel, isEditing }: {
         alert(error);
         return;
       }
-      onSave({ network, cidr, ip, chainId: Number(chainId), signerAccount, prefundedAccounts, nodes: newNodes }, initial.id);
+      onSave({ network, cidr, ip, chainId: Number(chainId), signerAccount, autoSigner, prefundedAccounts, nodes: newNodes}, initial.id);
       return;
     }
     if (!initial?.id) {
@@ -415,6 +417,7 @@ function NetworkForm({ initial, onSave, onCancel, isEditing }: {
           port: n.port
         })),
         prefundedAccounts.map(p => ({ address: p.address, amount: p.amount })),
+        autoSigner,
         getLocalNetworks().length
       );
       setIsLoading(false);
@@ -423,9 +426,9 @@ function NetworkForm({ initial, onSave, onCancel, isEditing }: {
         return;
       }
       // Update localStorage with the correct list of nodes
-      onSave({ network, cidr, ip, chainId: uniqueChainId, signerAccount, prefundedAccounts, nodes: stableNodes }, initial?.id);
+      onSave({ network, cidr, ip, chainId: uniqueChainId, signerAccount, autoSigner, prefundedAccounts, nodes: stableNodes }, initial?.id);
     } else {
-      onSave({ network, cidr, ip, chainId: Number(chainId), signerAccount, prefundedAccounts, nodes }, initial?.id);
+      onSave({ network, cidr, ip, chainId: Number(chainId), signerAccount, autoSigner, prefundedAccounts, nodes }, initial?.id);
     }
   }
 
@@ -535,23 +538,94 @@ function NetworkForm({ initial, onSave, onCancel, isEditing }: {
               {errors.ip && <p style={{ color: '#dc2626' }} className="text-xs mt-1">{errors.ip}</p>}
             </div>
             <div className="md:col-span-2">
-              <label style={{ color: '#334155' }} className="block text-sm font-medium mb-2">Signer Account (Validator)</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={signerAccount}
-                  onChange={e => {
-                    setSignerAccount(e.target.value);
-                    validateField('signerAccount', e.target.value);
-                  }}
-                  style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, padding: 12, minWidth: 340, width: '100%', maxWidth: 600 }}
-                  className={`flex-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.signerAccount ? 'border-red-500' : ''}`}
-                  placeholder="0x... Ethereum address"
-                  required
-                  disabled={isEditing}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                {/* Colonne gauche : Signer Account */}
+                <div>
+                  <label style={{ color: '#334155' }} className="block text-sm font-medium mb-2">Signer Account (Validator)</label>
+                  <input
+                    type="text"
+                    value={signerAccount}
+                    onChange={e => {
+                      setSignerAccount(e.target.value);
+                      validateField('signerAccount', e.target.value);
+                    }}
+                    style={{ 
+                      background: '#fff', 
+                      border: '1px solid #d1d5db', 
+                      borderRadius: 12, 
+                      padding: 12,
+                      width: '100%'
+                    }}
+                    className={`w-full focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.signerAccount ? 'border-red-500' : ''}`}
+                    placeholder="0x... Ethereum address"
+                    required
+                    disabled={isEditing}
+                  />
+                  {errors.signerAccount && <p style={{ color: '#dc2626' }} className="text-xs mt-1">{errors.signerAccount}</p>}
+                </div>
+                
+                {/* Colonne droite : Toggle Auto Signer */}
+                <div className="flex flex-col items-center">
+                  <label style={{ color: '#334155' }} className="block text-sm font-medium mb-2 text-center">Miner Nodes Automatically Signer</label>
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setAutoSigner(!autoSigner)}
+                      style={{
+                        position: 'relative',
+                        width: 56,
+                        height: 28,
+                        background: autoSigner ? 'linear-gradient(135deg, #10b981, #059669)' : '#d1d5db',
+                        borderRadius: 14,
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        boxShadow: autoSigner ? '0 4px 12px rgba(16, 185, 129, 0.4)' : '0 2px 4px rgba(0, 0, 0, 0.1)',
+                        transform: 'scale(1)',
+                      }}
+                      onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                      onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      disabled={isEditing}
+                    >
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 2,
+                          left: autoSigner ? 30 : 2,
+                          width: 24,
+                          height: 24,
+                          background: '#fff',
+                          borderRadius: 12,
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {autoSigner ? (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M10 3L4.5 8.5L2 6" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M9 3L3 9M3 3l6 6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                    <span style={{ 
+                      fontSize: 10, 
+                      fontWeight: 600, 
+                      color: autoSigner ? '#10b981' : '#6b7280',
+                      transition: 'color 0.3s ease'
+                    }}>
+                      {autoSigner ? 'ENABLED' : 'DISABLED'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              {errors.signerAccount && <p style={{ color: '#dc2626' }} className="text-xs mt-1">{errors.signerAccount}</p>}
             </div>
           </div>
         </div>

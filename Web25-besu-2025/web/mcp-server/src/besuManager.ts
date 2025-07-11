@@ -12,12 +12,13 @@ export async function createBesuNetwork(
   signerAccount: string = '',
   listOfNodes: { nodeType: string; ip: string; name: string; port: number }[],
   prefundedAccounts: { address: string; amount: string }[] = [],
+  autoSigner: boolean = false,
   nbrNetwork: number = 0
 ) {
   try {
     const prefundedAddresses = prefundedAccounts.map(acc => acc.address);
     const prefundedValues = prefundedAccounts.map(acc => acc.amount);
-    const dockerNetwork = await DockerNetwork.create(name, chainId, subnet, [], signerAccount, prefundedAddresses, prefundedValues);
+    const dockerNetwork = await DockerNetwork.create(name, chainId, subnet, [], signerAccount, prefundedAddresses, prefundedValues, autoSigner);
     await dockerNetwork.addBootnode('bootnode', (bootnodePort + nbrNetwork).toString(), bootnodeIP);
     const subnetParts = subnet.split('/');
     const baseIP = subnetParts[0].split('.');

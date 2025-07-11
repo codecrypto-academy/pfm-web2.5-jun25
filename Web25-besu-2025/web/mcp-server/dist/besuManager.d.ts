@@ -6,7 +6,7 @@ export declare function createBesuNetwork(name: string, chainId: number, subnet:
 }[], prefundedAccounts?: {
     address: string;
     amount: string;
-}[], nbrNetwork?: number): Promise<{
+}[], autoSigner?: boolean, nbrNetwork?: number): Promise<{
     success: boolean;
     error?: undefined;
 } | {

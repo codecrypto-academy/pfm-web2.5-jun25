@@ -12,11 +12,11 @@ exports.getBesuBalance = getBesuBalance;
 const besu_docker_manager_1 = require("@scarretero/besu-docker-manager");
 const bootnodePort = 28545; // Puerto inicial para el bootnode
 const signerPort = 28555; // Puerto inicial para el nodo que firma
-async function createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccount = '', listOfNodes, prefundedAccounts = [], nbrNetwork = 0) {
+async function createBesuNetwork(name, chainId, subnet, bootnodeIP, signerAccount = '', listOfNodes, prefundedAccounts = [], autoSigner = false, nbrNetwork = 0) {
     try {
         const prefundedAddresses = prefundedAccounts.map(acc => acc.address);
         const prefundedValues = prefundedAccounts.map(acc => acc.amount);
-        const dockerNetwork = await besu_docker_manager_1.DockerNetwork.create(name, chainId, subnet, [], signerAccount, prefundedAddresses, prefundedValues);
+        const dockerNetwork = await besu_docker_manager_1.DockerNetwork.create(name, chainId, subnet, [], signerAccount, prefundedAddresses, prefundedValues, autoSigner);
         await dockerNetwork.addBootnode('bootnode', (bootnodePort + nbrNetwork).toString(), bootnodeIP);
         const subnetParts = subnet.split('/');
         const baseIP = subnetParts[0].split('.');

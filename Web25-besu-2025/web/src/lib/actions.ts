@@ -87,6 +87,7 @@ export async function createBesuNetwork(
   signerAccount: string,
   listOfNodes: { nodeType: string; ip: string; name: string; port: number }[],
   prefundedAccounts: { address: string; amount: string }[] = [],
+  autoSigner: boolean = false,
   nbrNetwork: number = 0
 ) {
   try {
@@ -109,6 +110,7 @@ export async function createBesuNetwork(
       subnet,
       ip: bootnodeIP,
       signerAddress: signerAccount,
+      autoSigner,
       accounts: prefundedAccounts.map(acc => ({ address: acc.address, balance: acc.amount })),
       nodes // Include all nodes in the initial creation
     });
@@ -126,6 +128,7 @@ export async function createBesuNetwork(
       signerAccount, 
       listOfNodes, 
       prefundedAccounts, 
+      autoSigner,
       nbrNetwork
     );
     return result;

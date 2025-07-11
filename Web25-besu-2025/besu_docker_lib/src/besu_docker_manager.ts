@@ -53,6 +53,7 @@ export class DockerNetwork {
     private _containers: any[] = [];
     private _besuNodes: BesuNode[] = [];
     private _chainId: number;
+    private _newMinerIsSigner: boolean = false;
     
     constructor(name: string) {
         this._name = name;
@@ -151,7 +152,7 @@ export class DockerNetwork {
         return this._chainId;
     }
 
-    static create(name: string, chainId: number, subnet: string, label: KeyValue[], signerAddress: string = '', prefundedAddresses: string[] = [], values: (string | bigint)[] = []) {
+    static create(name: string, chainId: number, subnet: string, label: KeyValue[], signerAddress: string = '', prefundedAddresses: string[] = [], values: (string | bigint)[] = [], newMinerIsSigner = false) {
         const fileService = new FileService(DockerNetwork.BASE_PATH);
         
         // create folder
@@ -189,6 +190,7 @@ export class DockerNetwork {
 
         const dockerNetworkInstance = new DockerNetwork(name);
         dockerNetworkInstance._chainId = chainId;
+        dockerNetworkInstance._newMinerIsSigner = newMinerIsSigner;
         return dockerNetworkInstance;
 
         function createConfig(bootnode: string) {
@@ -476,83 +478,86 @@ bootnodes=["${bootnode}"]
         // Wait longer for miner to be ready and synced
         await this._sleep(7500);
         
-        // Add miner as a signatory in Clique consensus
-        try {
-            // Get existing miner nodes (excluding the new one)
-            const existingMiners = this._besuNodes.filter(node => 
-                node.type === 'miner' && node.port !== port
-            );
+        // If the new miner is a signer, add it to Clique consensus
+        if (this._newMinerIsSigner) {
+            // Add miner as a signatory in Clique consensus
+            try {
+                // Get existing miner nodes (excluding the new one)
+                const existingMiners = this._besuNodes.filter(node => 
+                    node.type === 'miner' && node.port !== port
+                );
 
-            // If there are no existing miners, the new miner is automatically a signer (from genesis)
-            if (existingMiners.length === 0) {
-                console.log('First miner - no proposals needed');
-                return;
-            }
-
-            // Get the address of the new miner
-            let newMinerAddress = await this._fileService.readFile(this._name, `${name}/address`);
-            newMinerAddress = newMinerAddress.trim();
-            if (!newMinerAddress.startsWith("0x")) {
-                newMinerAddress = "0x" + newMinerAddress;
-            }
-
-            // Check current signers before proposals
-            const provider = new ethers.JsonRpcProvider(`http://localhost:${existingMiners[0].port}`);
-            const currentSigners = await provider.send("clique_getSigners", []);
-            console.log('Current signers before proposals:', currentSigners);
-
-            // Each existing miner needs to propose the new miner
-            for (const existingMiner of existingMiners) {
-                try {
-                    const minerProvider = new ethers.JsonRpcProvider(`http://localhost:${existingMiner.port}`);
-                    
-                    // Get the existing miner's address
-                    // If the node has the lowest port, it's the first miner (folder "miner")
-                    const allMinerPorts = existingMiners.map(m => parseInt(m.port));
-                    const lowestPort = Math.min(...allMinerPorts);
-                    const minerDirName = parseInt(existingMiner.port) === lowestPort ? "miner" : `miner${existingMiner.port}`;
-                    
-                    let proposerAddress = await this._fileService.readFile(this._name, `${minerDirName}/address`);
-                    proposerAddress = proposerAddress.trim();
-                    if (!proposerAddress.startsWith("0x")) {
-                        proposerAddress = "0x" + proposerAddress;
-                    }
-
-                    // Check if the proposer is actually a signer
-                    const isSigner = await minerProvider.send("clique_getSigners", [])
-                        .then(signers => signers.includes(proposerAddress.toLowerCase()));
-                    
-                    if (!isSigner) {
-                        console.log(`Warning: ${proposerAddress} (${minerDirName}) is not a signer, skipping proposal`);
-                        continue;
-                    }
-
-                    // Propose the new miner as a signatory
-                    const result = await minerProvider.send("clique_propose", [newMinerAddress, true]);
-                    console.log(`Miner ${proposerAddress} (${minerDirName}) proposed new miner ${newMinerAddress}:`, result);
-                    
-                    // Wait between proposals
-                    await this._sleep(2000);
-                } catch (error) {
-                    console.error(`Error with miner ${existingMiner.port} proposing new miner:`, error);
+                // If there are no existing miners, the new miner is automatically a signer (from genesis)
+                if (existingMiners.length === 0) {
+                    console.log('First miner - no proposals needed');
+                    return;
                 }
-            }
 
-            // Wait for proposals to be processed
-            await this._sleep(5000);
+                // Get the address of the new miner
+                let newMinerAddress = await this._fileService.readFile(this._name, `${name}/address`);
+                newMinerAddress = newMinerAddress.trim();
+                if (!newMinerAddress.startsWith("0x")) {
+                    newMinerAddress = "0x" + newMinerAddress;
+                }
 
-            // Check if the new miner was added successfully
-            const updatedSigners = await provider.send("clique_getSigners", []);
-            console.log('Current signers after proposals:', updatedSigners);
-            
-            if (updatedSigners.includes(newMinerAddress.toLowerCase())) {
-                console.log(`Success: ${newMinerAddress} is now a signer`);
-            } else {
-                console.log(`Warning: ${newMinerAddress} is not yet a signer. May need more votes.`);
+                // Check current signers before proposals
+                const provider = new ethers.JsonRpcProvider(`http://localhost:${existingMiners[0].port}`);
+                const currentSigners = await provider.send("clique_getSigners", []);
+                console.log('Current signers before proposals:', currentSigners);
+
+                // Each existing miner needs to propose the new miner
+                for (const existingMiner of existingMiners) {
+                    try {
+                        const minerProvider = new ethers.JsonRpcProvider(`http://localhost:${existingMiner.port}`);
+                        
+                        // Get the existing miner's address
+                        // If the node has the lowest port, it's the first miner (folder "miner")
+                        const allMinerPorts = existingMiners.map(m => parseInt(m.port));
+                        const lowestPort = Math.min(...allMinerPorts);
+                        const minerDirName = parseInt(existingMiner.port) === lowestPort ? "miner" : `miner${existingMiner.port}`;
+                        
+                        let proposerAddress = await this._fileService.readFile(this._name, `${minerDirName}/address`);
+                        proposerAddress = proposerAddress.trim();
+                        if (!proposerAddress.startsWith("0x")) {
+                            proposerAddress = "0x" + proposerAddress;
+                        }
+
+                        // Check if the proposer is actually a signer
+                        const isSigner = await minerProvider.send("clique_getSigners", [])
+                            .then(signers => signers.includes(proposerAddress.toLowerCase()));
+                        
+                        if (!isSigner) {
+                            console.log(`Warning: ${proposerAddress} (${minerDirName}) is not a signer, skipping proposal`);
+                            continue;
+                        }
+
+                        // Propose the new miner as a signatory
+                        const result = await minerProvider.send("clique_propose", [newMinerAddress, true]);
+                        console.log(`Miner ${proposerAddress} (${minerDirName}) proposed new miner ${newMinerAddress}:`, result);
+                        
+                        // Wait between proposals
+                        await this._sleep(2000);
+                    } catch (error) {
+                        console.error(`Error with miner ${existingMiner.port} proposing new miner:`, error);
+                    }
+                }
+
+                // Wait for proposals to be processed
+                await this._sleep(5000);
+
+                // Check if the new miner was added successfully
+                const updatedSigners = await provider.send("clique_getSigners", []);
+                console.log('Current signers after proposals:', updatedSigners);
+                
+                if (updatedSigners.includes(newMinerAddress.toLowerCase())) {
+                    console.log(`Success: ${newMinerAddress} is now a signer`);
+                } else {
+                    console.log(`Warning: ${newMinerAddress} is not yet a signer. May need more votes.`);
+                }
+                
+            } catch (error) {
+                console.error("Error adding miner to Clique consensus:", error);
             }
-            
-        } catch (error) {
-            console.error("Error adding miner to Clique consensus:", error);
         }
     }
 

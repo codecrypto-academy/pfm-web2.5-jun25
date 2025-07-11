@@ -1,6 +1,6 @@
 {
   "name": "@scarretero/besu-docker-manager",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Library for managing Besu node networks using Docker",
   "main": "dist/besu_docker_manager.js",
   "types": "dist/besu_docker_manager.d.ts",

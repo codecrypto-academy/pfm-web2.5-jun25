@@ -18,5 +18,6 @@ export interface Network {
   chainId: number;
   prefundedAccounts: PrefundedAccount[];
   signerAccount: string;
+  autoSigner?: boolean;
   nodes: Node[];
 }

@@ -80,6 +80,7 @@ export async function createBesuNetwork(
   signerAccount: string,
   listOfNodes: { nodeType: string; ip: string; name: string; port: number }[],
   prefundedAccounts: { address: string; amount: string }[] = [],
+  autoSigner: boolean = false,
   nbrNetwork: number = 0
 ) {
   try {
@@ -103,7 +104,8 @@ export async function createBesuNetwork(
       ip: bootnodeIP,
       signerAddress: signerAccount,
       accounts: prefundedAccounts.map(acc => ({ address: acc.address, balance: acc.amount })),
-      nodes
+      nodes,
+      autoSigner
     });
 
     if (!network) {
@@ -116,9 +118,10 @@ export async function createBesuNetwork(
       chainId, 
       subnet, 
       bootnodeIP, 
-      signerAccount, 
+      signerAccount,
       listOfNodes, 
       prefundedAccounts, 
+      autoSigner,
       nbrNetwork
     );
     return result;
@@ -244,6 +247,7 @@ export async function getNetworksForLocalStorage() {
       ip: network.ip,
       chainId: network.chainId,
       signerAccount: network.signerAddress,
+      autoSigner: network.autoSigner || false, // Default to false if not present
       prefundedAccounts: network.accounts.map(acc => ({
         address: acc.address,
         amount: acc.balance

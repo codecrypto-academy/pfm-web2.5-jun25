@@ -18,6 +18,7 @@ export interface Network {
   subnet: string;
   ip: string;
   signerAddress: string;
+  autoSigner?: boolean; // Optional field for miner nodes auto-signer feature
   accounts: {
     address: string;
     balance: string;

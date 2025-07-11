@@ -34,6 +34,14 @@ GITHUB: https://github.com/codecrypto-academy/web25-besu-2025.git
     - Create a FRONTEND in the same project that uses the REST API to handle network creation
     DELIVERABLE: Frontend code
 
+- Level 5
+    - With the network running, be able to add a new miner node
+
+- Level 6
+    - Expose docker services from a VPS
+    - Deploy full proyect in the VPS
+    - Create MCP server with the lib
+
 3. **Project Organization**
 
 - Script. We will put a script.sh file here that will contain all the steps to create a node. Test it. 

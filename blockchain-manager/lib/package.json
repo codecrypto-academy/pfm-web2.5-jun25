@@ -26,6 +26,7 @@
   "dependencies": {
     "dockerode": "^4.0.7",
     "elliptic": "^6.6.1",
+    "ethers": "6",
     "keccak256": "^1.0.6"
   }
 }

@@ -2,7 +2,7 @@
 
 Este documento describe dos métodos principales para interactuar y gestionar la red de blockchain con Hyperledger Besu en este repositorio:
 
-1.  **Uso del Script de Shell (`docker.sh`)**: Un script autónomo que automatiza la creación y gestión de la red con configuraciones predefinidas.
+1.  **Uso del Script de Shell (`create-blockchain.sh`)**: Un script autónomo que automatiza la creación y gestión de la red con configuraciones predefinidas.
 2.  **Uso de la Aplicación/Librería TypeScript (`lib`)**: Una aplicación programática que ofrece un control más granular sobre la red a través de comandos y constantes configurables.
 
 ## 🚀 Requisitos Previos Comunes
@@ -16,9 +16,9 @@ Asegúrate de tener instalados los siguientes programas en tu sistema antes de u
 
 ---
 
-## Método 1: Uso del Script de Shell (`docker.sh`)
+## Método 1: Uso del Script de Shell (`create-blockchain.sh`)
 
-El script `./blockchain-manager/script/docker.sh` es una solución completa para desplegar una red de Hyperledger Besu. Este script maneja la creación de la red Docker, la generación de claves, la configuración de archivos de génesis y el despliegue de los nodos (bootnode, minero y RPC) utilizando contenedores Docker. Todas las configuraciones (IPs, puertos, nombres de red, etc.) están **hardcodeadas dentro del propio script `docker.sh`**.
+El script `./blockchain-manager/script/create-blockchain.sh` es una solución completa para desplegar una red de Hyperledger Besu. Este script maneja la creación de la red, la generación de claves, la configuración de archivos de génesis y el despliegue de los nodos (bootnode, minero y RPC) utilizando contenedores Docker. Todas las configuraciones (IPs, puertos, nombres de red, etc.) están **hardcodeadas dentro del propio script `create-blockchain.sh`**.
 
 ### 1. Crear la Red Blockchain
 
@@ -26,7 +26,7 @@ Para iniciar y configurar la red de blockchain con Hyperledger Besu utilizando e
 
 ```bash
 # Ejecutar el script principal para crear la red
-./blockchain-manager/script/docker.sh
+./blockchain-manager/script/create-blockchain.sh
 ```
 
 Este script realizará lo siguiente:
@@ -40,7 +40,7 @@ Este script realizará lo siguiente:
 
 ### 2. Verificar Estado de la Red (Método 1)
 
-Para asegurar que la red esté funcionando correctamente después de ejecutar `docker.sh`:
+Para asegurar que la red esté funcionando correctamente después de ejecutar `create-blockchain.sh`:
 
 ```bash
 # Verificar que los contenedores de la red estén funcionando
@@ -57,7 +57,7 @@ node blockchain-manager/script/blockchain-utilities.mjs network-status
 
 El script `./blockchain-manager/script/test-blockchain.sh` proporciona una validación completa y automatizada de la red. Este script realiza los siguientes pasos:
 
--   **Recreación de la Blockchain**: Ejecuta `./docker.sh` para asegurar un entorno de red limpio y recién creado.
+-   **Recreación de la Blockchain**: Ejecuta `./create-blockchain.sh` para asegurar un entorno de red limpio y recién creado.
 -   **Verificación de Estado de Nodos**: Comprueba que todos los nodos (bootnode, minero y RPC) estén ejecutándose correctamente.
 -   **Espera de Sincronización**: Espera 60 segundos para permitir que los nodos de la red se sincronicen.
 -   **Verificación de Información de Red**: Utiliza `node blockchain-utilities.mjs network-info` para obtener información general de la red.
@@ -77,7 +77,7 @@ Para ejecutar esta secuencia de prueba completa:
 
 ### 4. Detalles de Configuración (Método 1)
 
-Las configuraciones para la red creada por `docker.sh` son:
+Las configuraciones para la red creada por `create-blockchain.sh` son:
 
 -   **Chain ID**: 20190606
 -   **Consensus**: Clique PoA
@@ -173,7 +173,7 @@ docker ps --filter "label=network=besu-network"
 
 ### 2. Verificar Transferencias en MetaMask
 
-1.  Ejecuta: `node blockchain-manager/script/blockchain-utilities.mjs show-accounts` (si usas `docker.sh`) o inspecciona los archivos de identidad generados por `lib` para obtener las claves privadas.
+1.  Ejecuta: `node blockchain-manager/script/blockchain-utilities.mjs show-accounts` (si usas `create-blockchain.sh`) o inspecciona los archivos de identidad generados por `lib` para obtener las claves privadas.
 2.  Importa las cuentas que desees verificar en MetaMask utilizando las claves privadas.
 3.  Cambia a las cuentas de destino (ej. cuentas 1-10) y verifica que cada una tenga los fondos transferidos.
 

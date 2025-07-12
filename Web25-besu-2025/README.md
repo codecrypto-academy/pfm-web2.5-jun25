@@ -401,16 +401,10 @@ El servidor MCP es responsable de gestionar la comunicación entre la interfaz w
   ```
   > **Importante:** Debe ejecutar este comando para poder utilizar la pagina AI Manager. Y se debe ejecutar desde el directorio `web` para que los directorios de las redes se creen en la ubicación correcta. Si se ejecuta desde otro directorio, la estructura de carpetas podría no ser la esperada y causar errores en la gestión de redes.
 
-## Mejoras Potenciales
+## Actualizar la librería besu_docker_lib
 
-1. **Publicación de besu_docker_lib en NPM**
-   - Publicar la librería besu_docker_lib como un paquete npm público
-   - Esto permitiría:
-     - Instalación directa con `npm install @besu/besu_docker_lib`
-     - Gestión de versiones más eficiente
-     - Actualizaciones automáticas con `npm update`
-     - Eliminación de la necesidad de copiar manualmente los archivos compilados
-     - Mejor integración con otros proyectos
+   - Publicación de la nueva versión de besu_docker_lib en NPM
+   - Actualizar con `npm update` en el directorio `web` y `web/mcp-server`
 
 ## Referencias
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "➡️ Creating blockchain..."
-./docker.sh
+./create-blockchain.sh
 
 echo ""
 echo "➡️ Validating blockchain..."

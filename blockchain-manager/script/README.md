@@ -35,8 +35,7 @@ Los pasos son los siguientes:
 ### 1. Crear la Red Blockchain
 ```bash
 # Ejecutar el script principal para crear la red
-./script/docker.sh
-```
+./script/create-blockchain.sh
 
 ### 2. Verificar Estado de la Red
 ```bash

@@ -1,5 +1,9 @@
 #!/bin/bash
 
+echo "🏁 Starting blockchain test sesion..."
+echo ""
+echo ""
+
 echo "➡️ Creating blockchain..."
 ./create-blockchain.sh
 
@@ -84,3 +88,12 @@ node blockchain-utilities.mjs transfer-funds http://localhost:8545
 echo ""
 echo "🖥️ RPC Node Port ::8548::"
 node blockchain-utilities.mjs show-accounts http://localhost:8548
+
+sleep 10
+
+echo ""
+echo ""
+echo "🏁 Test finish. Cleaning up..."
+rm -rf networks
+docker rm -f $(docker ps -aq --filter "label=network=besu-network") >/dev/null 2>/dev/null || true
+docker network rm besu-network >/dev/null 2>/dev/null || true

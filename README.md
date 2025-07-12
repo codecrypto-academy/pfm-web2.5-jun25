@@ -179,7 +179,7 @@ This project provides two distinct methods for managing a Hyperledger Besu block
 
 #### **Project Relationships**
 - **Independent Project**: Self-contained within the `blockchain-manager` directory.
-- **Components**: The shell script (`script/docker.sh`) and the TypeScript library (`lib`) offer independent functionalities.
+- **Components**: The shell script (`script/create-blockchain.sh`) and the TypeScript library (`lib`) offer independent functionalities.
 - **Library (`lib`)**: Interacts with **Docker** via `dockerode`.
 - **Web Interface (`web`)**: (Planned/In Progress) will interact with the Library for network operations.
 
@@ -197,7 +197,14 @@ This project provides two distinct methods for managing a Hyperledger Besu block
 - Automated key generation, genesis file creation, and node configuration
 
 #### **Components**
-- **Script (`/script`)**: Contains `docker.sh` for an automated, hardcoded network setup, and `index.mjs` for various network commands.
+- **Script (`/script`)**: Contains `create-blockchain.sh` for an automated, hardcoded network setup, and `blockchain-utilities.mjs` for various network commands.
+    - **`test-blockchain.sh`**: Comprehensive blockchain deployment testing script that:
+        - Creates a complete blockchain network using `create-blockchain.sh`
+        - Validates all node statuses (bootnode, miner, RPC nodes on ports 8545-8548)
+        - Checks network synchronization across all nodes
+        - Performs balance checks and fund transfers
+        - Tests multi-node communication and transaction propagation
+        - Automatically cleans up resources after testing    
 - **Library (`/lib`)**: A TypeScript application for programmatic control of the network. It includes:
     -   Configuration constants in `src/constants.ts`.
     -   Main application logic in `src/app.ts` for node creation.
@@ -220,15 +227,16 @@ For a quick overview:
     yarn install
     yarn build
     ```
-2.  **To create the network using the shell script:**
-    ```bash
-    ./blockchain-manager/script/docker.sh
-    ```
-3.  **To create the network using the TypeScript application:**
+2.  **To create the network using the TypeScript application:**
     ```bash
     cd blockchain-manager/lib
     yarn start
     ```
+3.  **To create the network using the shell script:**
+    ```bash
+    ./blockchain-manager/script/create-blockchain.sh
+    ```
+
 
 #### **Development Commands**
 For a comprehensive list of commands for both the shell script and the TypeScript library, refer to `blockchain-manager/documentation/BlockchainNetworkGuide.md`.

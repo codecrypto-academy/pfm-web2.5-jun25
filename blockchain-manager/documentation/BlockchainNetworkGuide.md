@@ -58,12 +58,15 @@ node blockchain-manager/script/blockchain-utilities.mjs network-status
 El script `./blockchain-manager/script/test-blockchain.sh` proporciona una validación completa y automatizada de la red. Este script realiza los siguientes pasos:
 
 -   **Recreación de la Blockchain**: Ejecuta `./docker.sh` para asegurar un entorno de red limpio y recién creado.
+-   **Verificación de Estado de Nodos**: Comprueba que todos los nodos (bootnode, minero y RPC) estén ejecutándose correctamente.
 -   **Espera de Sincronización**: Espera 60 segundos para permitir que los nodos de la red se sincronicen.
 -   **Verificación de Información de Red**: Utiliza `node blockchain-utilities.mjs network-info` para obtener información general de la red.
 -   **Verificación de Estado de Red**: Utiliza `node blockchain-utilities.mjs network-status` para comprobar la salud de la red y las conexiones entre pares.
+-   **Verificación de Sincronización de Bloques**: Comprueba el número de bloque en todos los nodos RPC (puertos 8545, 8546, 8547, 8548) para verificar que estén sincronizados.
 -   **Obtención de Balance del Minero**: Recupera la dirección y la clave privada del nodo minero y luego verifica su balance inicial.
--   **Transferencia de Fondos Individual**: Crea una nueva dirección y transfiere 20 unidades de la moneda desde la cuenta del minero a esta nueva dirección.
--   **Transferencia a Múltiples Cuentas**: Ejecuta una transferencia de fondos a un rango de cuentas predefinidas utilizando `node blockchain-utilities.mjs transfer-funds` para simular transacciones masivas.
+-   **Transferencia de Fondos Individual**: Crea una nueva dirección y transfiere 80 unidades de la moneda desde la cuenta del minero a esta nueva dirección.
+-   **Transferencia a Múltiples Cuentas**: Ejecuta transferencias de fondos a un rango de cuentas predefinidas utilizando diferentes nodos RPC para probar la conectividad.
+-   **Verificación de Balances**: Muestra información detallada de las cuentas incluyendo balances actuales usando diferentes nodos RPC.
 
 Para ejecutar esta secuencia de prueba completa:
 
@@ -71,22 +74,6 @@ Para ejecutar esta secuencia de prueba completa:
 ./blockchain-manager/script/test-blockchain.sh
 ```
 
-### 3. Comandos Disponibles del Script (`script/index.mjs`)
-
-Los siguientes comandos se pueden ejecutar directamente usando `node blockchain-manager/script/blockchain-utilities.mjs` (después de ejecutar `docker.sh`):
-
-```bash
-node blockchain-manager/script/blockchain-utilities.mjs [comando] [parámetros]
-
-Comandos disponibles:
-    create-keys <ip>                    - Crea claves de nodo para la dirección IP dada.
-    network-info [url]                  - Obtiene información de la red (por defecto http://localhost:8545).
-    network-status [url]                - Comprueba el estado de la red y las conexiones entre pares.
-    balance <address>                   - Obtiene el balance de una dirección.
-    transfer <fromPrivate> <to> <amount> - Transfiere fondos de una cuenta a otra utilizando la clave privada del remitente.
-    transfer-funds [source] [start] [end] [amount] - Transfiere fondos a múltiples cuentas.
-    show-accounts [start] [end]         - Muestra la información de la cuenta para importar en MetaMask.
-```
 
 ### 4. Detalles de Configuración (Método 1)
 

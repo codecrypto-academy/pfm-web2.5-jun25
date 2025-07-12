@@ -1,7 +1,7 @@
 # borrar todo
 rm -rf networks
-docker rm -f $(docker ps -aq --filter "label=network=besu-network") 2>/dev/null || true
-docker network rm besu-network 2>/dev/null || true
+docker rm -f $(docker ps -aq --filter "label=network=besu-network") >/dev/null 2>/dev/null || true
+docker network rm besu-network >/dev/null 2>/dev/null || true
 
 # Set network configuration
 NETWORK="172.24.0.0/16"
@@ -16,19 +16,22 @@ mkdir -p networks/besu-network
 docker network create besu-network \
   --subnet $NETWORK \
   --label network=besu-network \
-  --label type=besu
+  --label type=besu >/dev/null
 
-echo "➡️ Network created"
+echo "✅ Network created"
+echo ""
 
 # crear clave privada bootnode
 # Generate private key public key and address and 
+echo "➡️ Preparing bootnode"
 cd networks/besu-network
 mkdir -p bootnode
 cd bootnode
 node ../../../blockchain-utilities.mjs create-keys $BOOTNODE_IP
 cd ../../..
 
-echo "➡️ Bootnode files created"
+echo "✅ Bootnode files created"
+
 
 # Get bootnode public key for enode URL
 BOOTNODE_PUBLIC_KEY=$(cat networks/besu-network/bootnode/key.pub)
@@ -36,7 +39,8 @@ BOOTNODE_PUBLIC_KEY=$(cat networks/besu-network/bootnode/key.pub)
 BOOTNODE_PUBLIC_KEY_ENODE=${BOOTNODE_PUBLIC_KEY#04}
 BOOTNODE_ENODE="enode://${BOOTNODE_PUBLIC_KEY_ENODE}@${BOOTNODE_IP}:30303"
 
-echo "➡️ Bootnode enode: ${BOOTNODE_ENODE}"
+echo "✅ Bootnode enode: ${BOOTNODE_ENODE}"
+echo ""
 
 # Verify enode format
 if [[ ! "$BOOTNODE_ENODE" =~ ^enode://[a-fA-F0-9]{128}@[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:[0-9]+$ ]]; then
@@ -44,14 +48,18 @@ if [[ ! "$BOOTNODE_ENODE" =~ ^enode://[a-fA-F0-9]{128}@[0-9]{1,3}\.[0-9]{1,3}\.[
     exit 1
 fi
 
-# crear clave privada para nodo miner
+echo "➡️ Preparing validator node"
 cd networks/besu-network
 mkdir -p miner
 cd miner
 node ../../../blockchain-utilities.mjs create-keys ${MINER_IP}
 cd ../../..
 
-echo "➡️ Miner files created"
+echo "✅ Validator files created"
+echo ""
+
+echo "➡️ Preparing blockchain configuration files"
+
 
 # Generate extraData for Clique PoA - CORRECTED VERSION
 generate_extra_data() {
@@ -106,7 +114,7 @@ echo '{
   }
 }' > networks/besu-network/genesis.json
 
-echo "➡️ Genesis file created"
+echo "✅ Genesis file created"
 
 # Create config.toml for Besu node configuration
 cat > networks/besu-network/config.toml << EOF
@@ -125,7 +133,8 @@ rpc-http-api=["ETH","NET","CLIQUE"]
 host-allowlist=["*"]            
 EOF
 
-echo "➡️ Config.toml file created"
+echo "✅ Config.toml file created"
+echo ""
 
 # Create Besu node
 docker run -d \
@@ -142,7 +151,7 @@ docker run -d \
   --node-private-key-file=/data/bootnode/key.priv \
   --genesis-file=/data/genesis.json >/dev/null || true
 
-echo "➡️ Bootnode node created"
+echo "✅ Bootnode node created"
 
 # Create miner node
 docker run -d \
@@ -163,7 +172,7 @@ docker run -d \
   --min-gas-price=0 \
   --bootnodes="${BOOTNODE_ENODE}" >/dev/null || true
 
-echo "➡️ Miner node created"
+echo "✅ Miner node created"
 
 # Create RPC nodes
 for port in 8545 8546 8547 8548; do
@@ -183,29 +192,8 @@ for port in 8545 8546 8547 8548; do
       --genesis-file=/data/genesis.json \
       --bootnodes="${BOOTNODE_ENODE}" >/dev/null || true
     
-    echo "➡️ RPC node on port ${port} created"
+    echo "✅ RPC node on port ${port} created"
 done
 
-# Check if all nodes are running
-echo "Checking node status..."
-if [ "$(docker ps -q --filter "name=besu-network-bootnode")" ]; then
-  echo "✅ Bootnode is running"
-else
-  echo "❌ Bootnode is not running"
-fi
-
-if [ "$(docker ps -q --filter "name=besu-network-miner")" ]; then
-  echo "✅ Miner is running"
-else
-  echo "❌ Miner is not running"
-fi
-
-for port in 8545 8546 8547 8548; do
-    if [ "$(docker ps -q --filter "name=besu-network-rpc${port}")" ]; then
-      echo "✅ RPC node on port ${port} is running"
-    else
-      echo "❌ RPC node on port ${port} is not running"
-    fi
-done
 
 

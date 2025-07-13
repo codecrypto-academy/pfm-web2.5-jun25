@@ -2,11 +2,12 @@
 import React, { useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { Button } from "../../components/ui/button";
 import { HoldToConfirmButton } from "../../components/ui/HoldToConfirmButton";
 import { createBesuNetwork, removeBesuNetwork, addBesuNode, removeBesuNode, getNetworksForLocalStorage } from "@/lib/actions";
 import { Network, Node, PrefundedAccount } from "../../types/network";
-import { Plus, Trash2, Network as NetworkIcon, Settings, Coins } from "lucide-react";
+import { Plus, Trash2, Network as NetworkIcon, Settings, Coins, ExternalLink } from "lucide-react";
 
 // Utility functions for validation
 function isValidIP(ip: string): boolean {
@@ -70,6 +71,7 @@ export default function NetworksPage() {
   const [networks, setNetworks] = useState<Network[]>([]);
   const [editing, setEditing] = useState<Network | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const router = useRouter();
 
   // Synchronise localStorage with MongoDB on each page load or tab return
   useEffect(() => {
@@ -175,7 +177,15 @@ export default function NetworksPage() {
             <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
               {networks.map((network) => (
                 <div key={network.id} className="border rounded-lg p-4 shadow bg-gray-50 mb-6">
-                  <div className="font-bold text-lg mb-2">{network.network}</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <button
+                      onClick={() => router.push(`/networks/${network.id}`)}
+                      className="font-bold text-lg text-blue-600 hover:text-blue-800 hover:underline transition-colors flex items-center gap-2"
+                    >
+                      {network.network}
+                      <ExternalLink className="h-4 w-4" />
+                    </button>
+                  </div>
                   <div><b>ChainID:</b> {network.chainId}</div>
                   <div><b>IP:</b> {network.ip}</div>
                   <div><b>CIDR (Subnet):</b> {network.cidr}</div>

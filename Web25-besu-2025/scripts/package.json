@@ -3,7 +3,15 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "generate": "node generate-transactions.js",
+    "generate-contract": "node generate-transactions.js --contract",
+    "generate-continuous": "node generate-transactions.js --continuous",
+    "check-blocks": "node generate-transactions.js --check",
+    "check-pending": "node generate-transactions.js --pending",
+    "generate-types": "node generate-transaction-types.js",
+    "check-types": "node generate-transaction-types.js check",
+    "clear-pending": "node generate-transaction-types.js clear"
   },
   "keywords": [],
   "author": "",

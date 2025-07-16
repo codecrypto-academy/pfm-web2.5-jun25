@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docker.png.png" alt="Docker & Besu" width="100%"/>
+  <img src="docker.png.png" alt="Docker & Besu" width="75%"/>
 </div>
 
 # Hyperledger Besu Network Manager

@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docker.png.png" alt="Docker & Besu" width="70%"/>
+</div>
+
 # Hyperledger Besu Network Manager
 
 Automated management system for private blockchain networks based on Hyperledger Besu with Clique (Proof of Authority) consensus protocol.

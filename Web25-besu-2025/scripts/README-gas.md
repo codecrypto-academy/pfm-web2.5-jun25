@@ -1,66 +1,66 @@
-# Comment générer des transactions avec Gas sur Besu
+# Cómo generar transacciones con Gas en Besu
 
-## 🔥 Quand le Gas apparaît dans Besu ?
+## 🔥 ¿Cuándo aparece el Gas en Besu?
 
-### Situations qui consomment du Gas :
+### Situaciones que consumen Gas:
 
-1. **Transfers simples** : 21,000 gas (minimum)
-2. **Smart contracts** : 500,000+ gas (déploiement)
-3. **Appels de fonctions** : Variable selon complexité
-4. **Opérations de stockage** : Plus coûteux
-5. **Boucles et calculs** : Proportionnel à la complexité
+1. **Transferencias simples**: 21,000 gas (mínimo)
+2. **Smart contracts**: 500,000+ gas (despliegue)
+3. **Llamadas a funciones**: Variable según complejidad
+4. **Operaciones de almacenamiento**: Más costosas
+5. **Bucles y cálculos**: Proporcional a la complejidad
 
-## 🚀 Générer des transactions
+## 🚀 Generar transacciones
 
-### 1. Installation
+### 1. Instalación
 ```bash
 cd scripts
 npm install
 ```
 
-### 2. Générer quelques transactions
+### 2. Generar algunas transacciones
 ```bash
 npm run generate
 ```
 
-### 3. Déployer un contrat (beaucoup de gas)
+### 3. Desplegar un contrato (mucho gas)
 ```bash
 npm run generate-contract
 ```
 
-### 4. Mode continu (nouvelles transactions toutes les 10s)
+### 4. Modo continuo (nuevas transacciones cada 10s)
 ```bash
 npm run generate-continuous
 ```
 
-## 📊 Ce que vous verrez
+## 📊 Lo que verás
 
-### Dans votre interface web :
-- **Blocs vides** (0 TX) : Gris
-- **Blocs avec transactions** : Orange avec indicateur "TX"
-- **Gas utilisé** affiché pour chaque bloc
+### En tu interfaz web:
+- **Bloques vacíos** (0 TX): Gris
+- **Bloques con transacciones**: Naranja con indicador "TX"
+- **Gas utilizado** mostrado para cada bloque
 
-### Exemples de gas :
+### Ejemplos de gas:
 ```
-Transfer simple:     21,000 gas
-Transfer avec data:  25,000+ gas
-Déploiement contrat: 500,000+ gas
-Appel de fonction:   45,000+ gas
+Transferencia simple:    21,000 gas
+Transferencia con data:  25,000+ gas
+Despliegue contrato:     500,000+ gas
+Llamada a función:       45,000+ gas
 ```
 
-## 🔧 Configuration
+## 🔧 Configuración
 
-Le script utilise :
-- **RPC Endpoint** : `http://localhost:18555`
-- **Clé privée** : Compte préfinancé de votre réseau
-- **Gas Limit** : Adapté selon le type de transaction
+El script utiliza:
+- **RPC Endpoint**: `http://localhost:18555`
+- **Clave privada**: Cuenta prefinanciada de tu red
+- **Gas Limit**: Adaptado según el tipo de transacción
 
-## 💡 Pourquoi le Gas en réseau privé ?
+## 💡 ¿Por qué Gas en red privada?
 
-Même en privé, Besu :
-1. **Mesure la complexité** des opérations
-2. **Limite les ressources** par transaction
-3. **Prévient les boucles infinies**
-4. **Simule un environnement réaliste**
+Incluso en privado, Besu:
+1. **Mide la complejidad** de las operaciones
+2. **Limita los recursos** por transacción
+3. **Previene bucles infinitos**
+4. **Simula un entorno realista**
 
-La différence : **Gas gratuit** (pas de coût réel) mais **limits conservées** !
+La diferencia: **Gas gratuito** (sin coste real) pero **límites conservados**!

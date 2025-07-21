@@ -94,6 +94,52 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
     return details;
   };
 
+  // Fonction pour obtenir les animations radar scan
+  const getBlockAnimations = (isNewBlock: boolean, hasTransactions: boolean) => {
+    const baseColor = hasTransactions ? "#10b981" : "#6b7280";
+    const accentColor = hasTransactions ? "#059669" : "#4b5563";
+
+    // Animation pour nouveaux blocs
+    if (isNewBlock) {
+      return {
+        scale: [1, 1.02, 1],
+        opacity: [1, 0.8, 1],
+        borderWidth: ["4px", "6px", "4px"],
+        borderColor: [baseColor, accentColor, baseColor]
+      };
+    }
+
+    // Style radar statique pour tous les autres blocs
+    return {
+      borderWidth: "4px",
+      borderColor: baseColor
+    };
+  };
+
+  // Fonction pour obtenir l'animation du conteneur radar scan
+  const getContainerAnimation = (isNewBlock: boolean) => {
+    if (!isNewBlock) return {};
+
+    return {
+      scale: [1, 1.005, 1],
+      opacity: [1, 0.95, 1]
+    };
+  };
+
+  // Fonction pour obtenir l'animation de l'overlay radar scan
+  const getOverlayAnimation = (hasTransactions: boolean) => {
+    return {
+      scale: [0, 1.5, 2],
+      opacity: [0.8, 0.4, 0],
+      borderRadius: ['50%', '50%', '50%']
+    };
+  };
+
+  // Fonction pour obtenir la durée d'animation radar scan
+  const getAnimationDuration = () => {
+    return 1.5;
+  };
+
   // Fonction pour obtenir l'icône selon les types de transactions dans le bloc
   const getBlockIcons = (transactionDetails?: TransactionDetail[]) => {
     if (!transactionDetails || transactionDetails.length === 0) {
@@ -651,11 +697,8 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
       {/* Latest Blocks - Full Width */}
       <motion.div 
         className="bg-white rounded-lg shadow-lg p-6"
-        animate={newBlockAnimation ? { 
-          scale: [1, 1.02], 
-          boxShadow: ["0 10px 15px -3px rgba(0, 0, 0, 0.1)", "0 20px 25px -5px rgba(16, 185, 129, 0.3)"]
-        } : {}}
-        transition={{ duration: 0.8, ease: "easeInOut" }}
+        animate={getContainerAnimation(newBlockAnimation)}
+        transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
       >          <div className="flex items-center gap-3 mb-4">
           <Hash className="h-5 w-5 text-blue-600" />
           <h3 className="text-lg font-semibold text-gray-800">Latest Blocks</h3>
@@ -695,14 +738,11 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
                   opacity: 1, 
                   y: 0, 
                   scale: 1,
-                  ...(index === 0 && newBlockAnimation ? {
-                    boxShadow: ["0 4px 6px rgba(0, 0, 0, 0.1)", "0 8px 25px rgba(16, 185, 129, 0.4)"],
-                    borderColor: block.transactions.length > 0 ? ["#22c55e", "#16a34a"] : ["#9ca3af", "#6b7280"]
-                  } : {})
+                  ...getBlockAnimations(index === 0 && newBlockAnimation, block.transactions.length > 0)
                 }}
                 exit={{ opacity: 0, y: 30, scale: 0.8 }}
                 transition={{ 
-                  duration: 0.8, 
+                  duration: getAnimationDuration(), 
                   delay: index * 0.1,
                   ease: "easeInOut"
                 }}
@@ -710,18 +750,21 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
                   block.transactions.length > 0 
                     ? 'from-green-50 to-blue-50 border-green-500' 
                     : 'from-gray-50 to-gray-100 border-gray-400'
+                } ${
+                  // Style radar pour tous les blocs
+                  block.transactions.length > 0 
+                    ? 'border-4 border-green-500' 
+                    : 'border-4 border-gray-400'
                 }`}
               >
                 {/* Animation de "nouveau bloc" pour le premier bloc */}
                 {index === 0 && newBlockAnimation && (
                   <motion.div
-                    initial={{ x: '-100%', opacity: 0.7 }}
-                    animate={{ x: '100%', opacity: 0 }}
-                    transition={{ duration: 1.5, ease: "easeInOut" }}
-                    className={`absolute inset-0 bg-gradient-to-r from-transparent to-transparent ${
-                      block.transactions.length > 0 
-                        ? 'via-green-200' 
-                        : 'via-gray-200'
+                    initial={{ scale: 0, opacity: 0.8 }}
+                    animate={getOverlayAnimation(block.transactions.length > 0)}
+                    transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
+                    className={`absolute top-0 left-0 w-full h-full border-4 ${
+                      block.transactions.length > 0 ? 'border-green-400' : 'border-gray-400'
                     }`}
                   />
                 )}
@@ -733,7 +776,7 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
                       scale: [1, 1.1],
                       color: block.transactions.length > 0 ? ["#15803d", "#059669"] : ["#4b5563", "#4b5563"]
                     } : {}}
-                    transition={{ duration: 0.8, ease: "easeInOut" }}
+                    transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
                   >
                     #{block.number}
                   </motion.span>
@@ -755,7 +798,7 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
                         rotate: [0, 360],
                         backgroundColor: block.transactions.length > 0 ? ["#f97316", "#ea580c"] : ["#6b7280", "#6b7280"]
                       }}
-                      transition={{ duration: 1.2, ease: "easeInOut" }}
+                      transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
                       className={`w-5 h-5 rounded-full ${block.transactions.length > 0 ? 'bg-orange-500' : 'bg-gray-500'}`}
                     />
                   )}
@@ -764,9 +807,9 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
                   <motion.div 
                     className="truncate"
                     animate={index === 0 && newBlockAnimation ? { 
-                      opacity: [0.7, 1] 
+                      opacity: [0.7, 0.4, 1] 
                     } : {}}
-                    transition={{ duration: 1.2, ease: "easeInOut" }}
+                    transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
                   >
                     Hash: {block.hash.slice(0, 8)}...{block.hash.slice(-6)}
                   </motion.div>
@@ -807,12 +850,9 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
         animate={{ 
           opacity: 1, 
           y: 0,
-          ...(newBlockAnimation ? {
-            scale: [1, 1.02],
-            boxShadow: ["0 10px 15px -3px rgba(0, 0, 0, 0.3)", "0 20px 25px -5px rgba(16, 185, 129, 0.5)"]
-          } : {})
+          ...(newBlockAnimation ? getContainerAnimation(true) : {})
         }}
-        transition={{ duration: 0.8, ease: "easeInOut" }}
+        transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
       >
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
@@ -822,7 +862,7 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
                 scale: [1, 1.2],
                 color: ["#ffffff", "#10f981"]
               } : {}}
-              transition={{ duration: 0.8, ease: "easeInOut" }}
+              transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
               key={blocks[0]?.number} // Re-animate when block number changes
             >
               {blocks[0]?.number || 0}
@@ -840,7 +880,7 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
                 scale: [1, 1.1],
                 color: ["#ffffff", "#10f981"]
               } : {}}
-              transition={{ duration: 0.8, ease: "easeInOut" }}
+              transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
               key={`${blocks[0]?.number}-${blocks[0]?.transactions.length}`}
             >
               {blocks.length > 0 ? (blocks[0].transactions.length || 0) : 0}
@@ -854,7 +894,7 @@ export default function LiveNetworkStatus({ rpcEndpoints, prefundedAccounts, net
                 scale: newBlockAnimation ? [1, 1.1] : 1,
                 color: isConnected ? (newBlockAnimation ? ["#ffffff", "#10f981"] : "#ffffff") : "#ff6b6b"
               } : {}}
-              transition={{ duration: 0.8, ease: "easeInOut" }}
+              transition={{ duration: getAnimationDuration(), ease: "easeInOut" }}
             >
               {isConnected ? 'LIVE' : 'OFF'}
             </motion.div>

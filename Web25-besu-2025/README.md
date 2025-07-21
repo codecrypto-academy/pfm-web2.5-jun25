@@ -135,7 +135,7 @@ Librería TypeScript para gestión de infraestructura:
 - Gestión de contenedores Docker
 
 ### 3. Scripts de Utilidad (`/scripts`)
-Scripts para la creación de una red Besu de prueba:
+Scripts para gestión de redes Besu y generación de transacciones:
 
 #### Scripts de Red
 - `script.sh` (Linux) y `script.ps1` (Windows)
@@ -154,6 +154,9 @@ Scripts para la creación de una red Besu de prueba:
   - Listar propuestas pendientes
   - Mostrar validadores actuales
   - Monitorear los nuevos bloques
+
+#### Generación de Transacciones
+- `generate-transactions.js` y `generate-transaction-types.js`: Genera transacciones de ejemplo y despliega contratos inteligentes
 
 ## Funcionamiento del Sistema
 

@@ -30,6 +30,7 @@ Important rules:
 5. Explain your choices
 6. Execute the actions in the correct order
 
+When the user requests validator nodes, these are minor nodes.
 If a parameter is not provided by the user, apply these rules:
 - For the bootnode, use the IP address ending with .10.
 - For the first validator address (signerAddress), use the value from the "address" file found in one of the directories inside networks/Keypair.

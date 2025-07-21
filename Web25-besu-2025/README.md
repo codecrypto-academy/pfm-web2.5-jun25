@@ -98,18 +98,34 @@ graph TD
 Interfaz gráfica desarrollada con Next.js 13 que incluye:
 
 #### Frontend (`/web/app`)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Framer Motion](https://img.shields.io/badge/Framer_Motion-0055FF?style=for-the-badge&logo=framer&logoColor=white)
+
 - Implementado en React con TypeScript
 - Utiliza el nuevo App Router de Next.js 13
 - Interfaz moderna con TailwindCSS
 - Gestión visual de redes y nodos Besu
 
 #### Backend (`/web/lib`)
+![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
+
 - Implementado en TypeScript
 - APIs para gestión de redes y nodos
 - Integración con MongoDB para persistencia
 - Incluye la librería besu_docker_lib compilada en `lib-besu`
 
 #### Servidor MCP (`/web/mcp-server`)
+![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Model Context Protocol](https://img.shields.io/badge/MCP-FF6B6B?style=for-the-badge&logo=protocol&logoColor=white)
+
 - Contiene un servidor MCP (Model Context Protocol)
 - Implementa el modelo de contexto para la gestión de redes Besu
 - Gestiona la creación y la gestión de redes Besu
@@ -128,6 +144,11 @@ Interfaz gráfica desarrollada con Next.js 13 que incluye:
 - Necesarios para la inicialización de la red
 
 ### 2. Biblioteca Docker (`/besu_docker_lib`)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
+![Jest](https://img.shields.io/badge/Jest-323330?style=for-the-badge&logo=Jest&logoColor=white)
+
 Librería TypeScript para gestión de infraestructura:
 - Creación y gestión de redes Docker
 - Gestión del ciclo de vida de nodos Besu
@@ -135,6 +156,13 @@ Librería TypeScript para gestión de infraestructura:
 - Gestión de contenedores Docker
 
 ### 3. Scripts de Utilidad (`/scripts`)
+![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![Bash](https://img.shields.io/badge/Bash-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white)
+![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?style=for-the-badge&logo=powershell&logoColor=white)
+![Ethers.js](https://img.shields.io/badge/Ethers.js-3C3C3D?style=for-the-badge&logo=ethereum&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
+
 Scripts para gestión de redes Besu y generación de transacciones:
 
 #### Scripts de Red
@@ -149,6 +177,9 @@ Scripts para gestión de redes Besu y generación de transacciones:
 ![ejemplo de datos de red Besu en mongodb](web/data/ejemplo.redbesu.mongodb.png)
 
 #### Herramientas Ethereum
+![Ethers.js](https://img.shields.io/badge/Ethers.js-3C3C3D?style=for-the-badge&logo=ethereum&logoColor=white)
+![Hyperledger Besu](https://img.shields.io/badge/Hyperledger_Besu-2F3134?style=for-the-badge&logo=hyperledger&logoColor=white)
+
 - `besu-ethers-toolkit.js`: Utilidades para interactuar con la red Besu
   - Proponer nuevos validadores
   - Listar propuestas pendientes
@@ -156,6 +187,9 @@ Scripts para gestión de redes Besu y generación de transacciones:
   - Monitorear los nuevos bloques
 
 #### Generación de Transacciones
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![Ethers.js](https://img.shields.io/badge/Ethers.js-3C3C3D?style=for-the-badge&logo=ethereum&logoColor=white)
+
 - `generate-transactions.js` y `generate-transaction-types.js`: Genera transacciones de ejemplo y despliega contratos inteligentes
 
 ## Funcionamiento del Sistema
@@ -328,15 +362,56 @@ graph LR
 ## API y Endpoints
 
 ### REST API
+
+#### Gestión de Redes
 - `POST /api/networks` - Crear red
 - `GET /api/networks` - Listar redes
 - `DELETE /api/networks/:id` - Eliminar red
 - `POST /api/networks/:id/nodes` - Añadir nodo
 
-### JSON-RPC
-- `eth_blockNumber` - Último bloque
-- `eth_getBalance` - Consultar balance
+#### Monitoreo y Estado de Red
+- `GET /api/test-connection?port={port}` - Probar conectividad con nodo Besu
+- `GET /api/network/{id}/validators?ip={ip}&port={port}` - Obtener validadores activos y propuestas
+- `GET /api/network/{id}/balances?ip={ip}&port={port}&accounts={accounts}` - Consultar balances de cuentas
+
+#### Integración con IA
+- `POST /api/ai-chat` - Enviar instrucciones en lenguaje natural al AI Manager
+
+### JSON-RPC (Ethereum/Besu)
+
+#### Métodos Estándar Ethereum
+- `eth_blockNumber` - Obtener número del último bloque
+- `eth_getBalance` - Consultar balance de una cuenta
 - `eth_sendTransaction` - Enviar transacción
+- `eth_getBlock` - Obtener información de un bloque
+- `eth_getTransaction` - Obtener detalles de una transacción
+- `eth_getTransactionReceipt` - Obtener recibo de transacción
+
+#### Métodos Específicos de Besu/Clique
+- `clique_getSigners` - Obtener lista de validadores activos
+- `clique_getSignersAtHash` - Obtener validadores en un bloque específico
+- `clique_propose` - Proponer añadir/eliminar un validador
+- `clique_getProposals` - Obtener propuestas pendientes de validadores
+
+### Parámetros de Ejemplo
+
+#### Test de Conectividad
+```bash
+GET /api/test-connection?port=18555
+# Respuesta: { success: true, rpcUrl, blockNumber, chainId, cliqueInfo }
+```
+
+#### Consulta de Validadores
+```bash
+GET /api/network/testnet/validators?ip=localhost&port=18555
+# Respuesta: { success: true, signers: [...], proposals: [...] }
+```
+
+#### Consulta de Balances
+```bash
+GET /api/network/testnet/balances?ip=localhost&port=18555&accounts=[{...}]
+# Respuesta: { success: true, balances: [{ address, balanceWei, balanceEth }] }
+```
 
 ## Monitoreo y Mantenimiento
 

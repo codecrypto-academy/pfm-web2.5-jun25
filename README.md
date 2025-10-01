@@ -11,3 +11,4 @@
 | CarreteroSamuel | [view repo](https://github.com/codecrypto-academy/pfm-web2.5-jun25/tree/CarreteroSamuel) | 10 |
 | robgaleano | [view repo](https://github.com/codecrypto-academy/pfm-web2.5-jun25/tree/robgaleano) | 8.5 |
 | alescofet | [view repo](https://github.com/codecrypto-academy/pfm-web2.5-jun25/tree/alescofet) | 8.5 |
+| peerreez | [view repo](https://github.com/codecrypto-academy/peerreez/tree/web2.5-control-panel-besu-2025) | 8.5 |
